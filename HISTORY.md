@@ -1,6 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.10 (00:11) — No-sessions members keep Active label; manual paid/unpaid visit override
+## 2026-08-10 — v0.11 (00:20) — Remove member ID from Member Frequency Breakdown
+- The Member Frequency Breakdown table no longer shows the member ID badge under each name, leaving just the member's name
+
 - Member directory: out-of-sessions members no longer get the red row/card background (that now applies only to expired members), and their status badge reads "Active (No Sessions)" instead of "No sessions"
 - Check-in Log visit edit modal now has a Payment Status dropdown (Auto / Paid / Unpaid) letting admins force a visit paid or unpaid; the reconciliation engine respects the manual override and skips it when Auto is chosen
 

@@ -196,7 +196,7 @@ Object.assign(App, {
                     const barPct = Math.min(100, Math.round(r.perWeek / 6 * 100));
                     return `
                         <tr>
-                            <td data-label="Member"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong><div class="mt-1"><span class="belt-badge" style="width:84px; text-align:center; overflow-wrap:anywhere; background:var(--gray-light); border-color:#cbd5e1; color:var(--dark);">${Utils.escapeHTML(m.id)}</span></div></td>
+                            <td data-label="Member"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong></td>
                             <td data-label="Belt">${Utils.getBeltBox(m.belt)}</td>
                             <td data-label="Classes">${r.count}</td>
                             <td data-label="Avg / Week">
