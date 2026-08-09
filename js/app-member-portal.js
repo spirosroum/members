@@ -8,6 +8,7 @@ Object.assign(App, {
             // Which average granularity the member portal shows (persisted per device):
             // 'week' shows Avg ... / Week, 'month' shows Avg ... / Month.
             memberStatsMode: (localStorage.getItem('gym_member_stats_mode') || 'week'),
+            memberStatsCollapsed: (localStorage.getItem('gym_member_stats_collapsed') === '1'),
             toggleMemberMenu: () => {
                 const drawer = document.getElementById('member-drawer');
                 const overlay = document.getElementById('member-drawer-overlay');
@@ -358,6 +359,19 @@ Object.assign(App, {
                 if (App.currentUser) App.renderMemberDashboard();
             },
 
+            toggleMemberStatsCollapsed: () => {
+                App.memberStatsCollapsed = !App.memberStatsCollapsed;
+                localStorage.setItem('gym_member_stats_collapsed', App.memberStatsCollapsed ? '1' : '0');
+                App.updateMemberStatsCollapsedUI();
+            },
+
+            updateMemberStatsCollapsedUI: () => {
+                const body = document.getElementById('member-stats-body');
+                const arrow = document.getElementById('member-stats-arrow');
+                if (body) body.classList.toggle('hidden', App.memberStatsCollapsed);
+                if (arrow) arrow.innerText = App.memberStatsCollapsed ? '▸' : '▾';
+            },
+
             updateMemberStatsModeUI: () => {
                 const weekBtn = document.getElementById('member-stats-mode-week');
                 const monthBtn = document.getElementById('member-stats-mode-month');
@@ -443,6 +457,7 @@ Object.assign(App, {
                 const statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true });
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
+                App.updateMemberStatsCollapsedUI();
                 const rank = App.getMemberLeaderboardRank(member.id);
                 const rankCard = document.getElementById('member-rank-card');
                 const rankVisible = App.isAdminAuthed() || DB.getMemberStatsVisibility()['rank'] !== false;

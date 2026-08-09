@@ -1,6 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.21 (02:10) — Separate Leaderboard Rank card in member portal
+## 2026-08-10 — v0.22 (02:20) — Expandable statistics in member portal
+- The Statistics section in the member portal is now collapsible: clicking the Statistics header collapses/expands the stat cards (with a ▾/▸ arrow), and the collapsed state is remembered per device
+
 - Member portal Leaderboard Rank moved out of the statistics grid into its own card, labeled "(last 90 days)" (the rank is computed over the trailing 3 months); it still respects the Member Settings visibility toggle
 - The admin member modal's rank card now also shows the "(last 90 days)" suffix; Greek/English label added
 
