@@ -928,6 +928,7 @@ Object.assign(App, {
                 const stats = [
                     { id: 'totalTrainings', title: 'Total Trainings', desc: 'Shows the member\'s total number of recorded trainings.' },
                     { id: 'totalHours', title: 'Total Hours Trained', desc: 'Shows the member\'s total hours spent training.' },
+                    { id: 'avgDay', title: 'Avg Trainings / Day', desc: 'Shows the member\'s average number of trainings per training day.' },
                     { id: 'avgWeek', title: 'Avg Trainings / Week', desc: 'Shows the member\'s average training frequency per week.' },
                     { id: 'avgDays', title: 'Avg Days / Week', desc: 'Shows the member\'s average training days per week.' },
                     { id: 'avgMonth', title: 'Avg Trainings / Month', desc: 'Shows the member\'s average training frequency per month.' },

@@ -273,6 +273,7 @@ Object.assign(App, {
                 let perMonth = 0;
                 let perWeekDays = 0;
                 let perMonthDays = 0;
+                let perDay = '0';
                 const lang = App.currentKioskLang || 'en';
                 const map = App.isAdminAuthed() ? App.KIOSK_I18N.en : (App.KIOSK_I18N[lang] || App.KIOSK_I18N.en);
                 const rank = App.getMemberLeaderboardRank(memberId);
@@ -294,6 +295,7 @@ Object.assign(App, {
                     const daySet = new Set(allDates.map(d => Utils.dateToLocalIso(d)));
                     perWeekDays = (daySet.size / weeks).toFixed(1);
                     perMonthDays = (daySet.size / months).toFixed(1);
+                    perDay = (total / daySet.size).toFixed(1);
                 }
 
                 // Admins (member modal) always see every stat; the member portal
@@ -336,6 +338,11 @@ Object.assign(App, {
                             <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
                         </div>`);
                 }
+                if (show('avgDay')) cards.push(`
+                    <div class="stat-card" style="padding: 1rem;">
+                        <h3>${Utils.escapeHTML(map.memberViewAvgDay || 'Avg Trainings / Day')}</h3>
+                        <div class="value" style="font-size: 1.5rem;">${perDay}</div>
+                    </div>`);
                 if (show('rank')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewRankLabel || 'Leaderboard Rank')}</h3>
