@@ -148,7 +148,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 checkinNotice: STATE.checkinNotice || '',
                 checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
                 showClassCheckins: STATE.showClassCheckins !== false,
-                memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgMonth: true, rank: true }
+                memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }
             };
         }
 
@@ -773,7 +773,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
                     if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
                     if (d.showClassCheckins != null) STATE.showClassCheckins = d.showClassCheckins;
-                    if (d.memberStatsVisibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgMonth: true, rank: true }, d.memberStatsVisibility);
+                    if (d.memberStatsVisibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, d.memberStatsVisibility);
                     FSEngine.settingsMirror = JSON.stringify(settingsPayload());
                 }
                 FSEngine.settingsReady = true;
@@ -874,7 +874,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCheckinNotice: () => STATE.checkinNotice || '',
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
             getShowClassCheckins: () => STATE.showClassCheckins !== false,
-            getMemberStatsVisibility: () => Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgMonth: true, rank: true }, STATE.memberStatsVisibility || {}),
+            getMemberStatsVisibility: () => Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, STATE.memberStatsVisibility || {}),
 
             // setters (update state and persist)
             saveMembers: (data) => {

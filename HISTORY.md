@@ -1,6 +1,9 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.18 (01:40) — Add Avg Trainings / Day to member statistics
+## 2026-08-10 — v0.19 (01:50) — Make Avg Days / Month a standalone member stat
+- "Avg Days / Month" is now an always-visible stat card (total training days ÷ months since first training) in both the admin member modal and the member portal, instead of only showing inside the Month toggle view
+- Added a matching "Avg Days / Month" visibility toggle in Member Settings (visible by default)
+
 - New "Avg Trainings / Day" stat card (total trainings ÷ distinct training days) in member statistics, shown in both the admin member modal and the member portal alongside the Week/Month averages
 - Added a matching "Avg Trainings / Day" visibility toggle in Member Settings (visible by default) and Greek/English i18n labels
 

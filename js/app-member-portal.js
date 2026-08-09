@@ -332,16 +332,16 @@ Object.assign(App, {
                             <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
                         </div>`);
-                    if (show('avgDays')) cards.push(`
-                        <div class="stat-card" style="padding: 1rem;">
-                            <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
-                            <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
-                        </div>`);
                 }
                 if (show('avgDay')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewAvgDay || 'Avg Trainings / Day')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perDay}</div>
+                    </div>`);
+                if (show('avgDaysMonth')) cards.push(`
+                    <div class="stat-card" style="padding: 1rem;">
+                        <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
+                        <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
                     </div>`);
                 if (show('rank')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">

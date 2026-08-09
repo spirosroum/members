@@ -931,6 +931,7 @@ Object.assign(App, {
                     { id: 'avgDay', title: 'Avg Trainings / Day', desc: 'Shows the member\'s average number of trainings per training day.' },
                     { id: 'avgWeek', title: 'Avg Trainings / Week', desc: 'Shows the member\'s average training frequency per week.' },
                     { id: 'avgDays', title: 'Avg Days / Week', desc: 'Shows the member\'s average training days per week.' },
+                    { id: 'avgDaysMonth', title: 'Avg Days / Month', desc: 'Shows the member\'s average training days per month.' },
                     { id: 'avgMonth', title: 'Avg Trainings / Month', desc: 'Shows the member\'s average training frequency per month.' },
                     { id: 'rank', title: 'Leaderboard Rank', desc: 'Shows the member\'s rank on the public training leaderboard.' }
                 ];
