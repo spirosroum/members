@@ -1,6 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.13 (00:40) — Add Total Hours Trained to member statistics
+## 2026-08-10 — v0.14 (01:00) — Fix member portal reads denied for Google members
+- Fixed Firestore rules: AUTH-READ collections (settings, plans, schedules, closedDates, visits, classCheckins, members, meta) were gated on `isKiosk() || isAdmin()`, but `isKiosk()` excludes any token with an email claim — so Google-signed-in members were denied reading settings (including memberStatsVisibility), causing hidden Member Settings stats to reappear in fresh incognito member sessions. Reads now allow any authenticated token (`request.auth != null`); write rules unchanged
+
 - New "Total Hours Trained" stat card in member statistics (admin member modal and member portal), summing each unique class session's duration with a 1-hour fallback and legacy visit entry→exit durations
 - Added a matching "Total Hours Trained" visibility toggle in Member Settings (visible by default) and Greek/English i18n labels
 

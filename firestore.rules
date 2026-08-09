@@ -8,8 +8,9 @@ service cloud.firestore {
     // SECURITY MODEL:
     //   * AUTH-READ   — schedule, plans, settings, closedDates, visits,
     //                   classCheckins, members (top-level). All reads
-    //                   require a Firebase auth token (anonymous or admin).
-    //                   Unauthenticated REST API requests are denied.
+    //                   require any Firebase auth token (anonymous, Google
+    //                   member, or admin). Unauthenticated REST API requests
+    //                   are denied.
     //   * ADMIN-READ  — payments, notifications, bins, memberRenames,
     //                   gym (legacy), member private fields (email, phone,
     //                   dob, notes). Admin-only read/write.
@@ -82,38 +83,38 @@ service cloud.firestore {
 
     // Settings (portal name, currency, belt visibility, checkin notice)
     match /settings/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
     // Migration state marker
     match /meta/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
     // Class schedules (public kiosk calendar)
     match /schedules/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
     // Academy closed dates
     match /closedDates/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
     // Membership plans (public pricing/plan listing)
     match /plans/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create, update, delete: if isAdmin();
     }
 
     // Visits (kiosk "Currently Inside" and leaderboard need read access;
     // no PII beyond memberId, which is already visible on the kiosk)
     match /visits/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create: if isKiosk();
       allow update: if isAdmin() || (isKiosk() && kioskVisitUpdate());
       allow delete: if isAdmin();
@@ -122,7 +123,7 @@ service cloud.firestore {
     // Class-level check-in records (leaderboard training counts,
     // class-details modal check-in history)
     match /classCheckins/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create: if isKiosk();
       allow update: if isAdmin() || (isKiosk() && kioskClassCheckinUpdate());
       allow delete: if isAdmin();
@@ -180,7 +181,7 @@ service cloud.firestore {
     // Top-level member doc: public display fields (name, belt, gender,
     // expirationDate, accountStatus, sessionsLeft, planDays, hideFromLeaderboard)
     match /members/{docId} {
-      allow read: if isKiosk() || isAdmin();
+      allow read: if request.auth != null;
       allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId && request.resource.data.name is string);
       allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
       allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
