@@ -31,10 +31,13 @@ service cloud.firestore {
     // Custom claims (request.auth.token.admin == true) are the primary check
     // (set via Admin SDK or a Cloud Function). The email fallback is kept for
     // backward-compatibility during the transition and can be removed later.
+    // NOTE: In Firestore rules, reading a missing token claim (e.g.
+    // request.auth.token.email) throws instead of returning null, which would
+    // deny every request. Always guard claim access with `in`.
     function isAdmin() {
       return request.auth != null &&
-             (request.auth.token.admin == true ||
-              (request.auth.token.email != null &&
+             (('admin' in request.auth.token && request.auth.token.admin == true) ||
+              ('email' in request.auth.token &&
                request.auth.token.email.lower() == 'spirosroumeliotis29@gmail.com'));
     }
 
@@ -45,7 +48,7 @@ service cloud.firestore {
     // email field is absent for any reason. Checking admin first guarantees
     // the admin path has priority.
     function isKiosk() {
-      return request.auth != null && request.auth.token.email == null;
+      return request.auth != null && !('email' in request.auth.token);
     }
 
     // Kiosk may only adjust session counts and its own ID on member docs

@@ -7,12 +7,19 @@
 // Tracks whether the admin has manually overridden the auto-computed
 // expiration date in the payment modal. A plan/start-date change resets it.
 let paymentExpManualOverride = false;
+// Tracks whether the admin has manually overridden the auto-computed starting
+// date in the payment modal. The starting date defaults to the payment date
+// (stacking onto an unexpired membership) unless the admin set it explicitly.
+let paymentStartManualOverride = false;
 
 Object.assign(App, {
             openPaymentModal: (presetMemberId = null, paymentId = null) => {
                 const form = document.getElementById('payment-form');
                 form.reset();
                 paymentExpManualOverride = false;
+                paymentStartManualOverride = false;
+                const saveBtn = document.getElementById('btn-save-payment');
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Payment'; }
 
                 // Reset quantity selector
                 const qtyInput = document.getElementById('form-pay-qty');
@@ -49,6 +56,11 @@ Object.assign(App, {
                         document.getElementById('form-pay-note').value = pay.note || '';
                         if (pay.planId) {
                             planSelect.value = pay.planId;
+                        }
+                        if (pay.appliedStartDate) {
+                            // The recorded window's start is deliberate — never re-derive it
+                            // from the payment date while editing.
+                            paymentStartManualOverride = true;
                         }
                         if (pay.appliedExpiration) {
                             document.getElementById('form-pay-exp').value = pay.appliedExpiration;
@@ -142,6 +154,7 @@ Object.assign(App, {
                 }
                 // Selecting a plan drives the auto-computed starting/expiration dates
                 paymentExpManualOverride = false;
+                paymentStartManualOverride = false;
                 App.computePaymentDates();
                 App.renderPaymentUnpaidSummary();
             },
@@ -160,6 +173,7 @@ Object.assign(App, {
              * The starting date drives the expiration date while a plan is selected.
              */
             onPaymentStartChange: () => {
+                paymentStartManualOverride = true;
                 paymentExpManualOverride = false;
                 App.computePaymentDates();
             },
@@ -199,15 +213,23 @@ Object.assign(App, {
 
                 // Starting date: keep the admin's value, otherwise default to the payment
                 // date — stacking onto an active unexpired membership when it ends later.
-                let startVal = startInput.value || payDate;
-                if (!startInput.value && member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
-                    const curExp = new Date(member.expirationDate);
-                    const payDateObj = new Date(payDate);
-                    if (curExp > payDateObj) {
-                        startVal = member.expirationDate;
+                // The modal pre-fills "today" for convenience, but that prefill must NOT pin
+                // the window to today: a backdated payment date has to move the membership
+                // window along with it (the recorded membership period == the payment window).
+                let startVal;
+                if (paymentStartManualOverride) {
+                    startVal = startInput.value || payDate;
+                } else {
+                    startVal = payDate;
+                    if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                        const curExp = new Date(member.expirationDate);
+                        const payDateObj = new Date(payDate);
+                        if (curExp > payDateObj) {
+                            startVal = member.expirationDate;
+                        }
                     }
+                    startInput.value = startVal;
                 }
-                startInput.value = startVal;
 
                 // Expiration date: auto-connect from starting date + plan duration,
                 // unless the admin manually overrode the expiration. The quantity
@@ -494,6 +516,13 @@ Object.assign(App, {
              */
             savePayment: (e) => {
                 e.preventDefault();
+                // Re-entrancy guard: the submit button can be clicked repeatedly before the
+                // modal closes. Without this, rapid clicks record duplicate memberships.
+                if (App.paymentSaveBusy) return;
+                App.paymentSaveBusy = true;
+                const saveBtn = document.getElementById('btn-save-payment');
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving…'; }
+                try {
                 const pays = DB.getPayments();
                 const id = document.getElementById('form-pay-id').value || 'PAY-' + Date.now();
                 const isNew = !document.getElementById('form-pay-id').value;
@@ -647,6 +676,10 @@ Object.assign(App, {
 
                 App.closeModal('modal-payment');
                 App.syncPaymentViews(memberId);
+                } finally {
+                    App.paymentSaveBusy = false;
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Payment'; }
+                }
             },
 
             /**

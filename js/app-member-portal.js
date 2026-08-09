@@ -237,7 +237,7 @@ Object.assign(App, {
                 let perWeek = 0;
                 let perMonth = 0;
                 const lang = App.currentKioskLang || 'en';
-                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const map = App.isAdminAuthed() ? App.KIOSK_I18N.en : (App.KIOSK_I18N[lang] || App.KIOSK_I18N.en);
                 const rank = App.getMemberLeaderboardRank(memberId);
                 const rankDisplay = rank ? `#${rank}` : (map.memberViewRankUnranked || 'Unranked');
                 

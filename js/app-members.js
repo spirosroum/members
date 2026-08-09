@@ -4,6 +4,12 @@
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
+// Tracks whether the admin has manually edited the Starting Date in the member
+// modal. When not overridden, applyPlan() stacks the new membership window onto
+// the member's current unexpired expiration (renewal), and the prefilled
+// "today" value never pins the window to today.
+let memberStartOverridden = false;
+
 Object.assign(App, {
             // --- ADMIN MEMBERS DIRECTORY ---
             // ── Export Members to Excel (CSV) ──────────────────────────
@@ -134,13 +140,20 @@ Object.assign(App, {
 
                 filtered.sort((a, b) => {
                     let valA, valB;
+                    let groupA = 0, groupB = 0;
                     switch(App.dirSortCol) {
                         case 'name': {
-                            const aLast = (a.lastName || '').toLowerCase();
-                            const bLast = (b.lastName || '').toLowerCase();
-                            if (aLast !== bLast) { valA = aLast; valB = bLast; break; }
-                            valA = (a.firstName || '').toLowerCase();
-                            valB = (b.firstName || '').toLowerCase();
+                            // Greek-script names always sort first (α→ω or ω→α), Latin/English
+                            // names always last, in both directions. Within each block the
+                            // per-direction order still applies.
+                            const keyLastA = Utils.sortKey(a.lastName || '');
+                            const keyLastB = Utils.sortKey(b.lastName || '');
+                            const keyFirstA = Utils.sortKey(a.firstName || '');
+                            const keyFirstB = Utils.sortKey(b.firstName || '');
+                            groupA = (Utils.isGreek(a.lastName) || Utils.isGreek(a.firstName)) ? 0 : 1;
+                            groupB = (Utils.isGreek(b.lastName) || Utils.isGreek(b.firstName)) ? 0 : 1;
+                            if (keyLastA !== keyLastB) { valA = keyLastA; valB = keyLastB; break; }
+                            valA = keyFirstA; valB = keyFirstB;
                             break;
                         }
                         case 'id': {
@@ -174,6 +187,7 @@ Object.assign(App, {
                         default: valA = a.id; valB = b.id;
                     }
                     if (typeof valA === 'string' && typeof valB === 'string') {
+                        if (groupA !== groupB) return groupA < groupB ? -1 : 1;
                         const keyA = Utils.sortKey(valA);
                         const keyB = Utils.sortKey(valB);
                         if (keyA !== keyB) return App.dirSortAsc ? (keyA < keyB ? -1 : 1) : (keyA < keyB ? 1 : -1);
@@ -405,10 +419,14 @@ Object.assign(App, {
 
             openMemberModal: (id = null) => {
                 document.getElementById('member-form').reset();
+                memberStartOverridden = false;
+                const memberSaveBtn = document.getElementById('btn-save-member');
+                if (memberSaveBtn) { memberSaveBtn.disabled = false; memberSaveBtn.innerText = 'Save Member'; }
                 document.getElementById('form-original-id').value = '';
                 document.getElementById('btn-delete-member').classList.add('hidden');
                 document.getElementById('admin-member-calendar-wrapper').classList.add('hidden');
                 document.getElementById('admin-member-payments-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-stats-wrapper').classList.add('hidden');
                 document.getElementById('admin-member-stats').innerHTML = '';
                 App.updateBeltColor(document.getElementById('form-belt'));
                 
@@ -435,6 +453,7 @@ Object.assign(App, {
                         document.getElementById('btn-delete-member').classList.remove('hidden');
                         document.getElementById('admin-member-calendar-wrapper').classList.remove('hidden');
                         document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
+                        document.getElementById('admin-member-stats-wrapper').classList.remove('hidden');
                         
                         const expInput = document.getElementById('form-expiration');
                         expInput.style.backgroundColor = (Utils.getDaysRemaining(m.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
@@ -482,7 +501,7 @@ Object.assign(App, {
 
             applyPlan: () => {
                 const planId = document.getElementById('form-plan-select').value;
-                const start = document.getElementById('form-start-date').value;
+                const startInput = document.getElementById('form-start-date');
                 const payInput = document.getElementById('form-last-payment');
                 const expInput = document.getElementById('form-expiration');
                 const sessWrap = document.getElementById('member-sessions-wrapper');
@@ -493,7 +512,24 @@ Object.assign(App, {
                     return;
                 }
                 const plan = DB.getPlans().find(p => p.id === planId);
+                let start = startInput.value;
                 if (plan && start) {
+                    // Stack onto the member's current unexpired membership when it ends later
+                    // than the given start date — unless the admin explicitly overrode the
+                    // start. Without this, renewals get anchored to the prefilled "today" and
+                    // silently shorten the total coverage window.
+                    if (!memberStartOverridden) {
+                        const mId = document.getElementById('form-original-id').value;
+                        const member = mId ? DB.getMembers().find(x => x.id === mId) : null;
+                        if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                            const curExp = new Date(member.expirationDate);
+                            const startObj = new Date(start);
+                            if (curExp > startObj) {
+                                start = member.expirationDate;
+                                startInput.value = start;
+                            }
+                        }
+                    }
                     expInput.value = Utils.calculateExpirationDate(start, plan.days);
                     expInput.style.backgroundColor = 'var(--bg-info-soft)';
                     payInput.value = parseFloat(plan.price).toFixed(2);
@@ -507,6 +543,8 @@ Object.assign(App, {
                     }
                 }
             },
+
+            markMemberStartOverridden: () => { memberStartOverridden = true; },
 
             updateBeltColor: (selectEl) => {
                 const colors = {
@@ -525,6 +563,13 @@ Object.assign(App, {
 
             saveMember: (e) => {
                 e.preventDefault();
+                // Re-entrancy guard: rapid double-clicks on Save Member would otherwise
+                // create duplicate member records AND duplicate auto-log payments.
+                if (App.memberSaveBusy) return;
+                App.memberSaveBusy = true;
+                const saveBtn = document.getElementById('btn-save-member');
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving…'; }
+                try {
                 const members = DB.getMembers();
                 const originalId = document.getElementById('form-original-id').value;
                 const id = document.getElementById('form-member-id').value;
@@ -690,6 +735,10 @@ Object.assign(App, {
 
                 App.closeModal('modal-member');
                 App.renderMemberDirectory();
+                } finally {
+                    App.memberSaveBusy = false;
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Member'; }
+                }
             },
 
             deleteMemberFromModal: () => {

@@ -45,6 +45,7 @@ index.html
 - **Local-first:** `STATE` is the in-memory source of truth. `DB.getX()`/`DB.saveX()` read/write STATE and persist to localStorage via `fallbackToLocal()`, then sync to Firestore via `FSEngine.scheduleFlush()` (debounced 600ms). The app works fully offline and syncs when online.
 - **PII isolation:** Sensitive fields (`phone`, `dob`, `notes`) are in `/members/{id}/private/info` — admin-only read/write. `DB.getMembers()` merges them in (admin only; stripped for kiosk). `DB.saveMembers()` strips them out, writes them to the private subcollection as a fire-and-forget.
 - **Cloud sync guard:** `FSEngine.applied` prevents an empty-localState client from deleting the entire cloud collection on its first flush. The `dirty` flag prevents local edits from being overwritten by incoming snapshots.
+- **Array docs vs. per-record collections:** `schedules`/`closedDates` are single array docs that are admin-only writes. On kiosk/member (non-admin) clients the local `dirty` flag for them is always spurious, so `handleArrayDocSnapshot()` and `resolveMigrationState()` apply the cloud state regardless of it. Do not reintroduce a `!dirty` gate for non-admin array-doc applies — a fresh incognito client would show an empty schedule (snapshot never re-fires, dirty never clears).
 
 ## Critical Invariants
 
@@ -63,6 +64,7 @@ index.html
 - Days use full Greek names (Δευτέρα, Τρίτη, etc.) — these must match the English day names in schedule data.
 - Language is persisted to `localStorage['kiosk_lang']`.
 - `App.applyKioskTranslations()` does manual DOM ID/class/attribute mapping — there is no framework. When adding kiosk-facing UI text, update both the `en` and `el` maps AND the `applyKioskTranslations()` selector logic.
+- **Uppercase Greek has no accent marks (τόνοι):** a Greek word rendered entirely in uppercase must not carry accents — write "ΕΛΛΑΔΑ" not "ΕΛΛΆΔΑ", "ΑΘΗΝΑ" not "ΑΘΉΝΑ". This also applies to strings displayed via CSS `text-transform: uppercase` (e.g. `.stat-card h3` in styles.css) — strip the τόνοι from the source string so the uppercased rendering is accent-free. Keep the Greek spelling otherwise unchanged.
 - **`app-i18n.js` must be the LAST script in index.html** because it calls `window.onload = App.init` and must have all App methods available.
 
 ## Conventions

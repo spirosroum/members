@@ -1039,7 +1039,10 @@
             </div>
             <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1.5rem;">
             
-            <div class="dashboard-grid mb-2" id="admin-member-stats" style="gap: 1rem; margin-top: -0.5rem;"></div>
+            <details class="mt-1 mb-2 hidden" id="admin-member-stats-wrapper" style="background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                <summary style="font-weight: 700; color: var(--dark); cursor: pointer;">Training Stats</summary>
+                <div class="dashboard-grid" id="admin-member-stats" style="gap: 1rem; margin-top: 1rem;"></div>
+            </details>
 
             <form id="member-form" class="flex-col gap-1">
                 <input type="hidden" id="form-original-id">
@@ -1123,7 +1126,7 @@
                     <div class="flex gap-2 mt-2">
                         <div style="flex: 1;">
                             <label class="text-gray">Starting Date</label>
-                            <input type="date" id="form-start-date" class="mt-1" onchange="App.applyPlan()" required>
+                            <input type="date" id="form-start-date" class="mt-1" onchange="App.markMemberStartOverridden(); App.applyPlan()" required>
                         </div>
                         <div style="flex: 1;">
                             <label class="text-gray" style="font-weight:bold; color:var(--dark);">Expiration Date</label>
@@ -1170,7 +1173,7 @@
                     <button type="button" class="btn-danger hidden" id="btn-delete-member" onclick="App.deleteMemberFromModal()">Delete</button>
                     <div style="flex: 1;"></div> 
                     <button type="button" class="btn-outline" onclick="App.closeModal('modal-member')">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Member</button>
+                    <button type="submit" class="btn-primary" id="btn-save-member">Save Member</button>
                 </div>
             </form>
         </div>
@@ -1241,7 +1244,7 @@
                     <button type="button" class="btn-danger hidden" id="btn-delete-payment" onclick="App.deletePayment()">Delete</button>
                     <div style="flex:1"></div>
                     <button type="button" class="btn-outline" onclick="App.closeModal('modal-payment')">Cancel</button>
-                    <button type="submit" class="btn-primary">Save Payment</button>
+                    <button type="submit" id="btn-save-payment" class="btn-primary">Save Payment</button>
                 </div>
             </form>
         </div>

@@ -307,7 +307,10 @@ Object.assign(App, {
                     return;
                 }
 
-                if(event && event.currentTarget && event.currentTarget.classList.contains('nav-item')) {
+                // `window.event` can be a non-element (e.g. the window-targeted `load`
+                // event that fires when a persisted admin session auto-logs in on boot,
+                // which has no `classList`), so guard before reading it.
+                if(event && event.currentTarget && event.currentTarget.classList && event.currentTarget.classList.contains('nav-item')) {
                     document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
                     event.currentTarget.classList.add('active');
                 }

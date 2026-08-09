@@ -161,6 +161,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             settingsMirror: '',
             dirty: new Set(),     // collections with local changes not yet flushed
             applied: new Set(),   // collections whose cloud state has been applied locally at least once
+            _subs: {},            // active Firestore unsubscribe functions per collection
             // Member id renames {oldId, newId} awaiting the delete pass. Persisted
             // so a tab close / crash between "create new doc" and "delete old doc"
             // does not orphan the old doc (which would duplicate the member).
@@ -622,6 +623,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.snapSeen.add(col);
                 if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col); fallbackToLocal(); renderAfterCloudSync(); }
                 if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
+                if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
+                    DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); renderAfterCloudSync(); });
+                }
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
             };
         }
@@ -632,9 +636,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.arrayMirrors[col] = JSON.stringify(items);
                 FSEngine.ready[col] = true;
                 FSEngine.snapSeen.add(col);
-                if (FSEngine.migrationResolved && !FSEngine.dirty.has(col)) {
+                // Kiosk/member clients can never legitimately edit schedules/closedDates
+                // (they are admin-only writes), so a local "dirty" flag on these array
+                // docs is always spurious for them. Ignoring it here prevents a fresh
+                // client (empty localStorage / incognito) from getting the collection
+                // stuck empty: if the snapshot arrives before the migration state
+                // resolves and the flag gets set, the apply would be skipped forever
+                // (the doc never changes again, so no snapshot re-fires, and kiosk
+                // clients can't flush admin-only writes to clear it). Unlike per-record
+                // collections there is no dirty merge fallback, so we apply regardless.
+                const isAdmin = FSEngine.isAdminClient();
+                if (FSEngine.migrationResolved && (!FSEngine.dirty.has(col) || !isAdmin)) {
                     STATE[ARRAY_DOCS[col].state] = items;
                     FSEngine.applied.add(col);
+                    if (!isAdmin) FSEngine.dirty.delete(col);
                     fallbackToLocal();
                     renderAfterCloudSync();
                 }
@@ -647,7 +662,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             FSEngine.migrationResolved = true;
             Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
             Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.dirty.has(col) && FSEngine.arrayMirrors[col] !== undefined) { STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]); FSEngine.applied.add(col); }
+                if (FSEngine.arrayMirrors[col] === undefined) return;
+                const isAdmin = FSEngine.isAdminClient();
+                if (!FSEngine.dirty.has(col) || !isAdmin) {
+                    STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]);
+                    FSEngine.applied.add(col);
+                    if (!isAdmin) FSEngine.dirty.delete(col);
+                }
             });
             fallbackToLocal();
             renderAfterCloudSync();
@@ -686,6 +707,82 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             safe(() => App.updateUICurrency && App.updateUICurrency());
         }
 
+        function subscribePerRecord(col) {
+            if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} }
+            FSEngine._subs[col] = db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => {
+                console.error('Firestore listener error (' + col + '):', err);
+                // Notifications are write-only for kiosk (rules allow create but not
+                // read). Mark the collection as ready with empty data so the kiosk
+                // can still create notifications without the sync engine blocking.
+                if (col === 'notifications' && !FSEngine.ready[col]) {
+                    FSEngine.mirrors[col] = new Map();
+                    FSEngine.lastDocs[col] = [];
+                    FSEngine.ready[col] = true;
+                    FSEngine.snapSeen.add(col);
+                }
+            });
+        }
+
+        function subscribeRenameLedger() {
+            if (FSEngine._subs['memberRenames']) { try { FSEngine._subs['memberRenames'](); } catch (e) {} }
+            FSEngine._subs['memberRenames'] = db.collection('memberRenames').onSnapshot(snapshot => {
+                const map = new Map();
+                snapshot.forEach(d => { const rec = d.data(); if (rec && rec.oldId && rec.newId) map.set(rec.oldId, rec.newId); });
+                FSEngine.renameMap = map;
+                if (FSEngine.migrationResolved) { applyRenameLedger(); renderAfterCloudSync(); }
+            }, err => console.error('Firestore listener error (memberRenames):', err));
+        }
+
+        function subscribeArrayDoc(col) {
+            if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} }
+            FSEngine._subs[col] = db.collection(col).doc('global').onSnapshot(handleArrayDocSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
+        }
+
+        function subscribeSettings() {
+            if (FSEngine._subs['settings']) { try { FSEngine._subs['settings'](); } catch (e) {} }
+            FSEngine._subs['settings'] = db.collection('settings').doc('global').onSnapshot(doc => {
+                if (doc.exists) {
+                    const d = doc.data() || {};
+                    if (d.portalName != null) STATE.portalName = d.portalName;
+                    if (Array.isArray(d.hiddenBelts)) STATE.hiddenBelts = d.hiddenBelts;
+                    if (d.currency != null) STATE.currency = d.currency;
+                    if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
+                    if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
+                    FSEngine.settingsMirror = JSON.stringify(settingsPayload());
+                }
+                FSEngine.settingsReady = true;
+                if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); renderAfterCloudSync(); }
+                if (FSEngine.dirty.has('settings')) FSEngine.scheduleFlush();
+            }, err => console.error('Firestore settings listener error:', err));
+        }
+
+        // Re-attach listeners for any collection that never delivered a snapshot.
+        // A Firestore onSnapshot listener that errors (e.g. permission-denied while
+        // the kiosk was signed in anonymously) is terminal — it will not re-fire
+        // automatically once the admin's credentials become available. Without this,
+        // logging in as admin after a denied boot leaves every collection empty
+        // forever (Staff Check-in, member directory, schedules, etc. show nothing).
+        function resubscribeMissing() {
+            if (!db || !db.collection) return;
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                if (col === 'notifications' || col === 'members') return;
+                if (!FSEngine.snapSeen.has(col)) subscribePerRecord(col);
+            });
+            Object.keys(ARRAY_DOCS).forEach(col => { if (!FSEngine.snapSeen.has(col)) subscribeArrayDoc(col); });
+            if (!FSEngine.settingsReady) subscribeSettings();
+            // Notifications are admin-read-only. On a kiosk boot the listener errors
+            // (rules allow create but not read) and the fallback marks it ready with
+            // empty data — so after an admin login it must be re-subscribed to get
+            // the real list; the snapSeen flag alone cannot distinguish the two.
+            // Members also need re-subscription on admin login so the snapshot
+            // re-fires and triggers the private subcollection fetch for PII data.
+            if (FSEngine.isAdminClient()) {
+                subscribePerRecord('notifications');
+                subscribePerRecord('members');
+            }
+            subscribeRenameLedger();
+        }
+
         function initRealtimeSync() {
             try {
                 if (!window.firebase || !firebase.firestore) {
@@ -695,46 +792,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 db = firebase.firestore();
                 FSEngine.db = db;
 
-                Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                    db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => {
-                        console.error('Firestore listener error (' + col + '):', err);
-                        // Notifications are write-only for kiosk (rules allow create but not
-                        // read). Mark the collection as ready with empty data so the kiosk
-                        // can still create notifications without the sync engine blocking.
-                        if (col === 'notifications' && !FSEngine.ready[col]) {
-                            FSEngine.mirrors[col] = new Map();
-                            FSEngine.lastDocs[col] = [];
-                            FSEngine.ready[col] = true;
-                            FSEngine.snapSeen.add(col);
-                        }
-                    });
-                });
+                Object.keys(CLOUD_COLLECTIONS).forEach(subscribePerRecord);
                 // Rename ledger: oldId -> newId for every self-service ID change.
                 // Kept separate from CLOUD_COLLECTIONS because it is a key-value
                 // map, not an array collection.
-                db.collection('memberRenames').onSnapshot(snapshot => {
-                    const map = new Map();
-                    snapshot.forEach(d => { const rec = d.data(); if (rec && rec.oldId && rec.newId) map.set(rec.oldId, rec.newId); });
-                    FSEngine.renameMap = map;
-                    if (FSEngine.migrationResolved) { applyRenameLedger(); renderAfterCloudSync(); }
-                }, err => console.error('Firestore listener error (memberRenames):', err));
-                Object.keys(ARRAY_DOCS).forEach(col => {
-                    db.collection(col).doc('global').onSnapshot(handleArrayDocSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
-                });
-                db.collection('settings').doc('global').onSnapshot(doc => {
-                    if (doc.exists) {
-                        const d = doc.data() || {};
-                        if (d.portalName != null) STATE.portalName = d.portalName;
-                        if (Array.isArray(d.hiddenBelts)) STATE.hiddenBelts = d.hiddenBelts;
-                        if (d.currency != null) STATE.currency = d.currency;
-                        if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
-                        if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
-                        FSEngine.settingsMirror = JSON.stringify(settingsPayload());
-                    }
-                    FSEngine.settingsReady = true;
-                    if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); renderAfterCloudSync(); }
-                    if (FSEngine.dirty.has('settings')) FSEngine.scheduleFlush();
-                }, err => console.error('Firestore settings listener error:', err));
+                subscribeRenameLedger();
+                Object.keys(ARRAY_DOCS).forEach(subscribeArrayDoc);
+                subscribeSettings();
 
                 // One-time migration from the legacy single document (admin only).
                 FSEngine.migrate();
@@ -751,6 +815,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 console.warn('Failed to initialize realtime sync', err);
             }
         }
+
+        FSEngine.resubscribeMissing = resubscribeMissing;
 
         const DB = {
             // getters
@@ -840,6 +906,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
             fetchAllMemberPrivate: async () => {
                 if (!db || !db.collection) return;
+                await FSEngine.whenReady('members');
                 const members = STATE.members || [];
                 const priv = {};
                 const promises = members.map(m => {
@@ -1002,6 +1069,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 .replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase()
                 .replace(/ς/g, 'σ'),
+            // True when a string contains any Greek-script character. Used to sort
+            // Greek names ahead of Latin/English names in the member directory.
+            isGreek: (str) => /[\u0370-\u03FF]/.test(String(str == null ? '' : str)),
             // Accent-insensitive search normalization (e.g. "Σπύρος" == "Σπυρος").
             normalizeSearch: (str) => Utils.sortKey(str),
             renderRichText: (text) => {
@@ -1456,6 +1526,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // Flush any pending local writes under admin privileges and retry
                 // the legacy migration if it wasn't completable in kiosk mode.
                 try { FSEngine.scheduleFlush(); FSEngine.migrate(); } catch (e) { console.warn('Admin unlock sync error:', e); }
+                // Re-attach Firestore listeners that failed while the kiosk was
+                // signed in anonymously (permission-denied kills a listener for good).
+                // Without this the admin portal would stay empty after login.
+                try { FSEngine.resubscribeMissing && FSEngine.resubscribeMissing(); } catch (e) { console.warn('Admin unlock listener resubscribe error:', e); }
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
@@ -1538,16 +1612,32 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
                         return;
                     }
-                    if (auth.currentUser) {
-                        try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
-                        return;
-                    }
-                    auth.signInAnonymously()
-                        .then(() => { try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); } })
-                        .catch(err => {
-                            console.warn('Anonymous auth failed, kiosk reads may be denied:', err);
+                    // Wait for the initial persisted session to be restored before
+                    // deciding whether to sign in anonymously. Calling signInAnonymously()
+                    // immediately races the async session restore and REPLACES a cached
+                    // admin/member session with an anonymous one — the admin portal
+                    // flashes for a split second, then the client drops back to the kiosk
+                    // and forces a re-login on every page load.
+                    let authSettled = false;
+                    let offAuth = null;
+                    offAuth = auth.onAuthStateChanged((user) => {
+                        if (authSettled) return;
+                        authSettled = true;
+                        // The listener may fire synchronously (before onAuthStateChanged
+                        // returns), in which case offAuth is still null — the flag above
+                        // makes any later fire a no-op, so a missed unsubscribe is harmless.
+                        if (offAuth) { try { offAuth(); } catch (e) {} }
+                        if (user) {
                             try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
-                        });
+                            return;
+                        }
+                        auth.signInAnonymously()
+                            .then(() => { try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); } })
+                            .catch(err => {
+                                console.warn('Anonymous auth failed, kiosk reads may be denied:', err);
+                                try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
+                            });
+                    });
                 })();
 
                 // Admin auth: hide the admin view initially, then let onAuthStateChanged

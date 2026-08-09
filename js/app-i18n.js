@@ -201,7 +201,7 @@ App.KIOSK_I18N = {
         memberViewHistoryStatus: 'Κατάσταση',
         memberViewStatusUnpaid: 'Απλήρωτο',
         memberViewStatusPaid: 'Πληρωμένο',
-        memberViewRankLabel: 'Θέση στην Κατάταξη',
+        memberViewRankLabel: 'ΘΕΣΗ ΣΤΗΝ ΚΑΤΑΤΑΞΗ',
         memberViewRankUnranked: 'Χωρίς κατάταξη',
         memberHideLbTitle: 'Απόκρυψη από την Κατάταξη',
         memberHideLbDesc: 'Αποκρύψτε το όνομά σας και τη θέση σας από την Κατάταξη Προπονήσεων.',
