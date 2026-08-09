@@ -1265,6 +1265,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             dirSortCol: 'lastName',
             dirSortAsc: true,
             dirStatus: 'active',
+            retentionSortCol: 'perWeek',
+            retentionSortAsc: true,
             pendingCheckinMember: null,
             pendingAdminCheckin: null,
             isMobileCheckinMode: false,
