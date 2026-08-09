@@ -201,6 +201,12 @@
                 <input type="datetime-local" id="form-visit-entry" required>
                 <label class="text-gray font-bold mt-1">Exit Date & Time (Leave empty if still inside)</label>
                 <input type="datetime-local" id="form-visit-exit">
+                <label class="text-gray font-bold mt-1">Payment Status</label>
+                <select id="form-visit-payment" style="width: 100%;">
+                    <option value="">Auto (recompute from payments)</option>
+                    <option value="paid">Paid</option>
+                    <option value="unpaid">Unpaid</option>
+                </select>
                 
                 <div class="flex gap-2 mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1.5rem;">
                     <button type="button" class="btn-danger" id="btn-delete-visit" onclick="App.deleteVisitFromModal()">Delete</button>
@@ -485,7 +491,7 @@
                     <div class="table-responsive mobile-cards">
                         <table>
                             <thead>
-                                <tr><th>Member</th><th>Belt</th><th>Classes</th><th>Avg / Week</th><th>Segment</th></tr>
+                                <tr id="retention-member-headers"><th>Member</th><th>Belt</th><th>Classes</th><th>Avg / Week</th><th>Segment</th></tr>
                             </thead>
                             <tbody id="retention-member-list"></tbody>
                         </table>

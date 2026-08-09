@@ -1,5 +1,13 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
+## 2026-08-10 — v0.10 (00:11) — No-sessions members keep Active label; manual paid/unpaid visit override
+- Member directory: out-of-sessions members no longer get the red row/card background (that now applies only to expired members), and their status badge reads "Active (No Sessions)" instead of "No sessions"
+- Check-in Log visit edit modal now has a Payment Status dropdown (Auto / Paid / Unpaid) letting admins force a visit paid or unpaid; the reconciliation engine respects the manual override and skips it when Auto is chosen
+
+- Member Frequency Breakdown table now has clickable column headers (like Member Directory) that sort by Member, Belt, Classes, Avg / Week, or Segment, with asc/desc toggling and an arrow indicator
+- Default sort stays "most at risk first" (Avg / Week ascending)
+- Belt moved out of the belt-colored member-ID box under the name into its own Belt column as a textless belt-color box; the ID under the name is now a neutral gray badge
+
 ## 2026-08-10 — v0.8 (00:02) — Admin control over which member statistics members can view
 - New "Member Settings" admin menu (separate sidebar entry under System) lets the admin toggle which personal statistics members see on their own dashboard: Total Trainings, Avg Trainings / Week, Avg Trainings / Month, Leaderboard Rank
 - Settings sync to Firestore like other settings and default to all-visible; admins always see the full set in the member modal

@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, exportRetentionExcel, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, saveClassCheckinsVisibility, renderMemberSettings, saveMemberStatsVisibility, repairDuplicateMembers
+// App methods: setRetentionPeriod, setRetentionSort, renderRetentionStats, renderRetentionTable, exportRetentionExcel, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, saveClassCheckinsVisibility, renderMemberSettings, saveMemberStatsVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -120,10 +120,71 @@ Object.assign(App, {
                 App.renderRetentionTable();
             },
 
+            setRetentionSort: (colId) => {
+                if (App.retentionSortCol === colId) { App.retentionSortAsc = !App.retentionSortAsc; }
+                else { App.retentionSortCol = colId; App.retentionSortAsc = true; }
+                App.renderRetentionTable();
+            },
+
             renderRetentionTable: () => {
                 const filter = document.getElementById('retention-segment-filter').value;
                 const rows = (App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
                 const list = document.getElementById('retention-member-list');
+                const headers = document.getElementById('retention-member-headers');
+                const sortCol = App.retentionSortCol || 'perWeek';
+                const sortAsc = App.retentionSortAsc !== false;
+                const cols = [
+                    { id: 'member', label: 'Member' },
+                    { id: 'belt', label: 'Belt' },
+                    { id: 'classes', label: 'Classes' },
+                    { id: 'perWeek', label: 'Avg / Week' },
+                    { id: 'segment', label: 'Segment' }
+                ];
+                if (headers) {
+                    headers.innerHTML = cols.map(c => {
+                        const isSorted = sortCol === c.id;
+                        const arrow = isSorted ? (sortAsc ? ' ↑' : ' ↓') : '';
+                        return `<th class="sortable" onclick="App.setRetentionSort('${c.id}')">${c.label}${arrow}</th>`;
+                    }).join('');
+                }
+                rows.sort((a, b) => {
+                    let valA, valB;
+                    let groupA = 0, groupB = 0;
+                    switch (sortCol) {
+                        case 'member': {
+                            const keyA = Utils.sortKey(a.member.lastName || '');
+                            const keyB = Utils.sortKey(b.member.lastName || '');
+                            const firstA = Utils.sortKey(a.member.firstName || '');
+                            const firstB = Utils.sortKey(b.member.firstName || '');
+                            groupA = Utils.isGreek(a.member.lastName) ? 0 : 1;
+                            groupB = Utils.isGreek(b.member.lastName) ? 0 : 1;
+                            if (keyA !== keyB) { valA = keyA; valB = keyB; break; }
+                            valA = firstA; valB = firstB;
+                            break;
+                        }
+                        case 'belt': {
+                            const beltOrder = { 'white': 0, 'blue': 1, 'purple': 2, 'brown': 3, 'black': 4 };
+                            valA = beltOrder[(a.member.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            valB = beltOrder[(b.member.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            break;
+                        }
+                        case 'classes': valA = a.count; valB = b.count; break;
+                        case 'segment': {
+                            const order = { 'high': 0, 'moderate': 1, 'active': 2 };
+                            valA = order[a.segment]; valB = order[b.segment];
+                            break;
+                        }
+                        default: valA = a.perWeek; valB = b.perWeek;
+                    }
+                    if (typeof valA === 'string' && typeof valB === 'string') {
+                        if (groupA !== groupB) return groupA < groupB ? -1 : 1;
+                        if (valA !== valB) return sortAsc ? (valA < valB ? -1 : 1) : (valA < valB ? 1 : -1);
+                        return 0;
+                    }
+                    if (valA < valB) return sortAsc ? -1 : 1;
+                    if (valA > valB) return sortAsc ? 1 : -1;
+                    return 0;
+                });
                 const segMeta = {
                     high: { label: 'High Risk', cls: 'badge-inactive' },
                     moderate: { label: 'Moderate Risk', cls: 'badge-warning' },
@@ -135,8 +196,8 @@ Object.assign(App, {
                     const barPct = Math.min(100, Math.round(r.perWeek / 6 * 100));
                     return `
                         <tr>
-                            <td data-label="Member"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong><div class="mt-1">${Utils.getMemberIdBadge(m)}</div></td>
-                            <td data-label="Belt">${Utils.escapeHTML(m.belt || 'White')}</td>
+                            <td data-label="Member"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong><div class="mt-1"><span class="belt-badge" style="width:84px; text-align:center; overflow-wrap:anywhere; background:var(--gray-light); border-color:#cbd5e1; color:var(--dark);">${Utils.escapeHTML(m.id)}</span></div></td>
+                            <td data-label="Belt">${Utils.getBeltBox(m.belt)}</td>
                             <td data-label="Classes">${r.count}</td>
                             <td data-label="Avg / Week">
                                 <div class="retention-freq">
@@ -752,6 +813,8 @@ Object.assign(App, {
                 const exitInput = document.getElementById('form-visit-exit');
                 exitInput.value = Utils.toLocalDatetimeInput(visit.exitTime);
 
+                document.getElementById('form-visit-payment').value = visit.paidOverride || '';
+
                 App.openModal('modal-visit');
             },
 
@@ -766,6 +829,9 @@ Object.assign(App, {
                     if(entryVal) v.entryTime = new Date(entryVal).toISOString();
                     if(exitVal) v.exitTime = new Date(exitVal).toISOString();
                     else v.exitTime = null;
+                    const payVal = document.getElementById('form-visit-payment').value;
+                    if (payVal === 'paid' || payVal === 'unpaid') v.paidOverride = payVal;
+                    else delete v.paidOverride;
                     DB.saveVisits(visits);
                     // Moving a visit in time can change which payment/session covers it, so
                     // re-run the reconciliation engine to keep isUnpaid flags and the member's

@@ -219,7 +219,7 @@ Object.assign(App, {
                     else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
-                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
+                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">Active (No Sessions)</span>`;
                     else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else statBadge = `<span class="badge badge-active">Active</span>`;
                     const trialBadge = m.trialParticipant
@@ -253,7 +253,7 @@ Object.assign(App, {
                     });
 
                     return `
-                    <tr class="${(isMemberExpired || isOutOfSessions) && m.accountStatus !== 'Frozen' ? 'bg-red-50' : ''}">
+                    <tr class="${isMemberExpired && m.accountStatus !== 'Frozen' ? 'bg-red-50' : ''}">
                         ${rowHTML}
                         <td data-label="Action" class="cell-actions"><button class="btn-primary btn-small" onclick="App.openMemberModal('${m.id}')">Manage</button></td>
                     </tr>
@@ -271,7 +271,7 @@ Object.assign(App, {
                     else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
-                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
+                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">Active (No Sessions)</span>`;
                     else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else statBadge = `<span class="badge badge-active">Active</span>`;
                     const trialBadge = m.trialParticipant
@@ -310,7 +310,7 @@ Object.assign(App, {
                     });
 
                     return `
-                    <div class="member-card ${(isMemberExpired || isOutOfSessions) && m.accountStatus !== 'Frozen' ? 'is-alert' : ''}">
+                    <div class="member-card ${isMemberExpired && m.accountStatus !== 'Frozen' ? 'is-alert' : ''}">
                         <div class="member-card-head">
                             <div class="member-card-title">
                                 <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>

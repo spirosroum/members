@@ -405,8 +405,14 @@ Object.assign(App, {
                         isPaidByTime = timeWindows.some(w => entry >= w.start && entry <= w.end);
                     }
 
+                    // Manual override from the Visit Edit modal: forces the visit paid or
+                    // unpaid regardless of what the coverage engine would otherwise decide.
                     let shouldBePaid = false;
-                    if (isPaidByExplicit || isPaidByTime) {
+                    if (v.paidOverride === 'paid') {
+                        shouldBePaid = true;
+                    } else if (v.paidOverride === 'unpaid') {
+                        shouldBePaid = false;
+                    } else if (isPaidByExplicit || isPaidByTime) {
                         shouldBePaid = true;
                     } else if (totalSessionsCapacity > 0) {
                         // Covered by session quota from valid payments
@@ -431,7 +437,7 @@ Object.assign(App, {
                     // Membership window: once the first unpaid day is reached, every following
                     // visit up to the expiration date is covered by the membership — without
                     // consuming any session quota (those visits were never session-covered).
-                    if (!shouldBePaid && memberWindowStart && entry && !isNaN(entry.getTime())
+                    if (v.paidOverride !== 'unpaid' && !shouldBePaid && memberWindowStart && entry && !isNaN(entry.getTime())
                         && entry >= memberWindowStart && entry <= memberExpires) {
                         shouldBePaid = true;
                     }
