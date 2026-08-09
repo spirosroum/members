@@ -929,6 +929,7 @@ Object.assign(App, {
                     { id: 'totalTrainings', title: 'Total Trainings', desc: 'Shows the member\'s total number of recorded trainings.' },
                     { id: 'totalHours', title: 'Total Hours Trained', desc: 'Shows the member\'s total hours spent training.' },
                     { id: 'avgWeek', title: 'Avg Trainings / Week', desc: 'Shows the member\'s average training frequency per week.' },
+                    { id: 'avgDays', title: 'Avg Days / Week', desc: 'Shows the member\'s average training days per week.' },
                     { id: 'avgMonth', title: 'Avg Trainings / Month', desc: 'Shows the member\'s average training frequency per month.' },
                     { id: 'rank', title: 'Leaderboard Rank', desc: 'Shows the member\'s rank on the public training leaderboard.' }
                 ];

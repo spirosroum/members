@@ -268,6 +268,7 @@ Object.assign(App, {
                 const total = App.getMemberTrainingCount(memberId);
                 let perWeek = 0;
                 let perMonth = 0;
+                let perWeekDays = 0;
                 const lang = App.currentKioskLang || 'en';
                 const map = App.isAdminAuthed() ? App.KIOSK_I18N.en : (App.KIOSK_I18N[lang] || App.KIOSK_I18N.en);
                 const rank = App.getMemberLeaderboardRank(memberId);
@@ -284,6 +285,10 @@ Object.assign(App, {
                     const months = Math.max(1, (now - firstDate) / (1000 * 60 * 60 * 24 * 30));
                     perWeek = (total / weeks).toFixed(1);
                     perMonth = (total / months).toFixed(1);
+                    // Distinct training DAYS (local calendar date) across visits and
+                    // class check-ins, so two trainings in the same day count as one day.
+                    const daySet = new Set(allDates.map(d => Utils.dateToLocalIso(d)));
+                    perWeekDays = (daySet.size / weeks).toFixed(1);
                 }
 
                 // Admins (member modal) always see the full set; the member portal
@@ -304,6 +309,11 @@ Object.assign(App, {
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
+                    </div>`);
+                if (show('avgDays')) cards.push(`
+                    <div class="stat-card" style="padding: 1rem;">
+                        <h3>${Utils.escapeHTML(map.memberViewAvgDays || 'Avg Days / Week')}</h3>
+                        <div class="value" style="font-size: 1.5rem;">${perWeekDays}</div>
                     </div>`);
                 if (show('avgMonth')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
