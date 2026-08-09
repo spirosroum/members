@@ -805,6 +805,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             if (FSEngine.isAdminClient()) {
                 subscribePerRecord('notifications');
                 subscribePerRecord('members');
+                // Payments and the bins are admin-read-only: anonymous kiosk auth
+                // denies them, which kills a listener for good. After a logout these
+                // never reload unless every admin unlock forces a fresh subscription.
+                ['payments', 'planBin', 'scheduleBin', 'notificationBin', 'bin'].forEach(col => subscribePerRecord(col));
             }
             subscribeRenameLedger();
         }
@@ -1561,6 +1565,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.removeItem('gym_bin');
                 ['payments','notifications','notificationBin','bin'].forEach(col => {
                     FSEngine.dirty.delete(col);
+                    // Forget this collection's cloud sync state along with the local
+                    // wipe: keeping ready/applied/snapSeen/mirror set would let the
+                    // next admin login's flush diff an empty local array against the
+                    // cloud mirror and DELETE every doc in the collection. Resetting
+                    // ready also makes resubscribeMissing re-attach the listener so
+                    // the data reloads instead of staying empty.
+                    FSEngine.ready[col] = false;
+                    FSEngine.applied.delete(col);
+                    FSEngine.snapSeen.delete(col);
+                    delete FSEngine.mirrors[col];
+                    delete FSEngine.lastDocs[col];
                 });
                 fallbackToLocal();
             },
