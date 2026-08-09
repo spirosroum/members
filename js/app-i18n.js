@@ -340,7 +340,7 @@ App.applyKioskTranslations = function() {
         if (memberDrawerLogout) memberDrawerLogout.innerText = map.memberPortalLogout || 'Logout';
         document.querySelectorAll('#kiosk-drawer-section-menu, #member-drawer-section-menu').forEach(el => { if (el) el.innerText = map.menuLabel || 'Menu'; });
         document.querySelectorAll('#kiosk-drawer-section-lang, #member-drawer-section-lang').forEach(el => { if (el) el.innerText = map.languageLabel || 'Language'; });
-        const langLabelText = lang === 'en' ? '🇬🇧 English' : '🇬🇷 Ελληνικά';
+        const langLabelText = lang === 'en' ? '🇬🇧' : '🇬🇷';
         const kioskDrawerLang = document.getElementById('kiosk-drawer-lang');
         if (kioskDrawerLang) kioskDrawerLang.innerText = langLabelText;
         const memberDrawerLang = document.getElementById('member-drawer-lang');

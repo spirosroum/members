@@ -1,5 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
+## 2026-08-09 — Flag-only language button in member portal and check-in
+- Language toggle button in the kiosk/member drawers now shows only the flag emoji (UK flag for English, Greek flag for Greek), no text
+
 ## 2026-08-09 — Add manual "Cancelled" member status for admins
 - Added "Cancelled" option to the Account Status dropdown in the member modal so admins can cancel members manually
 - Directory badges, status filter tab, and exports recognize the stored Cancelled status (filter also still includes 90d+ no-training members)
