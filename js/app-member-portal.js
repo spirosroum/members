@@ -312,7 +312,7 @@ Object.assign(App, {
                 if (show('totalHours')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
-                        <div class="value" style="font-size: 1.5rem;">${(App.getMemberTotalHours(memberId) / 60).toFixed(1)}</div>
+                        <div class="value" style="font-size: 1.5rem;">${Utils.formatDurationMins(App.getMemberTotalHours(memberId))}</div>
                     </div>`);
                 if (mode === 'week' || mode === 'both') {
                     if (show('avgWeek')) cards.push(`

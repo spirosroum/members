@@ -1,6 +1,10 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.19 (01:50) — Make Avg Days / Month a standalone member stat
+## 2026-08-10 — v0.20 (02:00) — Hours as h/m, missing Greek labels, member header order
+- Total Hours Trained now displays as hours and minutes (e.g. "12h 30m") instead of a decimal number
+- Added missing Greek translations so Total Trainings, Avg Trainings / Week, and Avg Trainings / Month no longer fall back to English
+- Member portal header buttons reordered: language toggle now sits to the left of Logout
+
 - "Avg Days / Month" is now an always-visible stat card (total training days ÷ months since first training) in both the admin member modal and the member portal, instead of only showing inside the Month toggle view
 - Added a matching "Avg Days / Month" visibility toggle in Member Settings (visible by default)
 
