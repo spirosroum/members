@@ -1030,7 +1030,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         };
 
         const Utils = {
-            formatDate: (dateStr) => { if (!dateStr) return 'N/A'; return new Date(dateStr).toLocaleDateString(); },
+            formatDate: (dateStr) => {
+                if (!dateStr) return 'N/A';
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return 'N/A';
+                const dd = String(d.getDate()).padStart(2, '0');
+                const mm = String(d.getMonth() + 1).padStart(2, '0');
+                const yyyy = d.getFullYear();
+                return `${dd}/${mm}/${yyyy}`;
+            },
             // Local-date helpers: "today" and date-to-YYYY-MM-DD conversions.
             // toISOString() returns the UTC date, which shifts the day for users in
             // positive/negative offsets (e.g. Greece is UTC+2/+3), so all date
@@ -1057,7 +1065,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             formatDateLocalized: (dateStr, lang = 'en') => {
                 if (!dateStr) return 'N/A';
                 try {
-                    const locale = lang === 'el' ? 'el-GR' : 'en-US';
+                    const locale = lang === 'el' ? 'el-GR' : 'en-GB';
                     return new Date(dateStr).toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
                 } catch (e) {
                     return Utils.formatDate(dateStr);
