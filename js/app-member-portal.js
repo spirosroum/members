@@ -265,7 +265,7 @@ Object.assign(App, {
                     .reduce((s, v) => s + Math.max(0, Math.round((new Date(v.exitTime) - new Date(v.entryTime)) / 60000)), 0);
             },
 
-            getMemberStatsHTML: (memberId) => {
+            getMemberStatsHTML: (memberId, opts = {}) => {
                 const visits = DB.getVisits().filter(v => v.memberId === memberId);
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
                 const total = App.getMemberTrainingCount(memberId);
@@ -343,9 +343,9 @@ Object.assign(App, {
                         <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
                     </div>`);
-                if (show('rank')) cards.push(`
+                if (!opts.separateRank && show('rank')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
-                        <h3>${Utils.escapeHTML(map.memberViewRankLabel || 'Leaderboard Rank')}</h3>
+                        <h3>${Utils.escapeHTML((map.memberViewRankLabel || 'Leaderboard Rank') + (map.memberViewRank90d || ' (last 90 days)'))}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.escapeHTML(rankDisplay)}</div>
                     </div>`);
                 return cards.join('');
@@ -440,9 +440,17 @@ Object.assign(App, {
                     <div class="text-gray mt-1">${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')} ${expDisplay}</div>
                 `;
 
-                const statsHTML = App.getMemberStatsHTML(member.id);
+                const statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true });
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
+                const rank = App.getMemberLeaderboardRank(member.id);
+                const rankCard = document.getElementById('member-rank-card');
+                const rankVisible = App.isAdminAuthed() || DB.getMemberStatsVisibility()['rank'] !== false;
+                if (rankCard) rankCard.classList.toggle('hidden', !rankVisible);
+                const rankTitle = document.getElementById('member-rank-title');
+                const rankValue = document.getElementById('member-rank-value');
+                if (rankTitle) rankTitle.innerText = (map.memberViewRankLabel || 'Leaderboard Rank') + (map.memberViewRank90d || ' (last 90 days)');
+                if (rankValue) rankValue.innerText = rank ? `#${rank}` : (map.memberViewRankUnranked || 'Unranked');
                 const statsTitle = document.getElementById('member-stats-title');
                 const weekBtn = document.getElementById('member-stats-mode-week');
                 const monthBtn = document.getElementById('member-stats-mode-month');

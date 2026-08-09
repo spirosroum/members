@@ -1,6 +1,9 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.20 (02:00) — Hours as h/m, missing Greek labels, member header order
+## 2026-08-10 — v0.21 (02:10) — Separate Leaderboard Rank card in member portal
+- Member portal Leaderboard Rank moved out of the statistics grid into its own card, labeled "(last 90 days)" (the rank is computed over the trailing 3 months); it still respects the Member Settings visibility toggle
+- The admin member modal's rank card now also shows the "(last 90 days)" suffix; Greek/English label added
+
 - Total Hours Trained now displays as hours and minutes (e.g. "12h 30m") instead of a decimal number
 - Added missing Greek translations so Total Trainings, Avg Trainings / Week, and Avg Trainings / Month no longer fall back to English
 - Member portal header buttons reordered: language toggle now sits to the left of Logout
