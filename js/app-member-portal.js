@@ -205,10 +205,11 @@ Object.assign(App, {
             // confirmKioskClassSelection / confirmAdminCheckinSelection).
             // Falls back to raw visit count only when no class check-ins exist
             // (legacy data recorded before class-level check-ins).
-            getMemberTrainingCount: (memberId, sinceDate = null) => {
+            getMemberTrainingCount: (memberId, sinceDate = null, untilDate = null) => {
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
                 let filtered = checkins;
                 if (sinceDate) filtered = filtered.filter(ci => new Date(ci.entryTime) >= sinceDate);
+                if (untilDate) filtered = filtered.filter(ci => new Date(ci.entryTime) < untilDate);
 
                 const uniqueSessionKeys = new Set();
                 filtered.forEach(ci => {
@@ -221,7 +222,9 @@ Object.assign(App, {
                     return uniqueSessionKeys.size;
                 }
 
-                const visits = DB.getVisits().filter(v => v.memberId === memberId && (!sinceDate || new Date(v.entryTime) >= sinceDate));
+                const visits = DB.getVisits().filter(v => v.memberId === memberId
+                    && (!sinceDate || new Date(v.entryTime) >= sinceDate)
+                    && (!untilDate || new Date(v.entryTime) < untilDate));
                 return visits.length;
             },
 

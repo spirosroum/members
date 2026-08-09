@@ -441,6 +441,13 @@
                         <button class="btn-outline btn-small retention-period-btn active" data-weeks="13" onclick="App.setRetentionPeriod(13)">3 mo</button>
                         <button class="btn-outline btn-small retention-period-btn" data-weeks="26" onclick="App.setRetentionPeriod(26)">6 mo</button>
                         <button class="btn-outline btn-small retention-period-btn" data-weeks="52" onclick="App.setRetentionPeriod(52)">12 mo</button>
+                        <button class="btn-outline btn-small retention-period-btn" data-custom="1" onclick="App.setRetentionPeriod('custom')">Custom</button>
+                    </div>
+                    <div class="retention-custom-range hidden" id="retention-custom-range">
+                        <label class="text-gray" style="font-weight:600;">From</label>
+                        <input type="date" id="retention-custom-start" onchange="App.onRetentionCustomChange()">
+                        <label class="text-gray" style="font-weight:600;">To</label>
+                        <input type="date" id="retention-custom-end" onchange="App.onRetentionCustomChange()">
                     </div>
                 </div>
 
@@ -462,7 +469,7 @@
                     <div class="flex justify-between align-center mb-1" style="flex-wrap: wrap; gap: 1rem;">
                         <div>
                             <h3 style="margin:0;">Member Frequency Breakdown</h3>
-                            <p class="text-gray" style="margin:0.25rem 0 0 0;">Every active member sorted by training frequency (most at risk first).</p>
+                            <p class="text-gray" style="margin:0.25rem 0 0 0;">Every active member sorted by training frequency (most at risk first). <span id="retention-window-label" style="font-weight:600;"></span></p>
                         </div>
                         <select id="retention-segment-filter" onchange="App.renderRetentionTable()" class="mt-1">
                             <option value="all">All Segments</option>

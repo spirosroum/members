@@ -9,26 +9,62 @@ Object.assign(App, {
             // --- RETENTION & ATTENDANCE ---
             setRetentionPeriod: (weeks) => {
                 App.retentionPeriodWeeks = weeks;
-                document.querySelectorAll('.retention-period-btn').forEach(b =>
-                    b.classList.toggle('active', parseInt(b.dataset.weeks, 10) === weeks));
+                const isCustom = weeks === 'custom';
+                document.querySelectorAll('.retention-period-btn').forEach(b => {
+                    const matches = isCustom ? b.dataset.custom === '1' : parseInt(b.dataset.weeks, 10) === weeks;
+                    b.classList.toggle('active', !!matches);
+                });
+                const customRange = document.getElementById('retention-custom-range');
+                if (customRange) customRange.classList.toggle('hidden', !isCustom);
+                App.renderKPIs();
                 App.renderRetentionStats();
             },
 
+            onRetentionCustomChange: () => {
+                App.retentionPeriodWeeks = 'custom';
+                document.querySelectorAll('.retention-period-btn').forEach(b =>
+                    b.classList.toggle('active', b.dataset.custom === '1'));
+                const customRange = document.getElementById('retention-custom-range');
+                if (customRange) customRange.classList.remove('hidden');
+                App.renderKPIs();
+                App.renderRetentionStats();
+            },
+
+            // Resolves the active analysis window to {since, until} Date objects.
+            // Preset buttons map to trailing N weeks ending today; Custom uses the
+            // date inputs (falling back to 3 months when only one is set).
+            getRetentionWindow: () => {
+                let until = new Date();
+                let since;
+                if (App.retentionPeriodWeeks === 'custom') {
+                    const startVal = document.getElementById('retention-custom-start').value;
+                    const endVal = document.getElementById('retention-custom-end').value;
+                    const start = startVal ? new Date(startVal + 'T00:00:00') : null;
+                    const end = endVal ? new Date(endVal + 'T23:59:59') : null;
+                    if (start && end) { since = start; until = end; }
+                    else if (start) { since = start; }
+                    else if (end) { since = new Date(end.getTime() - 13 * 7 * 24 * 60 * 60 * 1000); until = end; }
+                    else { since = new Date(until.getTime() - 13 * 7 * 24 * 60 * 60 * 1000); }
+                } else {
+                    const weeks = App.retentionPeriodWeeks || 13;
+                    since = new Date(until.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
+                }
+                return { since, until };
+            },
+
             renderRetentionStats: () => {
-                const weeks = App.retentionPeriodWeeks || 13;
-                const now = new Date();
-                const since = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
+                const { since, until } = App.getRetentionWindow();
 
                 // Analyze active members only — expired/inactive/frozen rosters are not at risk.
                 const members = DB.getMembers().filter(m => (m.accountStatus || 'Active') === 'Active');
 
                 const rows = members.map(m => {
-                    const count = App.getMemberTrainingCount(m.id, since);
+                    const count = App.getMemberTrainingCount(m.id, since, until);
                     // Effective window starts at the later of the period start or the member's
                     // first training date, so brand-new members aren't penalized for joining mid-period.
                     const firstTraining = App.getMemberFirstTrainingDate(m.id);
                     const windowStart = (firstTraining && firstTraining > since) ? firstTraining : since;
-                    const windowWeeks = Math.max(1, (now - windowStart) / (1000 * 60 * 60 * 24 * 7));
+                    const windowWeeks = Math.max(1, (until - windowStart) / (1000 * 60 * 60 * 24 * 7));
                     const perWeek = count / windowWeeks;
                     let segment = 'active';
                     if (perWeek < 1) segment = 'high';
@@ -51,6 +87,14 @@ Object.assign(App, {
                     <div class="stat-card"><h3>Moderate Risk</h3><div class="value" style="color:var(--warning)">${segCount.moderate}<span style="font-size:1rem;"> (${pct('moderate')}%)</span></div></div>
                     <div class="stat-card"><h3>Active / Healthy</h3><div class="value" style="color:var(--success)">${segCount.active}<span style="font-size:1rem;"> (${pct('active')}%)</span></div></div>
                 `;
+
+                // Show the active analysis window in the breakdown subtitle.
+                const winLabel = document.getElementById('retention-window-label');
+                if (winLabel) {
+                    const fmt = d => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    const endFmt = Utils.dateToLocalIso(until) === Utils.todayLocalIso() ? 'Today' : fmt(until);
+                    winLabel.innerText = `Analysis window: ${fmt(since)} – ${endFmt}.`;
+                }
 
                 const segCards = [
                     { key: 'high', label: 'High Risk', desc: '< 1 class / week', count: segCount.high, pct: pct('high'), color: 'var(--danger)', bg: 'var(--bg-danger-soft)' },
@@ -143,19 +187,29 @@ Object.assign(App, {
                 const grid = document.getElementById('kpi-grid');
                 if (!grid) return;
                 const now = new Date();
+                const { since: winStart, until: winEnd } = App.getRetentionWindow();
+                const isCustom = App.retentionPeriodWeeks === 'custom';
                 const members = DB.getMembers();
                 const checkins = DB.getClassCheckins();
-                const visits = DB.getVisits();
                 const payments = DB.getPayments();
                 const schedules = DB.getSchedules();
                 const currency = DB.getCurrency();
                 const joinMap = new Map();
                 members.forEach(m => joinMap.set(m.id, App.getMemberJoinDate(m.id)));
 
-                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                // ---- 1. MEMBERSHIP GROWTH (period) ----
+                // Headline growth = new members joining in the window ÷ roster before the window.
+                const windowNewMembers = members.filter(m => {
+                    const jd = joinMap.get(m.id);
+                    return jd && jd >= winStart && jd < winEnd;
+                }).length;
+                const rosterBeforeWindow = members.filter(m => {
+                    const jd = joinMap.get(m.id);
+                    return jd && jd < winStart;
+                }).length;
+                const growthPct = rosterBeforeWindow > 0 ? (windowNewMembers / rosterBeforeWindow) * 100 : null;
 
-                // ---- 1. MEMBERSHIP GROWTH (monthly) ----
+                // 6-month new-member trend (still shown for preset windows; hidden for custom).
                 const monthTrend = [];
                 for (let i = 5; i >= 0; i--) {
                     const s = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -166,55 +220,51 @@ Object.assign(App, {
                     }).length;
                     monthTrend.push({ label: s.toLocaleDateString(undefined, { month: 'short' }), count });
                 }
-                const newThisMonth = monthTrend[monthTrend.length - 1].count;
-                const rosterBeforeMonth = members.filter(m => {
-                    const jd = joinMap.get(m.id);
-                    return jd && jd < monthStart;
-                }).length;
-                const growthPct = rosterBeforeMonth > 0 ? (newThisMonth / rosterBeforeMonth) * 100 : null;
 
-                // ---- 2. MEMBER RETENTION (quarterly) ----
+                // ---- 2. MEMBER RETENTION (period) ----
                 // Retention = (students at end of period − new students acquired during period)
                 //             ÷ students at start of period × 100
-                const periodStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
                 const membersWithJoin = members.filter(m => joinMap.get(m.id));
-                const studentsAtStart = membersWithJoin.filter(m => joinMap.get(m.id) < periodStart).length;
-                const newStudents = membersWithJoin.filter(m => joinMap.get(m.id) >= periodStart).length;
-                const studentsAtEnd = membersWithJoin.length;
+                const studentsAtStart = membersWithJoin.filter(m => joinMap.get(m.id) < winStart).length;
+                const newStudents = membersWithJoin.filter(m => joinMap.get(m.id) >= winStart && joinMap.get(m.id) < winEnd).length;
+                const studentsAtEnd = membersWithJoin.filter(m => joinMap.get(m.id) < winEnd).length;
                 const retainedStudents = studentsAtEnd - newStudents;
                 const retentionPct = studentsAtStart > 0 ? (retainedStudents / studentsAtStart) * 100 : null;
 
-                // ---- 3. REVENUE PER MEMBER (monthly) ----
-                const revenueThisMonth = payments.filter(p => {
+                // ---- 3. REVENUE PER MEMBER (period) ----
+                const revenueThisPeriod = payments.filter(p => {
                     if (!p.date || !(parseFloat(p.amount) > 0)) return false;
                     const d = new Date(p.date + 'T12:00:00');
-                    return d >= monthStart && d < nextMonth;
+                    return d >= winStart && d < winEnd;
                 }).reduce((s, p) => s + parseFloat(p.amount), 0);
                 const activeCount = members.filter(m => (m.accountStatus || 'Active') === 'Active').length;
-                const rpm = activeCount > 0 ? revenueThisMonth / activeCount : null;
+                const rpm = activeCount > 0 ? revenueThisPeriod / activeCount : null;
 
-                // ---- 4. CLASS ATTENDANCE (weekly) ----
+                // ---- 4. CLASS ATTENDANCE (period) ----
                 // Attendance rate = students who attended ÷ students enrolled in that class × 100.
                 // Enrollment is approximated by the class's Max Capacity (set in Training Schedules).
                 // Only classes with a capacity set are counted; closed days are skipped.
-                const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() - 6);
-                weekStart.setHours(0, 0, 0, 0);
+                const attStart = new Date(winStart);
+                attStart.setHours(0, 0, 0, 0);
                 const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                // Skip days the academy is closed (holidays) so they don't count against capacity.
-                const closedSet = Utils.buildClosedSet(weekStart.getFullYear() + 1);
+                const closedSet = Utils.buildClosedSet(attStart.getFullYear() + 1);
                 let totalCap = 0, totalAtt = 0;
                 (schedules.filter(c => c.capacity && parseInt(c.capacity, 10) > 0 && c.isPublic !== false)).forEach(cls => {
                     const cap = parseInt(cls.capacity, 10);
                     (cls.slots || []).forEach(slot => {
-                        for (let i = 0; i < 7; i++) {
-                            const day = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
-                            if (dayNames[day.getDay()] !== slot.day) continue;
-                            const dateIso = Utils.dateToLocalIso(day);
-                            if (closedSet.has(dateIso)) continue;
-                            const att = checkins.filter(ci => ci.classId === cls.id && ci.slotDate === dateIso && ci.slotStart === slot.start && ci.slotEnd === slot.end).length;
-                            totalCap += cap;
-                            totalAtt += Math.min(att, cap);
+                        // Walk the window day by day; each occurrence of a matching slot
+                        // contributes its capacity once and counts its check-ins.
+                        const cursor = new Date(attStart);
+                        while (cursor < winEnd) {
+                            if (dayNames[cursor.getDay()] === slot.day) {
+                                const dateIso = Utils.dateToLocalIso(cursor);
+                                if (!closedSet.has(dateIso)) {
+                                    const att = checkins.filter(ci => ci.classId === cls.id && ci.slotDate === dateIso && ci.slotStart === slot.start && ci.slotEnd === slot.end).length;
+                                    totalCap += cap;
+                                    totalAtt += Math.min(att, cap);
+                                }
+                            }
+                            cursor.setDate(cursor.getDate() + 1);
                         }
                     });
                 });
@@ -239,26 +289,29 @@ Object.assign(App, {
                         ${extra}
                         <div class="kpi-note">${note}</div>
                     </div>`;
+                const winLabel = isCustom ? 'this period' : 'this month';
 
                 grid.innerHTML =
                     card(
                         'Membership Growth',
-                        'Goal: 5–10% monthly increase',
+                        isCustom ? 'Goal: 5–10% over the selected period' : 'Goal: 5–10% monthly increase',
                         growthPct != null ? `<span class="kpi-arrow">+</span>${growthPct.toFixed(1)}%` : '—',
                         growthPct != null ? (growthPct >= 5 ? 'ok' : 'warn') : 'warn',
-                        'Counted: new members joined this month ÷ roster before the month.',
-                        `<div class="kpi-chart">${monthTrend.map((t, idx) => `
-                            <div class="kpi-chart-col" title="${t.label}: ${t.count} new">
-                                <div class="kpi-chart-bar" style="height:${Math.max(4, Math.round(t.count / trendMax * 100))}%"></div>
-                                <span class="kpi-chart-label">${t.label}</span>
-                            </div>`).join('')}</div>`
+                        `Counted: new members joined in ${winLabel} ÷ roster before it.`,
+                        isCustom
+                            ? `<div class="kpi-sub">${windowNewMembers} new / ${rosterBeforeWindow} before</div>`
+                            : `<div class="kpi-chart">${monthTrend.map((t, idx) => `
+                                <div class="kpi-chart-col" title="${t.label}: ${t.count} new">
+                                    <div class="kpi-chart-bar" style="height:${Math.max(4, Math.round(t.count / trendMax * 100))}%"></div>
+                                    <span class="kpi-chart-label">${t.label}</span>
+                                </div>`).join('')}</div>`
                     ) +
                     card(
                         'Member Retention',
-                        'Goal: 95%+ quarterly',
+                        isCustom ? 'Goal: 95%+ over the selected period' : 'Goal: 95%+ quarterly',
                         retentionPct != null ? `${retentionPct.toFixed(0)}%` : '—',
                         retentionPct == null ? 'na' : (retentionPct >= 95 ? 'ok' : 'warn'),
-                        'Counted: (students now − new students this quarter) ÷ students at quarter start × 100.',
+                        `Counted: (students at end − new students ${isCustom ? 'in the period' : 'this quarter'}) ÷ students at start × 100.`,
                         retentionPct != null ? `<div class="kpi-sub">${retainedStudents} retained of ${studentsAtStart} at start (+${newStudents} new)</div>` : ''
                     ) +
                     card(
@@ -266,12 +319,12 @@ Object.assign(App, {
                         'Goal: match market benchmark',
                         rpm != null ? `${currency}${rpm.toFixed(2)}` : '—',
                         'info',
-                        `Counted: ${currency}${revenueThisMonth.toFixed(2)} revenue this month ÷ ${activeCount} active members.`,
-                        rpm != null ? `<div class="kpi-sub">${currency}${revenueThisMonth.toFixed(2)} total / ${activeCount} active</div>` : ''
+                        `Counted: ${currency}${revenueThisPeriod.toFixed(2)} revenue ${isCustom ? 'in the selected period' : 'this month'} ÷ ${activeCount} active members.`,
+                        rpm != null ? `<div class="kpi-sub">${currency}${revenueThisPeriod.toFixed(2)} total / ${activeCount} active</div>` : ''
                     ) +
                     card(
                         'Class Attendance',
-                        'Goal: 70–80% weekly (healthy range)',
+                        isCustom ? 'Goal: 70–80% over the selected period' : 'Goal: 70–80% weekly (healthy range)',
                         attendancePct != null ? `${attendancePct.toFixed(0)}%` : '—',
                         attendancePct == null ? 'na' : (attendancePct >= 70 ? 'ok' : 'warn'),
                         'Counted: students who attended ÷ students enrolled in that class × 100 (enrollment = class capacity).',

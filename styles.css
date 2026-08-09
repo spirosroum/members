@@ -484,6 +484,8 @@
         .retention-period-nav { flex-wrap: wrap; }
         .retention-period-btn.active { background: var(--primary); border-color: var(--primary); color: var(--white); }
         @media (hover: hover) { .retention-period-btn.active:hover { background: var(--primary-hover); border-color: var(--primary-hover); } }
+        .retention-custom-range { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; background: var(--light); border: 1px solid var(--gray-light); border-radius: var(--border-radius); padding: 0.6rem 0.9rem; }
+        .retention-custom-range input[type="date"] { height: 36px; padding: 0.3rem 0.6rem; border: 1px solid var(--gray-light); border-radius: 6px; font-size: 0.9rem; }
         .retention-segments { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
         .retention-seg-card { background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow); border: 1px solid var(--gray-light); padding: 1.25rem 1.5rem; border-top: 4px solid var(--seg-color); }
         .retention-seg-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
