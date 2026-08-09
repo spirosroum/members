@@ -240,6 +240,7 @@
             <div class="nav-item" onclick="App.navigate('admin-retention')">Retention & Attendance</div>
             
             <div class="sidebar-section">System</div>
+            <div class="nav-item" onclick="App.navigate('admin-member-settings')">Member Settings</div>
             <div class="nav-item" onclick="App.navigate('admin-settings')">General Settings</div>
             
         </div>
@@ -1014,6 +1015,22 @@
                             <button class="btn-primary btn-small" onclick="App.repairDuplicateMembers()">Repair Duplicates</button>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Member Settings -->
+            <div id="pane-admin-member-settings" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Member Settings</h1>
+                        <p class="text-gray">Choose which personal statistics members can see on their own dashboard.</p>
+                    </div>
+                </div>
+                <div class="card mt-2">
+                    <h3>Member Dashboard Statistics</h3>
+                    <p class="text-gray mb-1">Members see these cards on their dashboard after signing in. Toggle which ones are visible to them.</p>
+                    <div id="member-stats-visibility"></div>
+                    <button class="btn-primary btn-small mt-2" onclick="App.saveMemberStatsVisibility()">Save Visibility</button>
                 </div>
             </div>
         </div>

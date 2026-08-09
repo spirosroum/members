@@ -1,5 +1,10 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
+## 2026-08-10 — v0.8 (00:02) — Admin control over which member statistics members can view
+- New "Member Settings" admin menu (separate sidebar entry under System) lets the admin toggle which personal statistics members see on their own dashboard: Total Trainings, Avg Trainings / Week, Avg Trainings / Month, Leaderboard Rank
+- Settings sync to Firestore like other settings and default to all-visible; admins always see the full set in the member modal
+- Member portal shows a muted "no statistics" message if every stat is hidden (en + el i18n)
+
 ## 2026-08-09 — v0.7 (23:52) — Keep KPI badges and titles inside their cards
 - KPI card headers in Retention & Attendance now wrap instead of overflowing: the "Not tracked" / "Below target" / "On track" badge drops below the title on narrow cards and stays inside the box
 

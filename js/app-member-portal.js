@@ -257,24 +257,31 @@ Object.assign(App, {
                     perMonth = (total / months).toFixed(1);
                 }
 
-                return `
+                // Admins (member modal) always see the full set; the member portal
+                // respects the admin-configured Member Settings visibility toggles.
+                const show = (key) => App.isAdminAuthed() || DB.getMemberStatsVisibility()[key] !== false;
+                const cards = [];
+                if (show('totalTrainings')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewTotalTrainings || 'Total Trainings')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${total}</div>
-                    </div>
+                    </div>`);
+                if (show('avgWeek')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
-                    </div>
+                    </div>`);
+                if (show('avgMonth')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
-                    </div>
+                    </div>`);
+                if (show('rank')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewRankLabel || 'Leaderboard Rank')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.escapeHTML(rankDisplay)}</div>
-                    </div>
-                `;
+                    </div>`);
+                return cards.join('');
             },
 
             toggleHideFromLeaderboard: (checked) => {
@@ -351,7 +358,8 @@ Object.assign(App, {
                     <div class="text-gray mt-1">${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')} ${expDisplay}</div>
                 `;
 
-                document.getElementById('member-dash-stats').innerHTML = App.getMemberStatsHTML(member.id);
+                const statsHTML = App.getMemberStatsHTML(member.id);
+                document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberLeaderboardToggleUI();
                 App.renderMemberHistory(member.id, 'member-personal-history');
 

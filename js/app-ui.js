@@ -327,7 +327,8 @@ Object.assign(App, {
                     'admin-payments': 'Payments',
                     'admin-schedules': 'Training Schedules',
                     'admin-plans': 'Membership Plans',
-                    'admin-settings': 'General Settings'
+                    'admin-settings': 'General Settings',
+                    'admin-member-settings': 'Member Settings'
                 };
                 const mobileTitle = document.getElementById('mobile-page-title');
                 if (mobileTitle) mobileTitle.innerText = paneTitles[targetPane] || 'Admin Portal';
@@ -360,6 +361,7 @@ Object.assign(App, {
                 if (targetPane === 'admin-plans') { App.renderPlans(); App.renderPlanBin(); App.switchTab('plans', 'list'); }
                 if (targetPane === 'admin-schedules') { App.renderSchedules(); App.renderScheduleBin(); App.switchTab('schedule', 'list'); }
                 if (targetPane === 'admin-settings') App.renderAdminSettings();
+                if (targetPane === 'admin-member-settings') App.renderMemberSettings();
 
                 if (window.innerWidth <= 768) {
                     document.querySelector('.sidebar').classList.remove('open');

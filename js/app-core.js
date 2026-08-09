@@ -147,7 +147,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 currency: STATE.currency || '€',
                 checkinNotice: STATE.checkinNotice || '',
                 checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
-                showClassCheckins: STATE.showClassCheckins !== false
+                showClassCheckins: STATE.showClassCheckins !== false,
+                memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, avgWeek: true, avgMonth: true, rank: true }
             };
         }
 
@@ -772,6 +773,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
                     if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
                     if (d.showClassCheckins != null) STATE.showClassCheckins = d.showClassCheckins;
+                    if (d.memberStatsVisibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, avgWeek: true, avgMonth: true, rank: true }, d.memberStatsVisibility);
                     FSEngine.settingsMirror = JSON.stringify(settingsPayload());
                 }
                 FSEngine.settingsReady = true;
@@ -872,6 +874,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCheckinNotice: () => STATE.checkinNotice || '',
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
             getShowClassCheckins: () => STATE.showClassCheckins !== false,
+            getMemberStatsVisibility: () => Object.assign({ totalTrainings: true, avgWeek: true, avgMonth: true, rank: true }, STATE.memberStatsVisibility || {}),
 
             // setters (update state and persist)
             saveMembers: (data) => {
@@ -927,6 +930,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             setHiddenBelts: (data) => { STATE.hiddenBelts = data || []; return saveToCloud(); },
             setCurrency: (c) => { STATE.currency = c; return saveToCloud(); },
             setShowClassCheckins: (v) => { STATE.showClassCheckins = !!v; return saveToCloud(); },
+            setMemberStatsVisibility: (v) => { STATE.memberStatsVisibility = v || {}; return saveToCloud(); },
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 

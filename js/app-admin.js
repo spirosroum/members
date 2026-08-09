@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, exportRetentionExcel, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
+// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, exportRetentionExcel, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, saveClassCheckinsVisibility, renderMemberSettings, saveMemberStatsVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -852,6 +852,39 @@ Object.assign(App, {
                 const v = document.getElementById('setting-show-class-checkins').checked;
                 DB.setShowClassCheckins(v);
                 alert("Recorded check-ins visibility saved.");
+            },
+
+            renderMemberSettings: () => {
+                const vis = DB.getMemberStatsVisibility();
+                const stats = [
+                    { id: 'totalTrainings', title: 'Total Trainings', desc: 'Shows the member\'s total number of recorded trainings.' },
+                    { id: 'avgWeek', title: 'Avg Trainings / Week', desc: 'Shows the member\'s average training frequency per week.' },
+                    { id: 'avgMonth', title: 'Avg Trainings / Month', desc: 'Shows the member\'s average training frequency per month.' },
+                    { id: 'rank', title: 'Leaderboard Rank', desc: 'Shows the member\'s rank on the public training leaderboard.' }
+                ];
+                document.getElementById('member-stats-visibility').innerHTML = stats.map(s => `
+                    <div class="card mt-1" style="border-left: 4px solid var(--primary); padding: 0.75rem 1rem;">
+                        <div class="flex justify-between align-center" style="gap: 1rem;">
+                            <div>
+                                <div class="font-bold text-gray">${s.title}</div>
+                                <p class="text-gray" style="font-size: 0.85rem; margin: 0.15rem 0 0 0;">${s.desc}</p>
+                            </div>
+                            <label class="closed-date-toggle">
+                                <input type="checkbox" data-stat-id="${s.id}" ${vis[s.id] ? 'checked' : ''}>
+                                <span class="closed-date-toggle-track"></span>
+                            </label>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            saveMemberStatsVisibility: () => {
+                const v = {};
+                document.querySelectorAll('#member-stats-visibility input[type="checkbox"]').forEach(cb => {
+                    v[cb.dataset.statId] = cb.checked;
+                });
+                DB.setMemberStatsVisibility(v);
+                alert("Member statistics visibility saved.");
             },
 
             // One-time repair for members that were duplicated by an ID change:
