@@ -67,7 +67,7 @@ Object.assign(App, {
                     // first training date, so brand-new members aren't penalized for joining mid-period.
                     const firstTraining = App.getMemberFirstTrainingDate(m.id);
                     const windowStart = (firstTraining && firstTraining > since) ? firstTraining : since;
-                    const windowWeeks = Math.max(1, (until - windowStart) / (1000 * 60 * 60 * 24 * 7));
+                    const windowWeeks = Math.max(1, Math.round((until - windowStart) / (1000 * 60 * 60 * 24 * 7)));
                     const perWeek = count / windowWeeks;
                     let segment = 'active';
                     if (perWeek < 1) segment = 'high';
