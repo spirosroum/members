@@ -399,12 +399,14 @@ Object.assign(App, {
                 const today = Utils.todayLocalIso();
                 const todayVisits = visits.filter(v => v.entryTime && Utils.dateToLocalIso(new Date(v.entryTime)) === today && validMemberIds.has(v.memberId)).length;
                 const activeMem = members.filter(m => m.accountStatus === 'Active' && Utils.getDaysRemaining(m.expirationDate) >= 0).length;
+                const unpaidCheckins = visits.filter(v => v.isUnpaid && validMemberIds.has(v.memberId)).length;
 
                 const genderCounts = members.reduce((acc, m) => { const g = m.gender || 'Unspecified'; acc[g] = (acc[g] || 0) + 1; return acc; }, {});
 
                 document.getElementById('admin-stats-grid').innerHTML = `
                     <div class="stat-card"><h3>Currently Inside</h3><div class="value">${active}</div></div>
                     <div class="stat-card"><h3>Total Visits Today</h3><div class="value">${todayVisits}</div></div>
+                    <div class="stat-card"><h3>Unpaid Check-ins</h3><div class="value" style="color:${unpaidCheckins > 0 ? 'var(--danger)' : 'var(--success)'}">${unpaidCheckins}</div></div>
                     <div class="stat-card"><h3>Active Subscriptions</h3><div class="value" style="color:var(--success)">${activeMem}</div></div>
                     <div class="stat-card"><h3>Total Members</h3><div class="value">${members.length}</div></div>
                     <div class="stat-card"><h3>Genders</h3><div style="font-size:0.9rem;">${Object.entries(genderCounts).map(([k,v]) => `<div>${k}: <strong>${v}</strong></div>`).join('')}</div></div>

@@ -33,7 +33,7 @@ index.html
 - **Minimal edits:** change only what is necessary. Do not refactor unrelated code. Do not add comments.
 
 ### On every commit/push
-- **Update `HISTORY.md`** — append a new entry at the top with today's date, a one-line summary, and a bullet list of what changed. Follow the existing format.
+- **Update `HISTORY.md`** — append a new entry at the top with today's date, a short version name (e.g. `0.1`), the current time (HH:MM), a one-line summary, and a bullet list of what changed. Header format: `## YYYY-MM-DD — v0.1 (HH:MM) — Short summary`. Bump the version name on each change (minor bump per change: `0.1` → `0.2`). For a major update (breaking change, big new feature, large refactor), suggest bumping the major version (`0.x` → `1.0`) and flag it to the user.
 - **Write a descriptive commit message** — summarize what changed and why (e.g. `Fix visit log date filter for UTC+2 timezone` not `fix bug`). Keep it under 72 chars for the subject line.
 - **After committing, auto-push to `master`** on `https://github.com/spirosroum/members.git`. If git push fails, tell the user which files changed so they can upload manually.
 

@@ -1,5 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
+## 2026-08-09 — v0.1 (21:21) — Add unpaid check-ins counter to admin dashboard
+- Dashboard stats now show an "Unpaid Check-ins" card with the count of outstanding unpaid visits (red when > 0, green when zero)
+
 ## 2026-08-09 — Flag-only language button in member portal and check-in
 - Language toggle button in the kiosk/member drawers now shows only the flag emoji (UK flag for English, Greek flag for Greek), no text
 
