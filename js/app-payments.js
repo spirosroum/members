@@ -711,6 +711,10 @@ Object.assign(App, {
                 App.renderAllPayments();
                 App.renderVisitLog();
                 App.renderAnalyticalCalendar();
+                if (!document.getElementById('pane-admin-retention').classList.contains('hidden')) {
+                    App.renderKPIs();
+                    App.renderRetentionStats();
+                }
 
                 if (memberId) {
                     const historyContainer = document.getElementById('dashboard-history-container');

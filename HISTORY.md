@@ -1,6 +1,9 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.11 (00:20) — Remove member ID from Member Frequency Breakdown
+## 2026-08-10 — v0.12 (00:30) — Fix Revenue Per Member window bug and stale KPI refresh
+- Fixed Revenue Per Member (and other retention KPIs) excluding today's payments when logged before noon: the preset analysis window now ends at end-of-day instead of the exact current instant, so payment dates (parsed at local noon) always fall inside the window
+- KPI cards and the Member Frequency Breakdown now refresh immediately after saving a member or a payment while the Retention pane is open, instead of only on pane re-entry or period change
+
 - The Member Frequency Breakdown table no longer shows the member ID badge under each name, leaving just the member's name
 
 - Member directory: out-of-sessions members no longer get the red row/card background (that now applies only to expired members), and their status badge reads "Active (No Sessions)" instead of "No sessions"

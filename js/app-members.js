@@ -854,6 +854,10 @@ Object.assign(App, {
 
                 App.closeModal('modal-member');
                 App.renderMemberDirectory();
+                if (!document.getElementById('pane-admin-retention').classList.contains('hidden')) {
+                    App.renderKPIs();
+                    App.renderRetentionStats();
+                }
                 } finally {
                     App.memberSaveBusy = false;
                     if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Member'; }

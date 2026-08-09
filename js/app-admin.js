@@ -47,7 +47,10 @@ Object.assign(App, {
                     else { since = new Date(until.getTime() - 13 * 7 * 24 * 60 * 60 * 1000); }
                 } else {
                     const weeks = App.retentionPeriodWeeks || 13;
-                    since = new Date(until.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
+                    until.setHours(23, 59, 59, 999);
+                    since = new Date(until);
+                    since.setDate(since.getDate() - weeks * 7);
+                    since.setHours(0, 0, 0, 0);
                 }
                 return { since, until };
             },
