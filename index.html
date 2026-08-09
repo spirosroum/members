@@ -236,6 +236,9 @@
             <div class="nav-item" onclick="App.navigate('admin-schedules')">Training Schedules</div>
             <div class="nav-item" onclick="App.navigate('admin-plans')">Membership Plans</div>
             
+            <div class="sidebar-section">Analytics</div>
+            <div class="nav-item" onclick="App.navigate('admin-retention')">Retention & Attendance</div>
+            
             <div class="sidebar-section">System</div>
             <div class="nav-item" onclick="App.navigate('admin-settings')">General Settings</div>
             
@@ -420,6 +423,51 @@
                             </div>
 
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Retention & Attendance -->
+            <div id="pane-admin-retention" class="view-pane hidden">
+                <div class="flex justify-between align-center" style="flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <h1>Retention & Attendance</h1>
+                        <p class="text-gray">Attendance frequency is the strongest predictor of member retention. Members who train rarely quit at twice the rate of those training 3+ times a week.</p>
+                    </div>
+                    <div class="flex gap-1 align-center retention-period-nav">
+                        <span class="text-gray" style="font-weight:600;">Window:</span>
+                        <button class="btn-outline btn-small retention-period-btn" data-weeks="4" onclick="App.setRetentionPeriod(4)">4 wks</button>
+                        <button class="btn-outline btn-small retention-period-btn" data-weeks="8" onclick="App.setRetentionPeriod(8)">8 wks</button>
+                        <button class="btn-outline btn-small retention-period-btn active" data-weeks="13" onclick="App.setRetentionPeriod(13)">3 mo</button>
+                        <button class="btn-outline btn-small retention-period-btn" data-weeks="26" onclick="App.setRetentionPeriod(26)">6 mo</button>
+                        <button class="btn-outline btn-small retention-period-btn" data-weeks="52" onclick="App.setRetentionPeriod(52)">12 mo</button>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid mt-2 mb-2" id="retention-overview-grid"></div>
+
+                <div class="retention-segments mb-2" id="retention-segment-cards"></div>
+
+                <div class="card">
+                    <div class="flex justify-between align-center mb-1" style="flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3 style="margin:0;">Member Frequency Breakdown</h3>
+                            <p class="text-gray" style="margin:0.25rem 0 0 0;">Every active member sorted by training frequency (most at risk first).</p>
+                        </div>
+                        <select id="retention-segment-filter" onchange="App.renderRetentionTable()" class="mt-1">
+                            <option value="all">All Segments</option>
+                            <option value="high">High Risk Only</option>
+                            <option value="moderate">Moderate Risk Only</option>
+                            <option value="active">Active / Healthy Only</option>
+                        </select>
+                    </div>
+                    <div class="table-responsive mobile-cards">
+                        <table>
+                            <thead>
+                                <tr><th>Member</th><th>Belt</th><th>Classes</th><th>Avg / Week</th><th>Segment</th></tr>
+                            </thead>
+                            <tbody id="retention-member-list"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>

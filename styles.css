@@ -478,6 +478,24 @@
         .stat-card h3 { font-size: 0.85rem; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin: 0;}
         .stat-card .value { font-size: 2.25rem; font-weight: 800; color: var(--dark); margin-top: 0.5rem; line-height: 1;}
 
+        /* Retention & Attendance analytics */
+        .retention-period-nav { flex-wrap: wrap; }
+        .retention-period-btn.active { background: var(--primary); border-color: var(--primary); color: var(--white); }
+        @media (hover: hover) { .retention-period-btn.active:hover { background: var(--primary-hover); border-color: var(--primary-hover); } }
+        .retention-segments { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+        .retention-seg-card { background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow); border: 1px solid var(--gray-light); padding: 1.25rem 1.5rem; border-top: 4px solid var(--seg-color); }
+        .retention-seg-top { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .retention-seg-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .retention-seg-value { font-size: 2.25rem; font-weight: 800; color: var(--dark); line-height: 1.1; }
+        .retention-seg-desc { color: var(--gray); font-size: 0.9rem; margin-top: 0.25rem; }
+        .retention-seg-bar { height: 10px; background: var(--gray-light); border-radius: 999px; overflow: hidden; margin-top: 0.9rem; }
+        .retention-seg-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+        .retention-seg-foot { color: var(--gray); font-size: 0.85rem; margin-top: 0.5rem; }
+        .retention-freq { display: flex; align-items: center; gap: 0.6rem; min-width: 160px; }
+        .retention-freq-bar { flex: 1; height: 8px; background: var(--gray-light); border-radius: 999px; overflow: hidden; }
+        .retention-freq-fill { height: 100%; background: var(--primary); border-radius: 999px; }
+        .retention-freq-val { font-weight: 700; font-size: 0.9rem; min-width: 40px; text-align: right; }
+
         /* Check-in Layout */
         .checkin-layout { display: flex; flex-direction: column; gap: 1rem; align-items: stretch; }
         .member-card-display { border: 2px solid var(--gray-light); padding: 2.5rem; border-radius: var(--border-radius); text-align: center; background: var(--white); box-shadow: var(--shadow); }

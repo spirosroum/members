@@ -321,6 +321,7 @@ Object.assign(App, {
                 const paneTitles = {
                     'admin-checkin': 'Staff Check-in',
                     'admin-dashboard': 'Dashboard',
+                    'admin-retention': 'Retention & Attendance',
                     'admin-notifications': 'Notifications',
                     'admin-members': 'Member Directory',
                     'admin-payments': 'Payments',
@@ -352,6 +353,7 @@ Object.assign(App, {
                     if (sortEl) sortEl.value = 'newest';
                     App.renderVisitLog(); 
                 }
+                if (targetPane === 'admin-retention') { App.renderRetentionStats(); }
                 if (targetPane === 'admin-notifications') { App.renderNotifications(); App.renderNotificationBin(); App.switchTab('notifications', 'list'); }
                 if (targetPane === 'admin-members') { App.renderMemberDirectory(); App.renderMemberBin(); App.switchDirStatus('active'); }
                 if (targetPane === 'admin-payments') { App.renderAllPayments(); }

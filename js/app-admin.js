@@ -1,11 +1,121 @@
 // =====================================================================
 // app-admin.js
-// App methods: sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
+// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, getMemberFirstTrainingDate, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
 Object.assign(App, {
             // --- ADMIN DASHBOARD & LOG ---
+            // --- RETENTION & ATTENDANCE ---
+            setRetentionPeriod: (weeks) => {
+                App.retentionPeriodWeeks = weeks;
+                document.querySelectorAll('.retention-period-btn').forEach(b =>
+                    b.classList.toggle('active', parseInt(b.dataset.weeks, 10) === weeks));
+                App.renderRetentionStats();
+            },
+
+            renderRetentionStats: () => {
+                const weeks = App.retentionPeriodWeeks || 13;
+                const now = new Date();
+                const since = new Date(now.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
+
+                // Analyze active members only — expired/inactive/frozen rosters are not at risk.
+                const members = DB.getMembers().filter(m => (m.accountStatus || 'Active') === 'Active');
+
+                const rows = members.map(m => {
+                    const count = App.getMemberTrainingCount(m.id, since);
+                    // Effective window starts at the later of the period start or the member's
+                    // first training date, so brand-new members aren't penalized for joining mid-period.
+                    const firstTraining = App.getMemberFirstTrainingDate(m.id);
+                    const windowStart = (firstTraining && firstTraining > since) ? firstTraining : since;
+                    const windowWeeks = Math.max(1, (now - windowStart) / (1000 * 60 * 60 * 24 * 7));
+                    const perWeek = count / windowWeeks;
+                    let segment = 'active';
+                    if (perWeek < 1) segment = 'high';
+                    else if (perWeek < 3) segment = 'moderate';
+                    return { member: m, count, perWeek, segment };
+                });
+                rows.sort((a, b) => a.perWeek - b.perWeek || a.member.lastName.localeCompare(b.member.lastName));
+                App.retentionRows = rows;
+
+                const total = rows.length;
+                const segCount = { high: 0, moderate: 0, active: 0 };
+                rows.forEach(r => segCount[r.segment]++);
+                const avgPerWeek = total ? rows.reduce((s, r) => s + r.perWeek, 0) / total : 0;
+                const pct = k => total ? Math.round(segCount[k] / total * 100) : 0;
+
+                document.getElementById('retention-overview-grid').innerHTML = `
+                    <div class="stat-card"><h3>Active Members</h3><div class="value">${total}</div></div>
+                    <div class="stat-card"><h3>Avg Classes / Week</h3><div class="value">${avgPerWeek.toFixed(1)}</div></div>
+                    <div class="stat-card"><h3>High Risk</h3><div class="value" style="color:var(--danger)">${segCount.high}<span style="font-size:1rem;"> (${pct('high')}%)</span></div></div>
+                    <div class="stat-card"><h3>Moderate Risk</h3><div class="value" style="color:var(--warning)">${segCount.moderate}<span style="font-size:1rem;"> (${pct('moderate')}%)</span></div></div>
+                    <div class="stat-card"><h3>Active / Healthy</h3><div class="value" style="color:var(--success)">${segCount.active}<span style="font-size:1rem;"> (${pct('active')}%)</span></div></div>
+                `;
+
+                const segCards = [
+                    { key: 'high', label: 'High Risk', desc: '< 1 class / week', count: segCount.high, pct: pct('high'), color: 'var(--danger)', bg: 'var(--bg-danger-soft)' },
+                    { key: 'moderate', label: 'Moderate Risk', desc: '1–2 classes / week', count: segCount.moderate, pct: pct('moderate'), color: 'var(--warning)', bg: 'var(--bg-warning-soft)' },
+                    { key: 'active', label: 'Active / Healthy', desc: '3+ classes / week', count: segCount.active, pct: pct('active'), color: 'var(--success)', bg: 'var(--bg-success-soft)' }
+                ];
+                document.getElementById('retention-segment-cards').innerHTML = segCards.map(s => `
+                    <div class="retention-seg-card" style="--seg-color: ${s.color};">
+                        <div class="retention-seg-top">
+                            <span class="retention-seg-dot" style="background: ${s.color};"></span>
+                            <strong>${s.label}</strong>
+                            <span class="badge" style="background:${s.bg}; color:${s.color}; margin-left:auto;">${s.count}</span>
+                        </div>
+                        <div class="retention-seg-value">${s.pct}%</div>
+                        <div class="retention-seg-desc">${s.desc}</div>
+                        <div class="retention-seg-bar">
+                            <div class="retention-seg-bar-fill" style="width:${s.pct}%; background: ${s.color};"></div>
+                        </div>
+                        <div class="retention-seg-foot">${s.count} of ${total} active members</div>
+                    </div>
+                `).join('');
+
+                App.renderRetentionTable();
+            },
+
+            renderRetentionTable: () => {
+                const filter = document.getElementById('retention-segment-filter').value;
+                const rows = (App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
+                const list = document.getElementById('retention-member-list');
+                const segMeta = {
+                    high: { label: 'High Risk', cls: 'badge-inactive' },
+                    moderate: { label: 'Moderate Risk', cls: 'badge-warning' },
+                    active: { label: 'Active', cls: 'badge-active' }
+                };
+                list.innerHTML = rows.map(r => {
+                    const m = r.member;
+                    const meta = segMeta[r.segment];
+                    const barPct = Math.min(100, Math.round(r.perWeek / 6 * 100));
+                    return `
+                        <tr>
+                            <td data-label="Member"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong><div class="mt-1">${Utils.getMemberIdBadge(m)}</div></td>
+                            <td data-label="Belt">${Utils.escapeHTML(m.belt || 'White')}</td>
+                            <td data-label="Classes">${r.count}</td>
+                            <td data-label="Avg / Week">
+                                <div class="retention-freq">
+                                    <div class="retention-freq-bar"><div class="retention-freq-fill" style="width:${barPct}%;"></div></div>
+                                    <span class="retention-freq-val">${r.perWeek.toFixed(1)}</span>
+                                </div>
+                            </td>
+                            <td data-label="Segment"><span class="badge ${meta.cls}">${meta.label}</span></td>
+                        </tr>`;
+                }).join('') || '<tr><td colspan="5" class="text-center text-gray">No active members found in this segment.</td></tr>';
+            },
+
+            getMemberFirstTrainingDate: (memberId) => {
+                const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                const visits = DB.getVisits().filter(v => v.memberId === memberId && v.entryTime);
+                const dates = [
+                    ...checkins.map(ci => new Date(ci.entryTime)),
+                    ...visits.map(v => new Date(v.entryTime))
+                ].filter(d => !isNaN(d.getTime()));
+                if (!dates.length) return null;
+                return new Date(Math.min(...dates.map(d => d.getTime())));
+            },
+
             // --- SETTINGS ---
             sendAdminPasswordReset: () => {
                 const auth = getAuth();
