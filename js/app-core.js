@@ -146,7 +146,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 hiddenBelts: STATE.hiddenBelts || [],
                 currency: STATE.currency || '€',
                 checkinNotice: STATE.checkinNotice || '',
-                checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a'
+                checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
+                showClassCheckins: STATE.showClassCheckins !== false
             };
         }
 
@@ -770,6 +771,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (d.currency != null) STATE.currency = d.currency;
                     if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
                     if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
+                    if (d.showClassCheckins != null) STATE.showClassCheckins = d.showClassCheckins;
                     FSEngine.settingsMirror = JSON.stringify(settingsPayload());
                 }
                 FSEngine.settingsReady = true;
@@ -869,6 +871,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCurrency: () => STATE.currency || '€',
             getCheckinNotice: () => STATE.checkinNotice || '',
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
+            getShowClassCheckins: () => STATE.showClassCheckins !== false,
 
             // setters (update state and persist)
             saveMembers: (data) => {
@@ -923,6 +926,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             setPortalName: (name) => { STATE.portalName = name; return saveToCloud(); },
             setHiddenBelts: (data) => { STATE.hiddenBelts = data || []; return saveToCloud(); },
             setCurrency: (c) => { STATE.currency = c; return saveToCloud(); },
+            setShowClassCheckins: (v) => { STATE.showClassCheckins = !!v; return saveToCloud(); },
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 

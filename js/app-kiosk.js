@@ -105,17 +105,16 @@ Object.assign(App, {
                                     </div>`;
                                 }).join('')}
                             </div>
-                            <div style="margin-top: 0.75rem; border-top: 1px solid var(--gray-light); padding-top: 0.75rem;" onclick="event.stopPropagation()">
+                            ${DB.getShowClassCheckins() ? `<div style="margin-top: 0.75rem; border-top: 1px solid var(--gray-light); padding-top: 0.75rem;" onclick="event.stopPropagation()">
                                 <details style="cursor: pointer;">
                                     <summary style="font-weight: bold; outline: none; margin-bottom: 0.5rem;">${Utils.escapeHTML(map.classDetailsRecordedCheckins || 'Recorded Check-ins:')} <span class="badge" style="background: var(--gray); color: white;">${checkins.length}</span></summary>
                                     ${recentCheckins.length ? `<div class="text-gray" style="margin-top:0.5rem; font-size:0.95rem; padding-left: 1rem;"><strong>${Utils.escapeHTML(map.classDetailsRecentLabel || 'Recent:')}</strong><br> ${recentCheckins.map(checkin => {
                                         const member = DB.getMembers().find(m => m.id === checkin.memberId);
                                         const name = member ? `${Utils.escapeHTML(member.firstName)} ${Utils.escapeHTML(member.lastName)}` : Utils.escapeHTML(map.classDetailsUnknownMember || 'Unknown');
-                                        const checkinDateText = checkin.slotDate ? Utils.formatDateLocalized(checkin.slotDate, lang) : Utils.formatDate(checkin.entryTime);
-                                        return `• ${name} <span style="font-size: 0.85em;">(${checkinDateText})</span>`;
+                                        return `• ${name}`;
                                     }).join('<br>')}</div>` : `<div class="text-gray" style="margin-top:0.5rem; font-size:0.95rem; padding-left: 1rem;">${Utils.escapeHTML(map.classDetailsNoCheckins || 'No recorded check-ins yet.')}</div>`}
                                 </details>
-                            </div>
+                            </div>` : ''}
                         </div>
                     </div>
                 `;

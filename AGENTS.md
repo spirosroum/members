@@ -92,6 +92,19 @@ index.html
 - **Touch device detection:** `('ontouchstart' in window) || (navigator.maxTouchPoints > 0)` — used to choose redirect vs popup for Google sign-in on mobile.
 - **`Utils.escapeHTML()`** must be used on any user-generated content rendered as innerHTML. This is the app's XSS defense since it builds HTML strings in JS.
 
+## UI Aesthetics & Component Consistency
+
+These rules apply to **all three portals** (admin, kiosk/check-in, member) — no portal may look different from the others for the same kind of control.
+
+- **There are exactly TWO canonical checkbox styles. Never use a raw native `<input type="checkbox">` in visible UI.** Pick based on intent:
+  1. **Switch (boolean on/off)** — `.closed-date-toggle` (`<label class="closed-date-toggle"><input type="checkbox"><span class="closed-date-toggle-track"></span><span class="closed-date-toggle-label">…</span></label>`). Use for a single yes/no setting (e.g. plan Visible/Starred/Trial, class Visible, Repeat every year, Hide from Leaderboard, Allow raw HTML). If the label text should reflect state, add an `id` to the label span and update it from a small `App.update…Label()` handler (`onchange="App.updatePlanVisibilityLabel()"`).
+  2. **Pill chips (multi-select group)** — `.day-picker` (`<div class="day-picker"><label><input type="checkbox"> Label</label>…</div>`). Use for a set of related choices where several may be on at once (e.g. schedule days Mon–Sun, belt visibility, visible columns, export fields, class-checkin visibility).
+- **Hidden checkboxes are OK** when they drive selection logic and are never rendered (e.g. class-selection checkboxes in kiosk/staff check-in) — those stay `hidden` and are not part of the visual system.
+- **Cards/boxes and section headers** use the shared `.card` component and CSS variables only — no per-section hardcoded colors, inline `style=` overrides are the exception, not the rule.
+- **Submenu/tab bars** (Member Directory, Plans, Schedule, etc.) use `.tabs` / `.tab` — always horizontally scrollable and never squashed (tabs keep `flex-shrink: 0`). Do not add per-section tab styling.
+- **Pills show `cursor: pointer`**; only genuinely draggable pills (column configurator) keep `cursor: move` via `label[draggable="true"]`.
+- **When adding any checkbox anywhere**, copy an existing switch or pill example from this list and reuse the class — never introduce a third checkbox style.
+
 ## Recommended Practices for AI Agents
 
 Beyond the mandatory rules above, these are recommended for the best results:

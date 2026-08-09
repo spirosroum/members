@@ -817,6 +817,7 @@ Object.assign(App, {
             renderAdminSettings: () => {
                 document.getElementById('form-portal-name').value = DB.getPortalName();
                 document.getElementById('form-currency').value = DB.getCurrency();
+                document.getElementById('setting-show-class-checkins').checked = DB.getShowClassCheckins();
                 const hidden = DB.getHiddenBelts();
                 document.querySelectorAll('.setting-hide-belt').forEach(cb => {
                     cb.checked = hidden.includes(cb.value);
@@ -845,6 +846,12 @@ Object.assign(App, {
                 DB.setHiddenBelts(hidden);
                 alert("Belt visibility saved. Kiosk view updated.");
                 App.renderLivePresent();
+            },
+
+            saveClassCheckinsVisibility: () => {
+                const v = document.getElementById('setting-show-class-checkins').checked;
+                DB.setShowClassCheckins(v);
+                alert("Recorded check-ins visibility saved.");
             },
 
             // One-time repair for members that were duplicated by an ID change:

@@ -661,7 +661,11 @@
                             <label class="text-gray font-bold mt-1">Plan Description / Benefits</label>
                             <textarea id="form-plan-desc" placeholder="Examples:\n**Bold benefit**\n*Italic note*\n- Access to open mats\n- Free trial classes\nUse line breaks to separate bullets and paragraphs."></textarea>
                             <div class="text-gray text-sm mt-1">Use markdown-style formatting for public descriptions: **bold**, *italic*, bullet lists, and line breaks. Check the box to allow raw HTML when needed.</div>
-                            <label class="flex align-center gap-2 font-bold text-gray mt-1"><input type="checkbox" id="form-plan-desc-html"> Allow raw HTML formatting in description</label>
+                            <label class="closed-date-toggle mt-1">
+                                <input type="checkbox" id="form-plan-desc-html">
+                                <span class="closed-date-toggle-track"></span>
+                                <span class="closed-date-toggle-label">Allow raw HTML formatting in description</span>
+                            </label>
                             
                             <!-- COLOR PALETTE SELECTION -->
                             <label class="text-gray font-bold mt-1">Plan Color Accent</label>
@@ -978,6 +982,15 @@
                         <label><input type="checkbox" class="setting-hide-belt" value="Black"> Hide Black</label>
                     </div>
                     <button class="btn-primary btn-small" onclick="App.saveBeltVisibility()">Save Belt Visibility</button>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+
+                    <h3>Class Details Visibility</h3>
+                    <p class="text-gray mb-1">Choose whether the "Recorded Check-ins" list is shown publicly on class details.</p>
+                    <div class="day-picker mb-1">
+                        <label><input type="checkbox" id="setting-show-class-checkins"> Show recorded check-ins on class details</label>
+                    </div>
+                    <button class="btn-primary btn-small mt-1" onclick="App.saveClassCheckinsVisibility()">Save</button>
                 </div>
 
                 <div class="card mt-2">

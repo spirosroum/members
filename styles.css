@@ -157,9 +157,10 @@
         /* Day Picker / Toggles */
         .day-picker { display: flex; flex-wrap: wrap; gap: 0.5rem; }
         .day-picker label { 
-            background: var(--gray-light); padding: 0.5rem 1rem; border-radius: 999px; cursor: move; 
+            background: var(--gray-light); padding: 0.5rem 1rem; border-radius: 999px; cursor: pointer; 
             font-weight: 600; font-size: 0.9rem; transition: 0.2s; user-select: none; border: 2px solid transparent;
         }
+        .day-picker label[draggable="true"] { cursor: move; }
         .day-picker input[type="checkbox"] { display: none; }
         .day-picker label:has(input:checked) { background: var(--bg-info-soft); border-color: var(--primary); color: var(--primary); }
         .drag-over { border-style: dashed !important; opacity: 0.7; }
@@ -469,10 +470,13 @@
         .slot-card { background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light); margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
         
         /* Tabs System */
-        .tabs { display: flex; gap: 1rem; border-bottom: 2px solid var(--gray-light); margin-bottom: 1rem;}
-        .tab { padding: 0.75rem 1.5rem; cursor: pointer; font-weight: 600; color: var(--gray); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: 0.2s; }
+        .tabs { display: flex; gap: 1rem; border-bottom: 2px solid var(--gray-light); margin-bottom: 1rem; overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px; }
+        .tab { padding: 0.75rem 1.5rem; cursor: pointer; font-weight: 600; color: var(--gray); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: 0.2s; flex-shrink: 0; white-space: nowrap; }
         .tab:hover { color: var(--dark); }
         .tab.active { color: var(--primary); border-color: var(--primary); }
+        .tabs::-webkit-scrollbar { height: 6px; }
+        .tabs::-webkit-scrollbar-thumb { background: var(--gray-light); border-radius: 999px; }
+        .tabs::-webkit-scrollbar-track { background: transparent; }
 
         /* Grid Layouts */
         .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
@@ -536,8 +540,9 @@
         /* Tables */
         .table-responsive { overflow-x: auto; border-radius: var(--border-radius); border: 1px solid var(--gray-light); width: 100%; -webkit-overflow-scrolling: touch; }
         .table-responsive table { width: 100%; border-collapse: collapse; background: var(--white); white-space: nowrap; }
-        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--gray-light); font-size: 0.95rem; }
-        th { background: var(--light); font-weight: 600; color: var(--dark); border-bottom: 2px solid var(--gray-light); }
+        th, td { padding: 1rem; border-bottom: 1px solid var(--gray-light); font-size: 0.95rem; }
+        td { text-align: left; }
+        th { background: var(--light); font-weight: 600; color: var(--dark); border-bottom: 2px solid var(--gray-light); text-align: center; }
         th.sortable:hover { background: #f1f5f9; cursor: pointer; }
         tr:hover td { background: var(--light); }
         tr:last-child td { border-bottom: none; }
@@ -623,7 +628,6 @@
             .desktop-checkin-btn { display: none; }
             #kiosk-id-input { font-size: 2.2rem; letter-spacing: 4px; }
 
-            .tabs { overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 5px; }
             .view-pane { overflow-x: hidden; }
 
             .kiosk-header { flex-direction: row; text-align: left; gap: 1rem; padding: 1rem; }
@@ -723,6 +727,23 @@
             .modal-content { width: 100%; max-width: 100% !important; border-radius: 16px 16px 0 0; padding: 1.5rem; max-height: 92vh; }
             .modal-content .flex.gap-2 { flex-direction: column; }
             .modal-content .flex.gap-2.mt-4 { flex-direction: row; flex-wrap: wrap; }
+
+            /* Check-in & public modals stay centered on phones so their content
+               doesn't start from the very bottom of the screen */
+            #modal-kiosk-alert,
+            #modal-public-plans,
+            #modal-public-classes,
+            #modal-login,
+            #modal-class-details,
+            #modal-checkin-classes,
+            #modal-admin-checkin-classes { align-items: center; }
+            #modal-kiosk-alert .modal-content,
+            #modal-public-plans .modal-content,
+            #modal-public-classes .modal-content,
+            #modal-login .modal-content,
+            #modal-class-details .modal-content,
+            #modal-checkin-classes .modal-content,
+            #modal-admin-checkin-classes .modal-content { border-radius: 16px; }
 
             /* Stack settings and schedule-builder form rows on phones */
             #pane-admin-settings .flex.gap-2 { flex-direction: column; }
