@@ -107,7 +107,7 @@ Object.assign(App, {
                         || (m.email && Utils.normalizeSearch(m.email).includes(query));
                 });
 
-                // Filter by selected status submenu (active / inactive / frozen).
+                // Filter by selected status submenu (active / inactive / frozen / cancelled).
                 // When searching, ignore status so frozen/inactive members still show up.
                 const dirStatus = App.dirStatus || 'active';
                 if (!query && dirStatus === 'active') {
@@ -116,6 +116,8 @@ Object.assign(App, {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Inactive');
                 } else if (!query && dirStatus === 'frozen') {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Frozen');
+                } else if (!query && dirStatus === 'cancelled') {
+                    filtered = filtered.filter(m => App.isMemberCancelled(m.id));
                 }
 
                 // While a search is active the status sub-filter is ignored, so drop the
@@ -209,12 +211,16 @@ Object.assign(App, {
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
                     else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
+                    else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else statBadge = `<span class="badge badge-active">Active</span>`;
+                    const trialBadge = m.trialParticipant
+                        ? `<span class="badge badge-trial" style="margin-left:0.4rem;">Trial${m.trialConverted ? ' · converted' : ''}</span>`
+                        : '';
 
                     let rowHTML = '';
                     activeCols.forEach(c => {
                         switch(c.id) {
-                            case 'name': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong></td>`; break;
+                            case 'name': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong>${trialBadge}</td>`; break;
                             case 'id': rowHTML += `<td data-label="${c.label}">${Utils.getMemberIdBadge(m)}</td>`; break;
                             case 'gender': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.gender || 'Unspecified')}</td>`; break;
                             case 'age': rowHTML += `<td data-label="${c.label}">${Utils.calcAge(m.dob)}</td>`; break;
@@ -255,7 +261,11 @@ Object.assign(App, {
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
                     else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
+                    else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else statBadge = `<span class="badge badge-active">Active</span>`;
+                    const trialBadge = m.trialParticipant
+                        ? `<span class="badge badge-trial">Trial${m.trialConverted ? ' · converted' : ''}</span>`
+                        : '';
 
                     const chips = [];
                     activeCols.forEach(c => {
@@ -295,7 +305,7 @@ Object.assign(App, {
                                 <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>
                                 <div class="member-card-id">${Utils.getMemberIdBadge(m)}</div>
                             </div>
-                            <div class="member-card-status">${statBadge}</div>
+                            <div class="member-card-status">${statBadge}${trialBadge}</div>
                         </div>
                         <div class="member-card-meta">${chips.join('')}</div>
                         <button class="btn-primary member-card-btn" onclick="App.openMemberModal('${m.id}')">Manage</button>
@@ -490,7 +500,7 @@ Object.assign(App, {
                 App.updateBeltColor(document.getElementById('form-belt'));
                 
                 const planSelect = document.getElementById('form-plan-select');
-                planSelect.innerHTML = '<option value="">-- Custom/No Plan Update --</option>' + DB.getPlans().map(p => `<option value="${p.id}">${Utils.escapeHTML(p.name)} - ${DB.getCurrency()}${p.price}</option>`).join('');
+                planSelect.innerHTML = '<option value="">-- Custom/No Plan Update --</option>' + DB.getPlans().map(p => `<option value="${p.id}">${Utils.escapeHTML(p.name)}${p.isTrial ? ' (Trial)' : ''} - ${DB.getCurrency()}${p.price}</option>`).join('');
 
                 if (id) {
                     const m = DB.getMembers().find(x => x.id === id);
@@ -556,6 +566,35 @@ Object.assign(App, {
                     if (statusEl) statusEl.value = 'Inactive';
                 }
                 App.openModal('modal-member');
+            },
+
+            // Trial conversion tracking: a member becomes a trial participant when a trial
+            // plan is applied to them; if they later get a paid (non-trial) plan, they're
+            // marked as converted (used by the Trial Conversion KPI).
+            applyPlanTrialTracking: (m, appliedPlan) => {
+                if (!m || !appliedPlan) return;
+                if (appliedPlan.isTrial) {
+                    m.trialParticipant = true;
+                } else {
+                    if (m.trialParticipant && !m.trialConverted) {
+                        m.trialConverted = true;
+                    }
+                }
+            },
+
+            // A member is "cancelled" when they haven't trained in more than 90 days
+            // (no class check-in or visit in that window). Never-trained members are not
+            // cancelled — they show their normal account status. Computed, not stored.
+            isMemberCancelled: (memberId) => {
+                const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                const visits = DB.getVisits().filter(v => v.memberId === memberId && v.entryTime);
+                const allDates = [
+                    ...checkins.map(ci => new Date(ci.entryTime)),
+                    ...visits.map(v => new Date(v.entryTime))
+                ].filter(d => !isNaN(d.getTime()));
+                if (!allDates.length) return false;
+                const last = new Date(Math.max(...allDates.map(d => d.getTime())));
+                return (Date.now() - last.getTime()) > 90 * 24 * 60 * 60 * 1000;
             },
 
             applyPlan: () => {
@@ -684,6 +723,16 @@ Object.assign(App, {
                 const isTimeBasedPlan = !!(appliedPlan && appliedPlan.days != null && appliedPlan.days !== ''
                     && !(appliedPlan.sessions != null && appliedPlan.sessions !== ''));
                 mData.planDays = isTimeBasedPlan ? parseInt(appliedPlan.days, 10) : null;
+
+                // Carry trial tracking forward on edits, then apply it to the selected plan.
+                // A member becomes a trial participant when a trial plan is applied; if they
+                // later get a paid (non-trial) plan, they're marked as converted.
+                const prevTrialMember = originalId ? members.find(x => x.id === originalId) : null;
+                if (prevTrialMember) {
+                    mData.trialParticipant = !!prevTrialMember.trialParticipant;
+                    mData.trialConverted = !!prevTrialMember.trialConverted;
+                }
+                App.applyPlanTrialTracking(mData, appliedPlan);
 
                 // If a plan/payment is provided at registration, activate the account automatically
                 if (paymentAmt > 0 && planId) {

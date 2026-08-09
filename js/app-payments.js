@@ -642,6 +642,13 @@ Object.assign(App, {
                         m.planDays = newPlanDays;
                         DB.saveMembers(members);
                     }
+                    // Record trial participation/conversion when this payment applies a plan,
+                    // then persist if the member's trial status changed.
+                    const prevTrialState = (!!m.trialParticipant) + '|' + (!!m.trialConverted);
+                    App.applyPlanTrialTracking(m, plan);
+                    if (prevTrialState !== ((!!m.trialParticipant) + '|' + (!!m.trialConverted))) {
+                        DB.saveMembers(members);
+                    }
                 }
 
                 // Apply expiration plan updates to member profile

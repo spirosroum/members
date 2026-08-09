@@ -122,11 +122,12 @@ Object.assign(App, {
                                 <span class="closed-date-toggle-track"></span>
                             </label>
                         </td>
+                        <td data-label="Trial">${p.isTrial ? '<span class="badge badge-trial">Trial</span>' : '<span class="text-gray" style="font-size:0.8rem;">—</span>'}</td>
                         <td data-label="Price">${DB.getCurrency()}${parseFloat(p.price).toFixed(2)}</td>
                         <td data-label="Action"><button class="btn-primary btn-small" onclick="App.editPlan('${p.id}')">Edit</button></td>
                         <td data-label="Drag" class="drag-handle-cell" title="Drag to reorder"><span class="drag-handle">⠿</span></td>
                     </tr>
-                `).join('') || '<tr><td colspan="7" class="text-center text-gray">No active plans found.</td></tr>';
+                `).join('') || '<tr><td colspan="8" class="text-center text-gray">No active plans found.</td></tr>';
                 
                 const select = document.getElementById('select-edit-plan');
                 select.innerHTML = '<option value="">-- Create New Plan --</option>' + plans.map(p => `<option value="${p.id}">${Utils.escapeHTML(p.name)}</option>`).join('');
@@ -171,9 +172,11 @@ Object.assign(App, {
                 document.getElementById('form-plan-sessions').value = plan.sessions || '';
                 document.getElementById('form-plan-visible').checked = plan.isPublic !== false;
                 document.getElementById('form-plan-starred').checked = plan.starred === true;
+                document.getElementById('form-plan-trial').checked = plan.isTrial === true;
                 document.getElementById('form-plan-price').value = plan.price;
                 App.updatePlanVisibilityLabel();
                 App.updatePlanStarredLabel();
+                App.updatePlanTrialLabel();
                 App.selectPlanColor(plan.color || '#2563eb');
                 document.getElementById('btn-delete-plan').classList.remove('hidden');
                 document.getElementById('btn-cancel-plan-edit').classList.remove('hidden');
@@ -188,9 +191,11 @@ Object.assign(App, {
                 document.getElementById('btn-cancel-plan-edit').classList.add('hidden');
                 document.getElementById('select-edit-plan').value = '';
                 document.getElementById('form-plan-starred').checked = false;
+                document.getElementById('form-plan-trial').checked = false;
                 document.getElementById('form-plan-desc-html').checked = false;
                 App.updatePlanVisibilityLabel();
                 App.updatePlanStarredLabel();
+                App.updatePlanTrialLabel();
                 App.selectPlanColor('#2563eb');
             },
 
@@ -213,6 +218,7 @@ Object.assign(App, {
                     sessions: sessionsValue || null,
                     isPublic: document.getElementById('form-plan-visible').checked,
                     starred: document.getElementById('form-plan-starred').checked,
+                    isTrial: document.getElementById('form-plan-trial').checked,
                     price: document.getElementById('form-plan-price').value
                 };
 
@@ -265,6 +271,12 @@ Object.assign(App, {
                 const cb = document.getElementById('form-plan-starred');
                 const lbl = document.getElementById('form-plan-starred-label');
                 if (cb && lbl) lbl.innerText = cb.checked ? 'Starred' : 'Standard';
+            },
+
+            updatePlanTrialLabel: () => {
+                const cb = document.getElementById('form-plan-trial');
+                const lbl = document.getElementById('form-plan-trial-label');
+                if (cb && lbl) lbl.innerText = cb.checked ? 'Trial' : 'Standard';
             },
  
             deletePlanFromModal: () => {

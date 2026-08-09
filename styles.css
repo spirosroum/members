@@ -191,6 +191,8 @@
         .badge-frozen { background: var(--bg-warning-soft); color: #92400e; }
         .badge-warning { background: var(--bg-warning-soft); color: #92400e; }
         .badge-inside { background: var(--bg-info-soft); color: #1e40af; }
+        .badge-trial { background: var(--bg-info-soft); color: #0f766e; }
+        .badge-cancelled { background: var(--gray-light); color: #475569; }
         .plan-color-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
         /* Featured plan badge (more prominent than simple "Featured" text) */
@@ -495,6 +497,29 @@
         .retention-freq-bar { flex: 1; height: 8px; background: var(--gray-light); border-radius: 999px; overflow: hidden; }
         .retention-freq-fill { height: 100%; background: var(--primary); border-radius: 999px; }
         .retention-freq-val { font-weight: 700; font-size: 0.9rem; min-width: 40px; text-align: right; }
+
+        /* Key Performance Indicators */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; }
+        .kpi-card { background: var(--white); border-radius: var(--border-radius); box-shadow: var(--shadow); border: 1px solid var(--gray-light); padding: 1.25rem 1.4rem; display: flex; flex-direction: column; gap: 0.4rem; border-top: 4px solid var(--gray-light); }
+        .kpi-card.kpi-ok { border-top-color: var(--success); }
+        .kpi-card.kpi-warn { border-top-color: var(--warning); }
+        .kpi-card.kpi-na, .kpi-card.kpi-info { border-top-color: var(--gray-light); }
+        .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+        .kpi-title { font-weight: 700; color: var(--dark); font-size: 0.95rem; }
+        .kpi-badge { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+        .kpi-ok .kpi-badge { background: var(--bg-success-soft); color: #166534; }
+        .kpi-warn .kpi-badge { background: var(--bg-warning-soft); color: #92400e; }
+        .kpi-info .kpi-badge { background: var(--bg-info-soft); color: #1e40af; }
+        .kpi-na .kpi-badge { background: var(--gray-light); color: var(--gray); }
+        .kpi-value { font-size: 1.9rem; font-weight: 800; color: var(--dark); line-height: 1.15; }
+        .kpi-arrow { color: var(--success); font-weight: 800; }
+        .kpi-target { font-size: 0.8rem; color: var(--gray); font-weight: 600; }
+        .kpi-sub { font-size: 0.78rem; color: var(--gray); }
+        .kpi-note { font-size: 0.76rem; color: var(--gray); margin-top: auto; padding-top: 0.3rem; border-top: 1px dashed var(--gray-light); }
+        .kpi-chart { display: flex; align-items: flex-end; gap: 0.35rem; height: 56px; margin-top: 0.3rem; }
+        .kpi-chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; min-width: 0; }
+        .kpi-chart-bar { width: 100%; max-width: 26px; background: var(--primary); border-radius: 4px 4px 0 0; opacity: 0.85; }
+        .kpi-chart-label { font-size: 0.65rem; color: var(--gray); white-space: nowrap; }
 
         /* Check-in Layout */
         .checkin-layout { display: flex; flex-direction: column; gap: 1rem; align-items: stretch; }

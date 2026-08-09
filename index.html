@@ -444,6 +444,16 @@
                     </div>
                 </div>
 
+                <div class="card mb-2">
+                    <div class="flex justify-between align-center mb-1" style="flex-wrap: wrap; gap: 1rem;">
+                        <div>
+                            <h3 style="margin:0;">Key Performance Indicators</h3>
+                            <p class="text-gray" style="margin:0.25rem 0 0 0;">Business health targets and how each is counted.</p>
+                        </div>
+                    </div>
+                    <div class="kpi-grid mt-1" id="kpi-grid"></div>
+                </div>
+
                 <div class="dashboard-grid mt-2 mb-2" id="retention-overview-grid"></div>
 
                 <div class="retention-segments mb-2" id="retention-segment-cards"></div>
@@ -527,6 +537,7 @@
                     <div class="tab tab-link-members active" id="tab-link-members-active" onclick="App.switchDirStatus('active')">Active Members</div>
                     <div class="tab tab-link-members" id="tab-link-members-inactive" onclick="App.switchDirStatus('inactive')">Inactive Members</div>
                     <div class="tab tab-link-members" id="tab-link-members-frozen" onclick="App.switchDirStatus('frozen')">Frozen Members</div>
+                    <div class="tab tab-link-members" id="tab-link-members-cancelled" onclick="App.switchDirStatus('cancelled')">Cancelled (90d+)</div>
                     <div class="tab tab-link-members" id="tab-link-members-history" onclick="App.switchTab('members', 'history')">Training History</div>
                     <div class="tab tab-link-members" id="tab-link-members-bin" onclick="App.switchTab('members', 'bin')">Recycle Bin</div>
                 </div>
@@ -616,7 +627,7 @@
                     <div class="card" style="padding:0;">
                         <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
                             <table>
-                                <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Sessions</th><th>On Kiosk</th><th id="label-plan-price-th">Price</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <thead><tr><th>Plan Name</th><th>Validity (Days)</th><th>Sessions</th><th>On Kiosk</th><th>Trial</th><th id="label-plan-price-th">Price</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
                                 <tbody id="plans-list"></tbody>
                             </table>
                         </div>
@@ -685,6 +696,20 @@
                                         <input type="checkbox" id="form-plan-starred" onchange="App.updatePlanStarredLabel()">
                                         <span class="closed-date-toggle-track"></span>
                                         <span id="form-plan-starred-label" class="closed-date-toggle-label">Standard</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="card mt-1" style="border-left: 4px solid #0891b2; padding: 0.75rem 1rem;">
+                                <div class="flex justify-between align-center" style="gap: 1rem;">
+                                    <div>
+                                        <div class="font-bold text-gray">Trial / Introductory plan</div>
+                                        <p class="text-gray" style="font-size: 0.85rem; margin: 0.15rem 0 0 0;">Mark this as a free or discounted trial (e.g. single lesson, 1-week, 14-day). Members placed on it count as trial participants for the Trial Conversion KPI.</p>
+                                    </div>
+                                    <label class="closed-date-toggle">
+                                        <input type="checkbox" id="form-plan-trial" onchange="App.updatePlanTrialLabel()">
+                                        <span class="closed-date-toggle-track"></span>
+                                        <span id="form-plan-trial-label" class="closed-date-toggle-label">Standard</span>
                                     </label>
                                 </div>
                             </div>
@@ -778,7 +803,7 @@
                     <div class="card" style="padding:0;">
                         <div class="table-responsive mobile-cards" style="border:none; border-radius: var(--border-radius);">
                             <table>
-                                <thead><tr><th>Class</th><th>Schedule</th><th>On Kiosk</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
+                                <thead><tr><th>Class</th><th>Schedule</th><th>On Kiosk</th><th>Capacity</th><th style="width: 70px;">Action</th><th style="width: 70px;">Drag</th></tr></thead>
                                 <tbody id="schedule-classes-list"></tbody>
                             </table>
                         </div>
@@ -803,6 +828,13 @@
                             <textarea id="form-sched-desc" placeholder="Describe this class for members..."></textarea>
                             <label class="text-gray font-bold mt-1">Practitioners / Members</label>
                             <input type="text" id="form-sched-practitioners" placeholder="e.g. Coach Ali, Coach Maria">
+                            <div class="flex gap-2 mt-1" style="flex-wrap: wrap;">
+                                <div style="flex:1; min-width: 200px;">
+                                    <label class="text-gray font-bold">Max Capacity (Students per Slot)</label>
+                                    <input type="number" id="form-sched-capacity" min="1" placeholder="e.g. 25" class="mt-1">
+                                </div>
+                            </div>
+                            <div class="text-gray text-sm mt-1">Used to compute the weekly <strong>Class Attendance</strong> KPI (check-ins ÷ capacity). Leave empty to skip this class from that KPI.</div>
                             <label class="text-gray font-bold mt-1">Class Requirements</label>
                             <textarea id="form-sched-requirements" placeholder="Enter class requirements or member instructions..."></textarea>
                             <label class="text-gray font-bold mt-1">Class Color Accent</label>

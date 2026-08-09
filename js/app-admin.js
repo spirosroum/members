@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, getMemberFirstTrainingDate, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
+// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -114,6 +114,186 @@ Object.assign(App, {
                 ].filter(d => !isNaN(d.getTime()));
                 if (!dates.length) return null;
                 return new Date(Math.min(...dates.map(d => d.getTime())));
+            },
+
+            // Approximate a member's join date as the earliest of their first payment,
+            // first class check-in, or first visit. Used by the Membership Growth KPI.
+            getMemberJoinDate: (memberId) => {
+                const dates = [];
+                DB.getPayments().forEach(p => {
+                    if (p.memberId !== memberId || !p.date) return;
+                    const d = new Date(p.date + 'T12:00:00');
+                    if (!isNaN(d.getTime())) dates.push(d);
+                });
+                DB.getClassCheckins().forEach(ci => {
+                    if (ci.memberId !== memberId || !ci.entryTime) return;
+                    const d = new Date(ci.entryTime);
+                    if (!isNaN(d.getTime())) dates.push(d);
+                });
+                DB.getVisits().forEach(v => {
+                    if (v.memberId !== memberId || !v.entryTime) return;
+                    const d = new Date(v.entryTime);
+                    if (!isNaN(d.getTime())) dates.push(d);
+                });
+                if (!dates.length) return null;
+                return new Date(Math.min(...dates.map(d => d.getTime())));
+            },
+
+            renderKPIs: () => {
+                const grid = document.getElementById('kpi-grid');
+                if (!grid) return;
+                const now = new Date();
+                const members = DB.getMembers();
+                const checkins = DB.getClassCheckins();
+                const visits = DB.getVisits();
+                const payments = DB.getPayments();
+                const schedules = DB.getSchedules();
+                const currency = DB.getCurrency();
+                const joinMap = new Map();
+                members.forEach(m => joinMap.set(m.id, App.getMemberJoinDate(m.id)));
+
+                const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+                const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+                // ---- 1. MEMBERSHIP GROWTH (monthly) ----
+                const monthTrend = [];
+                for (let i = 5; i >= 0; i--) {
+                    const s = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                    const e = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+                    const count = members.filter(m => {
+                        const jd = joinMap.get(m.id);
+                        return jd && jd >= s && jd < e;
+                    }).length;
+                    monthTrend.push({ label: s.toLocaleDateString(undefined, { month: 'short' }), count });
+                }
+                const newThisMonth = monthTrend[monthTrend.length - 1].count;
+                const rosterBeforeMonth = members.filter(m => {
+                    const jd = joinMap.get(m.id);
+                    return jd && jd < monthStart;
+                }).length;
+                const growthPct = rosterBeforeMonth > 0 ? (newThisMonth / rosterBeforeMonth) * 100 : null;
+
+                // ---- 2. MEMBER RETENTION (quarterly) ----
+                // Retention = (students at end of period − new students acquired during period)
+                //             ÷ students at start of period × 100
+                const periodStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+                const membersWithJoin = members.filter(m => joinMap.get(m.id));
+                const studentsAtStart = membersWithJoin.filter(m => joinMap.get(m.id) < periodStart).length;
+                const newStudents = membersWithJoin.filter(m => joinMap.get(m.id) >= periodStart).length;
+                const studentsAtEnd = membersWithJoin.length;
+                const retainedStudents = studentsAtEnd - newStudents;
+                const retentionPct = studentsAtStart > 0 ? (retainedStudents / studentsAtStart) * 100 : null;
+
+                // ---- 3. REVENUE PER MEMBER (monthly) ----
+                const revenueThisMonth = payments.filter(p => {
+                    if (!p.date || !(parseFloat(p.amount) > 0)) return false;
+                    const d = new Date(p.date + 'T12:00:00');
+                    return d >= monthStart && d < nextMonth;
+                }).reduce((s, p) => s + parseFloat(p.amount), 0);
+                const activeCount = members.filter(m => (m.accountStatus || 'Active') === 'Active').length;
+                const rpm = activeCount > 0 ? revenueThisMonth / activeCount : null;
+
+                // ---- 4. CLASS ATTENDANCE (weekly) ----
+                // Attendance rate = students who attended ÷ students enrolled in that class × 100.
+                // Enrollment is approximated by the class's Max Capacity (set in Training Schedules).
+                // Only classes with a capacity set are counted; closed days are skipped.
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - 6);
+                weekStart.setHours(0, 0, 0, 0);
+                const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                // Skip days the academy is closed (holidays) so they don't count against capacity.
+                const closedSet = Utils.buildClosedSet(weekStart.getFullYear() + 1);
+                let totalCap = 0, totalAtt = 0;
+                (schedules.filter(c => c.capacity && parseInt(c.capacity, 10) > 0 && c.isPublic !== false)).forEach(cls => {
+                    const cap = parseInt(cls.capacity, 10);
+                    (cls.slots || []).forEach(slot => {
+                        for (let i = 0; i < 7; i++) {
+                            const day = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i);
+                            if (dayNames[day.getDay()] !== slot.day) continue;
+                            const dateIso = Utils.dateToLocalIso(day);
+                            if (closedSet.has(dateIso)) continue;
+                            const att = checkins.filter(ci => ci.classId === cls.id && ci.slotDate === dateIso && ci.slotStart === slot.start && ci.slotEnd === slot.end).length;
+                            totalCap += cap;
+                            totalAtt += Math.min(att, cap);
+                        }
+                    });
+                });
+                const attendancePct = totalCap > 0 ? (totalAtt / totalCap) * 100 : null;
+
+                // ---- 5. TRIAL CONVERSION (all-time) ----
+                // Rate = trial participants who became paying members ÷ total trial participants × 100.
+                const trialParticipants = members.filter(m => m.trialParticipant || m.trialConverted).length;
+                const trialConverted = members.filter(m => m.trialConverted).length;
+                const trialConvPct = trialParticipants > 0 ? (trialConverted / trialParticipants) * 100 : null;
+
+                // ---- Render KPI cards ----
+                const trendMax = Math.max(1, ...monthTrend.map(t => t.count));
+                const card = (title, target, value, status, note, extra = '') => `
+                    <div class="kpi-card kpi-${status}">
+                        <div class="kpi-head">
+                            <div class="kpi-title">${title}</div>
+                            <span class="kpi-badge">${status === 'ok' ? 'On track' : status === 'warn' ? 'Below target' : status === 'info' ? 'Info' : 'Not tracked'}</span>
+                        </div>
+                        <div class="kpi-value">${value}</div>
+                        <div class="kpi-target">${target}</div>
+                        ${extra}
+                        <div class="kpi-note">${note}</div>
+                    </div>`;
+
+                grid.innerHTML =
+                    card(
+                        'Membership Growth',
+                        'Goal: 5–10% monthly increase',
+                        growthPct != null ? `<span class="kpi-arrow">+</span>${growthPct.toFixed(1)}%` : '—',
+                        growthPct != null ? (growthPct >= 5 ? 'ok' : 'warn') : 'warn',
+                        'Counted: new members joined this month ÷ roster before the month.',
+                        `<div class="kpi-chart">${monthTrend.map((t, idx) => `
+                            <div class="kpi-chart-col" title="${t.label}: ${t.count} new">
+                                <div class="kpi-chart-bar" style="height:${Math.max(4, Math.round(t.count / trendMax * 100))}%"></div>
+                                <span class="kpi-chart-label">${t.label}</span>
+                            </div>`).join('')}</div>`
+                    ) +
+                    card(
+                        'Member Retention',
+                        'Goal: 95%+ quarterly',
+                        retentionPct != null ? `${retentionPct.toFixed(0)}%` : '—',
+                        retentionPct == null ? 'na' : (retentionPct >= 95 ? 'ok' : 'warn'),
+                        'Counted: (students now − new students this quarter) ÷ students at quarter start × 100.',
+                        retentionPct != null ? `<div class="kpi-sub">${retainedStudents} retained of ${studentsAtStart} at start (+${newStudents} new)</div>` : ''
+                    ) +
+                    card(
+                        'Revenue Per Member',
+                        'Goal: match market benchmark',
+                        rpm != null ? `${currency}${rpm.toFixed(2)}` : '—',
+                        'info',
+                        `Counted: ${currency}${revenueThisMonth.toFixed(2)} revenue this month ÷ ${activeCount} active members.`,
+                        rpm != null ? `<div class="kpi-sub">${currency}${revenueThisMonth.toFixed(2)} total / ${activeCount} active</div>` : ''
+                    ) +
+                    card(
+                        'Class Attendance',
+                        'Goal: 70–80% weekly (healthy range)',
+                        attendancePct != null ? `${attendancePct.toFixed(0)}%` : '—',
+                        attendancePct == null ? 'na' : (attendancePct >= 70 ? 'ok' : 'warn'),
+                        'Counted: students who attended ÷ students enrolled in that class × 100 (enrollment = class capacity).',
+                        attendancePct != null ? `<div class="kpi-sub">${totalAtt} attended / ${totalCap} enrolled</div>`
+                            : '<div class="kpi-sub">Set a Max Capacity in Training Schedules to enable this KPI.</div>'
+                    ) +
+                    card(
+                        'Trial Conversion',
+                        'Goal: 50–70% conversion',
+                        trialConvPct != null ? `${trialConvPct.toFixed(0)}%` : '—',
+                        trialConvPct == null ? 'na' : (trialConvPct >= 50 ? 'ok' : 'warn'),
+                        'Counted: trial participants who became paying members ÷ total trial participants × 100.',
+                        trialConvPct != null ? `<div class="kpi-sub">${trialConverted} converted of ${trialParticipants} trial participants</div>`
+                            : '<div class="kpi-sub">Mark a plan as Trial and assign it to members to enable this KPI.</div>'
+                    ) +
+                    card(
+                        'Member Satisfaction',
+                        'Goal: 90%+ quarterly',
+                        '—',
+                        'na',
+                        'Not tracked yet — no survey data source. Add a kiosk/member survey later to compute this.'
+                    );
             },
 
             // --- SETTINGS ---
