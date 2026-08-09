@@ -530,7 +530,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // local intent (edits/deletions) and snapshots must NOT be applied —
             // otherwise a locally-deleted member would be resurrected by the
             // next snapshot and the deletion would never propagate.
-            if (FSEngine.dirty.has(col) && !FSEngine.applied.has(col)) {
+            // The merge guard uses !applied (not dirty && !applied) because
+            // dirty is an in-memory flag lost on page reload — a client that
+            // saved data locally but hadn't flushed to Firestore yet would
+            // otherwise lose that data on reload when the snapshot overwrites
+            // STATE with cloud-only data.
+            if (!FSEngine.applied.has(col)) {
                 const local = STATE[cfg.state] || [];
                 const merged = local.slice();
                 cloudArr.forEach(rec => {
@@ -1470,6 +1475,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // CSS-hide the admin view and force the kiosk (unless a member/mobile
             // view is active). Also clears sensitive client-side data.
             lockAdmin: () => {
+                // Flush pending local writes to Firestore while the admin auth
+                // session is still active — once adminAuthed flips to false,
+                // admin-only collections (payments, bins, etc.) cannot write.
+                if (FSEngine.flushTimer) {
+                    clearTimeout(FSEngine.flushTimer);
+                    FSEngine.flushTimer = null;
+                    try { FSEngine.flush(); } catch (e) {}
+                }
                 App.adminAuthed = false;
                 App.adminListenersBound = false;
                 const adminView = document.getElementById('view-admin');
@@ -1509,6 +1522,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.removeItem('gym_notifications');
                 localStorage.removeItem('gym_notification_bin');
                 localStorage.removeItem('gym_bin');
+                ['payments','notifications','notificationBin','bin'].forEach(col => {
+                    FSEngine.dirty.delete(col);
+                });
                 fallbackToLocal();
             },
 

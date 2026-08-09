@@ -499,6 +499,9 @@
         tr.bg-red-50 { background: var(--bg-danger-soft); }
         tr.bg-red-50:hover td { background: var(--bg-danger-soft); }
 
+        /* Phone-only member card list; hidden on desktop (the table shows instead) */
+        .member-dir-cards { display: none; }
+
         .table-inside { border: none; white-space: normal; }
         /* "Currently Inside" list: allow name/belt rows to wrap instead of overflowing */
         .table-inside td:first-child { display: flex; justify-content: space-between; align-items: center; border-bottom: none; flex-wrap: wrap; gap: 0.5rem; }
@@ -626,6 +629,25 @@
             .table-responsive.mobile-cards td.cell-actions .flex { width: 100%; }
             .table-responsive.mobile-cards td .flex.gap-1 { flex-wrap: wrap; }
             .table-responsive.mobile-cards .drag-handle-cell { display: none; }
+
+            /* ---- Member Directory: friendly card list replaces the table on phones ---- */
+            .table-responsive.mobile-cards.member-dir-table { display: none; }
+            .member-dir-cards { display: flex; flex-direction: column; gap: 0.85rem; }
+            .member-card { background: var(--white); border: 1px solid var(--gray-light); border-radius: 14px; padding: 1rem; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
+            .member-card.is-alert { background: var(--bg-danger-soft); border-color: #fecaca; }
+            .member-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+            .member-card-title { min-width: 0; }
+            .member-card-name { font-size: 1.05rem; font-weight: 700; color: var(--dark); line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
+            .member-card-id { margin-top: 0.4rem; }
+            .member-card-status { flex-shrink: 0; }
+            .member-card-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
+            .member-chip { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--gray-light); border-radius: 999px; padding: 0.3rem 0.65rem; font-size: 0.8rem; font-weight: 600; color: var(--dark); }
+            .member-chip .chip-label { font-size: 0.6rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.4px; }
+            .member-chip a { color: var(--primary); text-decoration: none; }
+            .member-chip.is-warn { background: var(--bg-warning-soft); color: #92400e; }
+            .member-chip.is-danger { background: var(--bg-danger-soft); color: #991b1b; }
+            .member-card .member-card-btn { width: 100%; margin-top: 0.85rem; }
+            .member-cards-empty { padding: 1.5rem 1rem; }
 
             /* ---- Friendlier touch targets & spacing ---- */
             button, .nav-item, .tab, label { touch-action: manipulation; }

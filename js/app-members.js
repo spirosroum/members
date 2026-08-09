@@ -242,6 +242,65 @@ Object.assign(App, {
                         <td data-label="Action" class="cell-actions"><button class="btn-primary btn-small" onclick="App.openMemberModal('${m.id}')">Manage</button></td>
                     </tr>
                 `}).join('') || `<tr><td colspan="${activeCols.length + 1}" class="text-center text-gray">${query ? `No members found matching &quot;${Utils.escapeHTML(query)}&quot;.` : 'No members found.'}</td></tr>`;
+
+                // Phone view: a friendly card list instead of the dense table. Rendered
+                // alongside the desktop table — CSS shows one or the other per breakpoint.
+                const cardsContainer = document.getElementById('member-directory-cards');
+                cardsContainer.innerHTML = filtered.map(m => {
+                    const isMemberExpired = m.expirationDate ? Utils.getDaysRemaining(m.expirationDate) < 0 : false;
+                    const isOutOfSessions = m.sessionsTotal && parseInt(m.sessionsLeft) <= 0;
+
+                    let statBadge = '';
+                    if (m.accountStatus === 'Frozen') statBadge = `<span class="badge badge-frozen">Frozen</span>`;
+                    else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
+                    else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
+                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
+                    else statBadge = `<span class="badge badge-active">Active</span>`;
+
+                    const chips = [];
+                    activeCols.forEach(c => {
+                        switch(c.id) {
+                            case 'name': case 'id': case 'status': break;
+                            case 'gender':
+                                if (m.gender) chips.push(`<span class="member-chip"><span class="chip-label">Gender</span>${Utils.escapeHTML(m.gender)}</span>`);
+                                break;
+                            case 'age': {
+                                const age = Utils.calcAge(m.dob);
+                                if (age !== 'N/A') chips.push(`<span class="member-chip"><span class="chip-label">Age</span>${age}</span>`);
+                                break;
+                            }
+                            case 'phone':
+                                if (m.phone) chips.push(`<span class="member-chip"><span class="chip-label">Phone</span><a href="tel:${Utils.escapeHTML(m.phone)}">${Utils.escapeHTML(m.phone)}</a></span>`);
+                                break;
+                            case 'exp': {
+                                if (m.expirationDate) {
+                                    chips.push(`<span class="member-chip ${isMemberExpired ? 'is-danger' : ''}"><span class="chip-label">Expires</span>${Utils.formatDate(m.expirationDate)}</span>`);
+                                } else if (m.sessionsTotal) {
+                                    chips.push(`<span class="member-chip ${isOutOfSessions ? 'is-warn' : ''}"><span class="chip-label">Sessions</span>${parseInt(m.sessionsLeft) || 0}/${parseInt(m.sessionsTotal) || 0}</span>`);
+                                }
+                                break;
+                            }
+                            case 'last-visit': {
+                                const lv = visits.filter(v => v.memberId === m.id).sort((x, y) => new Date(y.entryTime) - new Date(x.entryTime))[0];
+                                chips.push(`<span class="member-chip"><span class="chip-label">Last visit</span>${lv ? Utils.formatDate(lv.entryTime) : 'Never'}</span>`);
+                                break;
+                            }
+                        }
+                    });
+
+                    return `
+                    <div class="member-card ${(isMemberExpired || isOutOfSessions) && m.accountStatus !== 'Frozen' ? 'is-alert' : ''}">
+                        <div class="member-card-head">
+                            <div class="member-card-title">
+                                <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>
+                                <div class="member-card-id">${Utils.getMemberIdBadge(m)}</div>
+                            </div>
+                            <div class="member-card-status">${statBadge}</div>
+                        </div>
+                        <div class="member-card-meta">${chips.join('')}</div>
+                        <button class="btn-primary member-card-btn" onclick="App.openMemberModal('${m.id}')">Manage</button>
+                    </div>
+                `}).join('') || `<div class="member-cards-empty text-center text-gray">${query ? `No members found matching &quot;${Utils.escapeHTML(query)}&quot;.` : 'No members found.'}</div>`;
             },
 
             renderColumnConfigurator: () => {
