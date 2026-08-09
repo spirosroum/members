@@ -353,7 +353,7 @@ Object.assign(App, {
                     if (sortEl) sortEl.value = 'newest';
                     App.renderVisitLog(); 
                 }
-                if (targetPane === 'admin-retention') { App.renderRetentionStats(); }
+                if (targetPane === 'admin-retention') { App.renderKPIs(); App.renderRetentionStats(); }
                 if (targetPane === 'admin-notifications') { App.renderNotifications(); App.renderNotificationBin(); App.switchTab('notifications', 'list'); }
                 if (targetPane === 'admin-members') { App.renderMemberDirectory(); App.renderMemberBin(); App.switchDirStatus('active'); }
                 if (targetPane === 'admin-payments') { App.renderAllPayments(); }

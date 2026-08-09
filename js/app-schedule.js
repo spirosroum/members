@@ -101,7 +101,8 @@ Object.assign(App, {
                 const description = document.getElementById('form-sched-desc').value;
                 const practitioners = document.getElementById('form-sched-practitioners').value.trim();
                 const requirements = document.getElementById('form-sched-requirements').value.trim();
-                const newClass = { id, name, description, practitioners, requirements, color, isPublic: document.getElementById('form-sched-visible').checked, slots: App.draftClassSlots };
+                const capacity = parseInt(document.getElementById('form-sched-capacity').value, 10) || null;
+                const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, slots: App.draftClassSlots };
 
                 if (isNew) schedules.push(newClass);
                 else { const idx = schedules.findIndex(c => c.id === id); if(idx > -1) schedules[idx] = newClass; }
@@ -118,6 +119,7 @@ Object.assign(App, {
                 document.getElementById('form-sched-class-name').value = '';
                 document.getElementById('form-sched-desc').value = '';
                 document.getElementById('form-sched-practitioners').value = '';
+                document.getElementById('form-sched-capacity').value = '';
                 document.getElementById('form-sched-requirements').value = '';
                 document.getElementById('form-sched-visible').checked = true;
                 App.updateClassVisibilityLabel();
@@ -138,6 +140,7 @@ Object.assign(App, {
                 document.getElementById('form-sched-class-name').value = cls.name;
                 document.getElementById('form-sched-desc').value = cls.description || '';
                 document.getElementById('form-sched-practitioners').value = cls.practitioners || '';
+                document.getElementById('form-sched-capacity').value = cls.capacity || '';
                 document.getElementById('form-sched-requirements').value = cls.requirements || '';
                 document.getElementById('form-sched-visible').checked = cls.isPublic !== false;
                 App.updateClassVisibilityLabel();
@@ -241,11 +244,12 @@ Object.assign(App, {
                                 <span class="closed-date-toggle-track"></span>
                             </label>
                         </td>
+                        <td data-label="Capacity">${cls.capacity ? `<span class="badge badge-inside">${cls.capacity}</span>` : '<span class="text-gray" style="font-size:0.8rem;">—</span>'}</td>
                         <td data-label="Action"><button class="btn-primary btn-small" onclick="App.editScheduleClass('${cls.id}')">Edit</button></td>
                         <td data-label="Drag" class="drag-handle-cell" title="Drag to reorder"><span class="drag-handle">⠿</span></td>
                     </tr>
                     `;
-                }).join('') || '<tr><td colspan="5" class="text-center text-gray">No classes found. Add a class to get started.</td></tr>';
+                }).join('') || '<tr><td colspan="6" class="text-center text-gray">No classes found. Add a class to get started.</td></tr>';
             },
 
             toggleClassVisibility: (id, visible) => {
