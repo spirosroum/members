@@ -117,7 +117,7 @@ Object.assign(App, {
                 } else if (!query && dirStatus === 'frozen') {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Frozen');
                 } else if (!query && dirStatus === 'cancelled') {
-                    filtered = filtered.filter(m => App.isMemberCancelled(m.id));
+                    filtered = filtered.filter(m => m.accountStatus === 'Cancelled' || App.isMemberCancelled(m.id));
                 }
 
                 // While a search is active the status sub-filter is ignored, so drop the
@@ -144,7 +144,15 @@ Object.assign(App, {
                     let valA, valB;
                     let groupA = 0, groupB = 0;
                     switch(App.dirSortCol) {
-                        case 'name': {
+                        case 'firstName': {
+                            const keyA = Utils.sortKey(a.firstName || '');
+                            const keyB = Utils.sortKey(b.firstName || '');
+                            groupA = Utils.isGreek(a.firstName) ? 0 : 1;
+                            groupB = Utils.isGreek(b.firstName) ? 0 : 1;
+                            valA = keyA; valB = keyB;
+                            break;
+                        }
+                        case 'lastName': {
                             // Greek-script names always sort first (α→ω or ω→α), Latin/English
                             // names always last, in both directions. Within each block the
                             // per-direction order still applies.
@@ -152,8 +160,8 @@ Object.assign(App, {
                             const keyLastB = Utils.sortKey(b.lastName || '');
                             const keyFirstA = Utils.sortKey(a.firstName || '');
                             const keyFirstB = Utils.sortKey(b.firstName || '');
-                            groupA = (Utils.isGreek(a.lastName) || Utils.isGreek(a.firstName)) ? 0 : 1;
-                            groupB = (Utils.isGreek(b.lastName) || Utils.isGreek(b.firstName)) ? 0 : 1;
+                            groupA = Utils.isGreek(a.lastName) ? 0 : 1;
+                            groupB = Utils.isGreek(b.lastName) ? 0 : 1;
                             if (keyLastA !== keyLastB) { valA = keyLastA; valB = keyLastB; break; }
                             valA = keyFirstA; valB = keyFirstB;
                             break;
@@ -208,6 +216,7 @@ Object.assign(App, {
 
                     let statBadge = '';
                     if (m.accountStatus === 'Frozen') statBadge = `<span class="badge badge-frozen">Frozen</span>`;
+                    else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
                     else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
@@ -220,7 +229,8 @@ Object.assign(App, {
                     let rowHTML = '';
                     activeCols.forEach(c => {
                         switch(c.id) {
-                            case 'name': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong>${trialBadge}</td>`; break;
+                            case 'firstName': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)}</strong>${trialBadge}</td>`; break;
+                            case 'lastName': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.lastName)}</strong></td>`; break;
                             case 'id': rowHTML += `<td data-label="${c.label}">${Utils.getMemberIdBadge(m)}</td>`; break;
                             case 'gender': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.gender || 'Unspecified')}</td>`; break;
                             case 'age': rowHTML += `<td data-label="${c.label}">${Utils.calcAge(m.dob)}</td>`; break;
@@ -258,6 +268,7 @@ Object.assign(App, {
 
                     let statBadge = '';
                     if (m.accountStatus === 'Frozen') statBadge = `<span class="badge badge-frozen">Frozen</span>`;
+                    else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
                     else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
                     else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
                     else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">No sessions</span>`;
@@ -270,7 +281,7 @@ Object.assign(App, {
                     const chips = [];
                     activeCols.forEach(c => {
                         switch(c.id) {
-                            case 'name': case 'id': case 'status': break;
+                            case 'firstName': case 'lastName': case 'id': case 'status': break;
                             case 'gender':
                                 if (m.gender) chips.push(`<span class="member-chip"><span class="chip-label">Gender</span>${Utils.escapeHTML(m.gender)}</span>`);
                                 break;

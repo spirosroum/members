@@ -162,6 +162,10 @@ Object.assign(App, {
                     App.addNotification('Frozen Check-in Attempt', `${member.firstName} ${member.lastName} attempted to check in, but account is frozen.`, 'warning', member.id);
                     return App.showKioskMessage('Account is Frozen. Please see staff.', 'warning');
                 }
+                if (member.accountStatus === 'Cancelled') {
+                    App.addNotification('Cancelled Check-in Attempt', `${member.firstName} ${member.lastName} attempted to check in, but account is cancelled.`, 'warning', member.id);
+                    return App.showKioskMessage('Account is Cancelled. Please see staff.', 'warning');
+                }
 
                 // Inactive members are allowed to check in; their visit will be marked unpaid
                 // and they will receive a post-check-in alert to see staff.

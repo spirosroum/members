@@ -205,6 +205,10 @@ Object.assign(App, {
                     App.showKioskAlert(map.mobileAccountFrozenTitle || 'Account Frozen', map.mobileAccountFrozenBody || 'Your account is frozen. Please see staff.', 'var(--warning)');
                     return;
                 }
+                if (member.accountStatus === 'Cancelled') {
+                    App.showKioskAlert(map.mobileAccountFrozenTitle || 'Account Cancelled', map.mobileAccountFrozenBody || 'Your account has been cancelled. Please see staff.', 'var(--warning)');
+                    return;
+                }
                 const isUnpaidVisit = App.computeVisitUnpaid(member);
                 const planDays = member.planDays != null ? parseInt(member.planDays, 10) : null;
                 const daysRemaining = Utils.getDaysRemaining(member.expirationDate);

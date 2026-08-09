@@ -471,12 +471,15 @@
                             <h3 style="margin:0;">Member Frequency Breakdown</h3>
                             <p class="text-gray" style="margin:0.25rem 0 0 0;">Every active member sorted by training frequency (most at risk first). <span id="retention-window-label" style="font-weight:600;"></span></p>
                         </div>
-                        <select id="retention-segment-filter" onchange="App.renderRetentionTable()" class="mt-1">
-                            <option value="all">All Segments</option>
-                            <option value="high">High Risk Only</option>
-                            <option value="moderate">Moderate Risk Only</option>
-                            <option value="active">Active / Healthy Only</option>
-                        </select>
+                        <div class="flex gap-1 align-center" style="flex-wrap: wrap;">
+                            <select id="retention-segment-filter" onchange="App.renderRetentionTable()" class="mt-1">
+                                <option value="all">All Segments</option>
+                                <option value="high">High Risk Only</option>
+                                <option value="moderate">Moderate Risk Only</option>
+                                <option value="active">Active / Healthy Only</option>
+                            </select>
+                            <button class="btn-success btn-small mt-1" onclick="App.exportRetentionExcel()">Download CSV</button>
+                        </div>
                     </div>
                     <div class="table-responsive mobile-cards">
                         <table>
@@ -544,7 +547,7 @@
                     <div class="tab tab-link-members active" id="tab-link-members-active" onclick="App.switchDirStatus('active')">Active Members</div>
                     <div class="tab tab-link-members" id="tab-link-members-inactive" onclick="App.switchDirStatus('inactive')">Inactive Members</div>
                     <div class="tab tab-link-members" id="tab-link-members-frozen" onclick="App.switchDirStatus('frozen')">Frozen Members</div>
-                    <div class="tab tab-link-members" id="tab-link-members-cancelled" onclick="App.switchDirStatus('cancelled')">Cancelled (90d+)</div>
+                    <div class="tab tab-link-members" id="tab-link-members-cancelled" onclick="App.switchDirStatus('cancelled')">Cancelled</div>
                     <div class="tab tab-link-members" id="tab-link-members-history" onclick="App.switchTab('members', 'history')">Training History</div>
                     <div class="tab tab-link-members" id="tab-link-members-bin" onclick="App.switchTab('members', 'bin')">Recycle Bin</div>
                 </div>
@@ -1146,6 +1149,7 @@
                             <option value="Active">Active (Normal)</option>
                             <option value="Inactive">Inactive (No Membership)</option>
                             <option value="Frozen">Frozen / Suspended</option>
+                            <option value="Cancelled">Cancelled</option>
                         </select>
                     </div>
                 </div>

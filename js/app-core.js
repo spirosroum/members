@@ -1254,14 +1254,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             authUser: null,
             adminAuthed: false,
             adminListenersBound: false,
-            dirSortCol: 'name',
+            dirSortCol: 'lastName',
             dirSortAsc: true,
             dirStatus: 'active',
             pendingCheckinMember: null,
             pendingAdminCheckin: null,
             isMobileCheckinMode: false,
             columnsConfig: [
-                {id: 'name', label: 'Name', checked: true},
+                {id: 'firstName', label: 'First Name', checked: true},
+                {id: 'lastName', label: 'Last Name', checked: true},
                 {id: 'id', label: 'ID', checked: true},
                 {id: 'gender', label: 'Gender', checked: false},
                 {id: 'age', label: 'Age', checked: true},
@@ -1429,6 +1430,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             computeVisitUnpaid: (member) => {
                 if (!member) return true;
                 if (member.accountStatus === 'Frozen') return true;
+                if (member.accountStatus === 'Cancelled') return true;
                 if (member.accountStatus === 'Inactive') return true;
                 const planDays = member.planDays != null ? parseInt(member.planDays, 10) : null;
                 if (planDays && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) return false;

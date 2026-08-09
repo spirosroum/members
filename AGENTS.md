@@ -25,11 +25,25 @@ index.html
 
 **Every JS file** uses `Object.assign(App, { /* methods */ })` — all methods live on the global `App` object. There are no ES modules. If a file is loaded before the methods it depends on, the app silently breaks.
 
+## AI Agent Rules (READ FIRST)
+
+### Before making any change
+- **Read `HISTORY.md` first** — it contains the full changelog of every update. This helps you understand what was recently changed, what patterns are established, and avoid regressions.
+- **Read the relevant source files** before editing — do not guess at function signatures or variable names.
+- **Minimal edits:** change only what is necessary. Do not refactor unrelated code. Do not add comments.
+
+### On every commit/push
+- **Update `HISTORY.md`** — append a new entry at the top with today's date, a one-line summary, and a bullet list of what changed. Follow the existing format.
+- **Write a descriptive commit message** — summarize what changed and why (e.g. `Fix visit log date filter for UTC+2 timezone` not `fix bug`). Keep it under 72 chars for the subject line.
+- **After committing, auto-push to `master`** on `https://github.com/spirosroum/members.git`. If git push fails, tell the user which files changed so they can upload manually.
+
+### After deployment
+- **Can also deploy to Firebase Hosting:** `firebase deploy --only hosting` to `https://ssg-desk.web.app`.
+
 ## Deployment
 
 - **There is no dev server, no npm, no build.** Open `index.html` directly in a browser (or use `python3 -m http.server 3000` for local testing).
-- **Production:** hosted on **GitHub Pages** at `https://spirosroum.github.io/members/` with a custom domain at **`https://members.ssgbjj.gr/`**. Deploy by pushing to the `master` branch of `https://github.com/spirosroum/members.git`. When git push is not available from the local machine, the user manually uploads changed files.
-- **After making changes, ask the user: "Do you want me to push the changes to GitHub Pages?"** If yes, commit and push. If git auth fails, tell the user which specific files changed so they can upload manually.
+- **Production:** hosted on **GitHub Pages** at `https://spirosroum.github.io/members/` with a custom domain at **`https://members.ssgbjj.gr/`**. Deploy by pushing to the `master` branch of `https://github.com/spirosroum/members.git`. When git push is not available, the user manually uploads changed files.
 - **Firebase Hosting** (`https://ssg-desk.web.app`) is also available as a secondary deployment target. Deploy with `firebase deploy --only hosting`.
 - **Deploy Firestore Rules only:** `firebase deploy --only firestore:rules`
 - **No lint, no typecheck, no tests.** There is no tooling.
@@ -77,3 +91,17 @@ index.html
 - **Responsive breakpoint:** 768px (`@media (max-width: 768px)`). Below this, the sidebar becomes a sliding drawer, numpad appears, and tables switch to mobile card layout (`.mobile-cards`).
 - **Touch device detection:** `('ontouchstart' in window) || (navigator.maxTouchPoints > 0)` — used to choose redirect vs popup for Google sign-in on mobile.
 - **`Utils.escapeHTML()`** must be used on any user-generated content rendered as innerHTML. This is the app's XSS defense since it builds HTML strings in JS.
+
+## Recommended Practices for AI Agents
+
+Beyond the mandatory rules above, these are recommended for the best results:
+
+- **Batch related changes into one commit** — don't create separate commits for each tweak of the same feature/bug.
+- **Check for side effects** — because this is a global-namespace app (`App.method`), adding or renaming a method can break calls in other files. Always grep for all call sites when renaming.
+- **Keep HTML and JS in sync** — inline `onclick="App.foo()"` handlers in `index.html` must match the actual method name. JavaScript can't warn you about a broken reference.
+- **Test locally before committing** — run `python3 -m http.server 3000` and test the actual flow for each view (kiosk, admin, member) to verify nothing broke.
+- **Preserve load order** — if adding a new JS file, insert it in the correct position in `index.html` based on dependencies, and update the architecture diagram in this file.
+- **Prefer editing existing files** over creating new ones — the app's simplicity (14 JS files total) is a feature, not a bug.
+- **Never introduce build tools, npm, TypeScript, or frameworks** — the zero-build philosophy is deliberate.
+- **Don't add comments** — the codebase convention is clean, comment-free code. Only add them for genuinely non-obvious logic.
+- **Ignore Firebase quota warnings** on kiosk refreshes — the app already caps retries, and anonymous read spikes during gym hours are expected.

@@ -314,11 +314,14 @@ Object.assign(App, {
                 const hasValidity = !!member.expirationDate;
                 const daysRemaining = hasValidity ? Utils.getDaysRemaining(member.expirationDate) : null;
                 const isFrozen = member.accountStatus === 'Frozen';
+                const isCancelled = member.accountStatus === 'Cancelled';
                 const isInactive = member.accountStatus === 'Inactive';
                 
                 let statusText = '';
                 if (isFrozen) {
                     statusText = `<span style="color:var(--warning)">${Utils.escapeHTML(map.memberStatusFrozen || 'Frozen')}</span>`;
+                } else if (isCancelled) {
+                    statusText = `<span style="color:var(--danger)">${Utils.escapeHTML(map.memberStatusCancelled || 'Cancelled')}</span>`;
                 } else if (isInactive) {
                     statusText = `<span style="color:var(--danger)">${Utils.escapeHTML(map.memberStatusInactive || 'Inactive')}</span>`;
                 } else if (hasValidity && Utils.getDaysRemaining(member.expirationDate) < 0) {

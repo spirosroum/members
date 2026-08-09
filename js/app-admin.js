@@ -1,6 +1,6 @@
 // =====================================================================
 // app-admin.js
-// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
+// App methods: setRetentionPeriod, renderRetentionStats, renderRetentionTable, exportRetentionExcel, getMemberFirstTrainingDate, getMemberJoinDate, renderKPIs, sendAdminPasswordReset, renderAdminDashboard, renderAnalyticalCalendar, filterVisitsByDate, exportMonthlyExcel, getVisitPaidByInfo, renderVisitLog, openVisitEditModal, saveVisitEdit, deleteVisitFromModal, searchDashboardHistory, renderAdminSettings, updatePortalName, updateCurrency, saveBeltVisibility, repairDuplicateMembers
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -147,6 +147,34 @@ Object.assign(App, {
                             <td data-label="Segment"><span class="badge ${meta.cls}">${meta.label}</span></td>
                         </tr>`;
                 }).join('') || '<tr><td colspan="5" class="text-center text-gray">No active members found in this segment.</td></tr>';
+            },
+
+            exportRetentionExcel: () => {
+                const filter = document.getElementById('retention-segment-filter').value;
+                const rows = (App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
+                if (!rows.length) return alert('No data to export for the current segment filter.');
+                const segLabels = { high: 'High Risk', moderate: 'Moderate Risk', active: 'Active / Healthy' };
+                let csvContent = "data:text/csv;charset=utf-8,";
+                csvContent += "Member ID,First Name,Last Name,Belt,Classes,Avg / Week,Segment\n";
+                const esc = (val) => {
+                    let str = String(val == null ? '' : val);
+                    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        return '"' + str.replace(/"/g, '""') + '"';
+                    }
+                    return str;
+                };
+                rows.forEach(r => {
+                    const m = r.member;
+                    csvContent += `${esc(m.id)},${esc(m.firstName)},${esc(m.lastName)},${esc(m.belt || 'White')},${esc(r.count)},${esc(r.perWeek.toFixed(1))},${esc(segLabels[r.segment])}\n`;
+                });
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `GymDesk_Retention_${Utils.todayLocalIso()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             },
 
             getMemberFirstTrainingDate: (memberId) => {

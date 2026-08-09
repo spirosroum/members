@@ -126,6 +126,7 @@ Object.assign(App, {
                 // Display priority: Frozen > Inactive > expired (by date) > out of sessions > active
                 let statusHtml = '';
                 if (m.accountStatus === 'Frozen') statusHtml = `<div class="mt-2 kiosk-msg danger">ACCOUNT FROZEN</div>`;
+                else if (m.accountStatus === 'Cancelled') statusHtml = `<div class="mt-2 kiosk-msg danger">ACCOUNT CANCELLED</div>`;
                 else if (m.accountStatus === 'Inactive') statusHtml = `<div class="mt-2 kiosk-msg danger">ACCOUNT INACTIVE</div>`;
                 else if (isMemberExpired) statusHtml = `<div class="mt-2 kiosk-msg danger">MEMBERSHIP EXPIRED</div>`;
                 else if (isOutOfSessions) statusHtml = `<div class="mt-2 kiosk-msg warning">NO SESSIONS LEFT</div>`;
