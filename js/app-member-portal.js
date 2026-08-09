@@ -233,6 +233,35 @@ Object.assign(App, {
                 return entry ? entry.rank : null;
             },
 
+            // Total minutes trained: sums the duration of each unique class session
+            // (date/class/slot), falling back to visit entry→exit duration for legacy
+            // records logged before class-level check-ins. Mirrors getMemberTrainingCount
+            // so "Total Hours Trained" counts the same sessions as "Total Trainings".
+            getMemberTotalHours: (memberId) => {
+                const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                if (checkins.length > 0) {
+                    const seen = new Set();
+                    let totalMins = 0;
+                    checkins.forEach(ci => {
+                        const dateKey = ci.slotDate || (ci.entryTime ? Utils.dateToLocalIso(new Date(ci.entryTime)) : '');
+                        const key = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
+                        if (seen.has(key)) return;
+                        seen.add(key);
+                        let mins = 60;
+                        if (ci.slotStart && ci.slotEnd) {
+                            const [sh, sm] = ci.slotStart.split(':').map(Number);
+                            const [eh, em] = ci.slotEnd.split(':').map(Number);
+                            const dur = (eh * 60 + em) - (sh * 60 + sm);
+                            if (dur > 0 && dur < 24 * 60) mins = dur;
+                        }
+                        totalMins += mins;
+                    });
+                    return totalMins;
+                }
+                return DB.getVisits().filter(v => v.memberId === memberId && v.entryTime && v.exitTime)
+                    .reduce((s, v) => s + Math.max(0, Math.round((new Date(v.exitTime) - new Date(v.entryTime)) / 60000)), 0);
+            },
+
             getMemberStatsHTML: (memberId) => {
                 const visits = DB.getVisits().filter(v => v.memberId === memberId);
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
@@ -265,6 +294,11 @@ Object.assign(App, {
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewTotalTrainings || 'Total Trainings')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${total}</div>
+                    </div>`);
+                if (show('totalHours')) cards.push(`
+                    <div class="stat-card" style="padding: 1rem;">
+                        <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
+                        <div class="value" style="font-size: 1.5rem;">${(App.getMemberTotalHours(memberId) / 60).toFixed(1)}</div>
                     </div>`);
                 if (show('avgWeek')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">

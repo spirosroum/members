@@ -1,6 +1,9 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.12 (00:30) — Fix Revenue Per Member window bug and stale KPI refresh
+## 2026-08-10 — v0.13 (00:40) — Add Total Hours Trained to member statistics
+- New "Total Hours Trained" stat card in member statistics (admin member modal and member portal), summing each unique class session's duration with a 1-hour fallback and legacy visit entry→exit durations
+- Added a matching "Total Hours Trained" visibility toggle in Member Settings (visible by default) and Greek/English i18n labels
+
 - Fixed Revenue Per Member (and other retention KPIs) excluding today's payments when logged before noon: the preset analysis window now ends at end-of-day instead of the exact current instant, so payment dates (parsed at local noon) always fall inside the window
 - KPI cards and the Member Frequency Breakdown now refresh immediately after saving a member or a payment while the Retention pane is open, instead of only on pane re-entry or period change
 
