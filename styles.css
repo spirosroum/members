@@ -510,8 +510,8 @@
         .kpi-card.kpi-ok { border-top-color: var(--success); }
         .kpi-card.kpi-warn { border-top-color: var(--warning); }
         .kpi-card.kpi-na, .kpi-card.kpi-info { border-top-color: var(--gray-light); }
-        .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-        .kpi-title { font-weight: 700; color: var(--dark); font-size: 0.95rem; }
+        .kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+        .kpi-title { font-weight: 700; color: var(--dark); font-size: 0.95rem; min-width: 0; }
         .kpi-badge { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 0.2rem 0.5rem; border-radius: 999px; white-space: nowrap; }
         .kpi-ok .kpi-badge { background: var(--bg-success-soft); color: #166534; }
         .kpi-warn .kpi-badge { background: var(--bg-warning-soft); color: #92400e; }
