@@ -2,7 +2,7 @@
 
 ## Architecture
 
-This is a **single-page static web app** with no build step, no bundler, no CI. Three view containers in `index.html` (kiosk, admin, member) are toggled via CSS `hidden`. Firebase Firestore is the cloud DB, localStorage is the local cache/fallback. All JS is loaded via `<script>` tags — **load order is critical** (see below). Firebase compat SDK v10.8.0 (not modular v9+ API).
+This is a **single-page static web app** with no build step, no bundler, no CI. Hosted on **GitHub Pages** (`spirosroum.github.io/members`). Three view containers in `index.html` (kiosk, admin, member) are toggled via CSS `hidden`. Firebase Firestore is the cloud DB, localStorage is the local cache/fallback. All JS is loaded via `<script>` tags — **load order is critical** (see below). Firebase compat SDK v10.8.0 (not modular v9+ API).
 
 ```
 index.html
@@ -25,11 +25,13 @@ index.html
 
 **Every JS file** uses `Object.assign(App, { /* methods */ })` — all methods live on the global `App` object. There are no ES modules. If a file is loaded before the methods it depends on, the app silently breaks.
 
-## Commands
+## Deployment
 
 - **There is no dev server, no npm, no build.** Open `index.html` directly in a browser (or use `python3 -m http.server 3000` for local testing).
-- **Deploy:** all files in this directory are served via Firebase Hosting. Deploy with `firebase deploy` (or `firebase deploy --only hosting`).
-- **Deploy Rules only:** `firebase deploy --only firestore:rules`
+- **Production:** hosted on **GitHub Pages** at `https://spirosroum.github.io/members/` with a custom domain at **`https://members.ssgbjj.gr/`**. Deploy by pushing to the `master` branch of `https://github.com/spirosroum/members.git`. When git push is not available from the local machine, the user manually uploads changed files.
+- **After making changes, ask the user: "Do you want me to push the changes to GitHub Pages?"** If yes, commit and push. If git auth fails, tell the user which specific files changed so they can upload manually.
+- **Firebase Hosting** (`https://ssg-desk.web.app`) is also available as a secondary deployment target. Deploy with `firebase deploy --only hosting`.
+- **Deploy Firestore Rules only:** `firebase deploy --only firestore:rules`
 - **No lint, no typecheck, no tests.** There is no tooling.
 
 ## Firebase & Auth
