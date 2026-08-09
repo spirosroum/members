@@ -5,6 +5,9 @@
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
 Object.assign(App, {
+            // Which average granularity the member portal shows (persisted per device):
+            // 'week' shows Avg ... / Week, 'month' shows Avg ... / Month.
+            memberStatsMode: (localStorage.getItem('gym_member_stats_mode') || 'week'),
             toggleMemberMenu: () => {
                 const drawer = document.getElementById('member-drawer');
                 const overlay = document.getElementById('member-drawer-overlay');
@@ -269,6 +272,7 @@ Object.assign(App, {
                 let perWeek = 0;
                 let perMonth = 0;
                 let perWeekDays = 0;
+                let perMonthDays = 0;
                 const lang = App.currentKioskLang || 'en';
                 const map = App.isAdminAuthed() ? App.KIOSK_I18N.en : (App.KIOSK_I18N[lang] || App.KIOSK_I18N.en);
                 const rank = App.getMemberLeaderboardRank(memberId);
@@ -289,11 +293,14 @@ Object.assign(App, {
                     // class check-ins, so two trainings in the same day count as one day.
                     const daySet = new Set(allDates.map(d => Utils.dateToLocalIso(d)));
                     perWeekDays = (daySet.size / weeks).toFixed(1);
+                    perMonthDays = (daySet.size / months).toFixed(1);
                 }
 
-                // Admins (member modal) always see the full set; the member portal
-                // respects the admin-configured Member Settings visibility toggles.
+                // Admins (member modal) always see every stat; the member portal
+                // respects the visibility toggles AND the Week/Month mode switcher
+                // (which decides whether the averages are shown per week or per month).
                 const show = (key) => App.isAdminAuthed() || DB.getMemberStatsVisibility()[key] !== false;
+                const mode = App.isAdminAuthed() ? 'both' : (App.memberStatsMode === 'month' ? 'month' : 'week');
                 const cards = [];
                 if (show('totalTrainings')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
@@ -305,27 +312,51 @@ Object.assign(App, {
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${(App.getMemberTotalHours(memberId) / 60).toFixed(1)}</div>
                     </div>`);
-                if (show('avgWeek')) cards.push(`
-                    <div class="stat-card" style="padding: 1rem;">
-                        <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
-                        <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
-                    </div>`);
-                if (show('avgDays')) cards.push(`
-                    <div class="stat-card" style="padding: 1rem;">
-                        <h3>${Utils.escapeHTML(map.memberViewAvgDays || 'Avg Days / Week')}</h3>
-                        <div class="value" style="font-size: 1.5rem;">${perWeekDays}</div>
-                    </div>`);
-                if (show('avgMonth')) cards.push(`
-                    <div class="stat-card" style="padding: 1rem;">
-                        <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
-                        <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
-                    </div>`);
+                if (mode === 'week' || mode === 'both') {
+                    if (show('avgWeek')) cards.push(`
+                        <div class="stat-card" style="padding: 1rem;">
+                            <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
+                            <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
+                        </div>`);
+                    if (show('avgDays')) cards.push(`
+                        <div class="stat-card" style="padding: 1rem;">
+                            <h3>${Utils.escapeHTML(map.memberViewAvgDays || 'Avg Days / Week')}</h3>
+                            <div class="value" style="font-size: 1.5rem;">${perWeekDays}</div>
+                        </div>`);
+                }
+                if (mode === 'month' || mode === 'both') {
+                    if (show('avgMonth')) cards.push(`
+                        <div class="stat-card" style="padding: 1rem;">
+                            <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
+                            <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
+                        </div>`);
+                    if (show('avgDays')) cards.push(`
+                        <div class="stat-card" style="padding: 1rem;">
+                            <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
+                            <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
+                        </div>`);
+                }
                 if (show('rank')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
                         <h3>${Utils.escapeHTML(map.memberViewRankLabel || 'Leaderboard Rank')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.escapeHTML(rankDisplay)}</div>
                     </div>`);
                 return cards.join('');
+            },
+
+            setMemberStatsMode: (mode) => {
+                App.memberStatsMode = mode === 'month' ? 'month' : 'week';
+                localStorage.setItem('gym_member_stats_mode', App.memberStatsMode);
+                App.updateMemberStatsModeUI();
+                if (App.currentUser) App.renderMemberDashboard();
+            },
+
+            updateMemberStatsModeUI: () => {
+                const weekBtn = document.getElementById('member-stats-mode-week');
+                const monthBtn = document.getElementById('member-stats-mode-month');
+                const isMonth = App.memberStatsMode === 'month';
+                if (weekBtn) weekBtn.classList.toggle('active', !isMonth);
+                if (monthBtn) monthBtn.classList.toggle('active', isMonth);
             },
 
             toggleHideFromLeaderboard: (checked) => {
@@ -404,6 +435,13 @@ Object.assign(App, {
 
                 const statsHTML = App.getMemberStatsHTML(member.id);
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
+                App.updateMemberStatsModeUI();
+                const statsTitle = document.getElementById('member-stats-title');
+                const weekBtn = document.getElementById('member-stats-mode-week');
+                const monthBtn = document.getElementById('member-stats-mode-month');
+                if (statsTitle) statsTitle.innerText = map.memberViewStatsTitle || 'Statistics';
+                if (weekBtn) weekBtn.innerText = map.memberViewWeek || 'Week';
+                if (monthBtn) monthBtn.innerText = map.memberViewMonth || 'Month';
                 App.updateMemberLeaderboardToggleUI();
                 App.renderMemberHistory(member.id, 'member-personal-history');
 

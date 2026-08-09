@@ -1066,7 +1066,16 @@
             
             <div class="card mb-2" id="member-dash-info"></div>
 
-            <div class="dashboard-grid mb-2" id="member-dash-stats"></div>
+            <div class="card mb-2">
+                <div class="flex justify-between align-center mb-1" style="gap: 1rem;">
+                    <h3 id="member-stats-title" style="margin:0;">Statistics</h3>
+                    <div class="flex gap-1">
+                        <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-week" onclick="App.setMemberStatsMode('week')">Week</button>
+                        <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-month" onclick="App.setMemberStatsMode('month')">Month</button>
+                    </div>
+                </div>
+                <div class="dashboard-grid" id="member-dash-stats"></div>
+            </div>
 
             <div class="card mb-2">
                 <h3 id="member-change-id-title">Change Member ID</h3>
