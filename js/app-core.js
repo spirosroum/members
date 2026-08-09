@@ -979,7 +979,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     bin: STATE.bin || [], classCheckins: STATE.classCheckins || [], notifications: STATE.notifications || [],
                     notificationBin: STATE.notificationBin || [],
                     adminPassword: null, // legacy field — never stored anymore
-                    currency: STATE.currency || '€', checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a'
+                    currency: STATE.currency || '€', checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
+                    checkinNotice: STATE.checkinNotice || '', showClassCheckins: STATE.showClassCheckins !== false,
+                    memberStatsVisibility: STATE.memberStatsVisibility || {}
                 };
                 const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                 const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -1010,6 +1012,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (data.classCheckins) STATE.classCheckins = data.classCheckins;
                         if (data.currency) STATE.currency = data.currency;
                         if (data.checkinNoticeColor) STATE.checkinNoticeColor = data.checkinNoticeColor;
+                        if (data.checkinNotice) STATE.checkinNotice = data.checkinNotice;
+                        if (data.showClassCheckins !== undefined) STATE.showClassCheckins = data.showClassCheckins;
+                        if (data.memberStatsVisibility) STATE.memberStatsVisibility = data.memberStatsVisibility;
 
                         // Extract private fields from imported member data and store
                         // in the private subcollection cache, then stripe public-only.

@@ -1,6 +1,8 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
-## 2026-08-10 — v0.23 (02:30) — CRITICAL: fix admin login wiping payments (and bins) from Firestore
+## 2026-08-10 — v0.24 (02:40) — Backup now includes all settings
+- Export/Import backup now also stores and restores the check-in notice text, the "show recorded check-ins" setting, and the member statistics visibility toggles (previously only portalName/currency/colors were backed up)
+
 - Fixed a data-loss bug where logging out and back in as admin deleted the entire payments/notifications/bins cloud data: `clearSensitiveData()` wiped the local arrays but left the sync engine's ready/applied/snapSeen/mirror state intact, so the next admin login's flush diffed an empty local list against the cloud mirror and issued delete ops for every document
 - `clearSensitiveData()` now resets the sync metadata for the wiped collections so an empty local state can never be flushed as deletions, and admin unlock now force-resubscribes payments and the bins so the history reloads after every login
 
