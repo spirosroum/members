@@ -353,12 +353,29 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     } catch (err) {
                         // Mirrors are untouched on failure so the retry re-generates
                         // the same diffs instead of seeing a "no change" state.
+                        // Retries are capped: a persistent failure (e.g. quota
+                        // exhaustion or a permission error) must NOT loop forever —
+                        // an endless 5s retry loop burns through the entire Firestore
+                        // daily quota and makes the app unusable. After MAX_RETRIES
+                        // consecutive failures, back off and let the next save or
+                        // snapshot re-attempt the flush.
                         console.error('Firestore batch write failed (will retry):', err);
                         fallbackToLocal();
+                        self.retryCount = (self.retryCount || 0) + 1;
+                        if (self.retryCount >= 10) {
+                            console.error('Firestore batch write: giving up after ' + self.retryCount + ' consecutive failures. Will retry on next save/snapshot.');
+                            self.retryCount = 0;
+                            self.retryTimer = null;
+                            return;
+                        }
                         if (!self.retryTimer) self.retryTimer = setTimeout(() => { self.retryTimer = null; self.flush(); }, 5000);
                         return;
                     }
                 }
+
+                // A successful commit means we can clear any retry backoff.
+                self.retryCount = 0;
+                if (self.retryTimer) { clearTimeout(self.retryTimer); self.retryTimer = null; }
 
                 // Now that the writes landed, update the local mirrors.
                 mirrorUpdates.forEach(u => {
