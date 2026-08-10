@@ -477,8 +477,18 @@ Object.assign(App, {
             },
 
             renderAnalyticalCalendar: () => {
-                const monthStr = document.getElementById('export-month-picker').value; // 'YYYY-MM'
-                if (monthStr) localStorage.setItem('gym_analytical_month', monthStr);
+                const input = document.getElementById('export-month-picker');
+                let monthStr = input ? input.value : '';
+                const persisted = localStorage.getItem('gym_analytical_month');
+                if (!monthStr && persisted) {
+                    monthStr = persisted;
+                    if (input) input.value = monthStr;
+                }
+                if (!monthStr) {
+                    monthStr = Utils.currentMonthLocal();
+                    if (input) input.value = monthStr;
+                }
+                localStorage.setItem('gym_analytical_month', monthStr);
 
                 // Sync supporting UI: Today button + export section month label
                 const todayBtn = document.getElementById('analytical-month-today');
@@ -491,7 +501,7 @@ Object.assign(App, {
                 }
 
                 if(!monthStr) return;
-                
+
                 const [year, month] = monthStr.split('-').map(Number);
                 const daysInMonth = new Date(year, month, 0).getDate();
                 
@@ -555,8 +565,8 @@ Object.assign(App, {
 
             changeAnalyticalMonth: (delta) => {
                 const input = document.getElementById('export-month-picker');
-                if (!input || !input.value) return;
-                const [year, month] = input.value.split('-').map(Number);
+                const monthVal = (input && input.value) || localStorage.getItem('gym_analytical_month') || Utils.currentMonthLocal();
+                const [year, month] = monthVal.split('-').map(Number);
                 const d = new Date(year, month - 1 + delta, 1);
                 input.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                 localStorage.setItem('gym_analytical_month', input.value);
