@@ -1826,9 +1826,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
                 // Admin auth: hide the admin view initially, then let onAuthStateChanged
                 // reveal it if a valid admin session exists.
+                // DO NOT call lockAdmin() here — it wipes sensitive data (payments,
+                // member PII, bins) from STATE and localStorage via clearSensitiveData()
+                // before the Firestore listener that reloads them is even set up.
+                // On the next page load those arrays are empty, and on the first
+                // page load after a hard-refresh the wipe happens before initAuth()
+                // has a chance to restore the admin session and repopulate from
+                // Firestore — losing every payment, notification, and bin entry.
+                App.adminAuthed = false;
                 const adminView = document.getElementById('view-admin');
                 if (adminView) adminView.classList.add('hidden');
-                App.lockAdmin();
                 App.initAuth();
 
                 App.autoCheckoutStaleVisits();
