@@ -1,5 +1,15 @@
 # Changelog — GymDesk (Sloth Submission Grappling)
 
+Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
+
+## 2026-08-10 — v0.34 (16:00) — Fix member name edit reverting on refresh; fix "Unknown Member" in payments ledger
+- Bug 1 root cause: a check-in client (kiosk/staff) with a stale copy of a member doc (old name, mirror frozen during a dirty flush) wrote back the WHOLE member record on its sessionsLeft save, overwriting the newer cloud name — the admin's edit landed locally but the cloud silently reverted, so a page refresh showed the old name
+- `diffAndWrite()` now emits field-scoped member writes for records already in the mirror: only the fields whose values actually differ are written (a check-in writes just `sessionsLeft`), so stale display fields (name/belt/etc.) are never clobbered back over newer cloud docs
+- Bug 2 root cause: the payments ledger resolved names from STATE.members at render time, so it flashed "Unknown Member" when members weren't applied yet, and payment records referencing renamed member ids were never translated once loaded after the rename ledger
+- `renderAllPayments()` now shows a loading row and defers until members are ready (`FSEngine.whenReady('members')`), and resolves names through the rename ledger (`FSEngine.renameMap`) when the direct id lookup fails
+- `applyCollectionSnapshotData()` now translates `memberId` through `resolveRenameTarget()` as payments/visits/class-check-ins/notifications load, so records loaded after a rename never point at a stale id (also fixes the same gap in the visit log/dashboard lookups)
+- Bug reports tracked in `BUGS.md` (both marked fixed)
+
 ## 2026-08-10 — v0.33 (15:20) — Unpaid visits stay unpaid after a package purchase: stale manual override blocks reconciliation
 - Root cause: a visit's Payment Status dropdown in the Visit Edit modal can set a manual `paidOverride: 'unpaid'`. The reconciliation engine hard-honors that override, so when the member later buys an 8-session (or any) package, the new session quota / date coverage can NOT clear the visit — it stays unpaid forever even though the account activates and the package covers it (confirmed in production data: member 8997 has an active Drop-In Bundle but visit V-1786061427991 stuck unpaid because `paidOverride='unpaid'` was set earlier)
 - `savePayment()` now clears any manual `paidOverride === 'unpaid'` on the member's visits before running the reconciliation, so a freshly-recorded payment re-evaluates those visits against the new coverage (the purchased sessions are consumed by the outstanding debt, e.g. an 8-session bundle after 1 unpaid check-in leaves 7)
@@ -114,70 +124,3 @@
 
 ## 2026-08-09 — v0.4 (22:05) — Show language name next to flag in kiosk/member menu
 - The Language item in the kiosk and member-portal sliding menus (phone mode) now shows the flag plus the language name ("🇬🇧 English" / "🇬🇷 Ελληνικά") instead of the flag alone
-
-## 2026-08-09 — v0.3 (21:50) — Hide dates in public class check-ins; admin toggle for check-in visibility
-- Recorded check-ins in the public Class Details view no longer show the date (it's the clicked class date, so it's redundant)
-- Added a "Class Details Visibility" setting in admin General Settings to choose whether recorded check-ins are shown publicly
-- New setting is synced to Firestore like other settings and defaults to public
-
-## 2026-08-09 — v0.2 (21:35) — Center table header labels across all lists
-- Table header (`th`) text is now centered in every list/table in the app (Member Directory, Payments, Plans, Closed Dates, Schedule, Visit Log, Retention, member history, etc.)
-- Row content (`td`) and section titles remain left-aligned
-
-## 2026-08-09 — v0.1 (21:21) — Add unpaid check-ins counter to admin dashboard
-- Dashboard stats now show an "Unpaid Check-ins" card with the count of outstanding unpaid visits (red when > 0, green when zero)
-
-## 2026-08-09 — Flag-only language button in member portal and check-in
-- Language toggle button in the kiosk/member drawers now shows only the flag emoji (UK flag for English, Greek flag for Greek), no text
-
-## 2026-08-09 — Add manual "Cancelled" member status for admins
-- Added "Cancelled" option to the Account Status dropdown in the member modal so admins can cancel members manually
-- Directory badges, status filter tab, and exports recognize the stored Cancelled status (filter also still includes 90d+ no-training members)
-- Cancelled members are blocked from kiosk/mobile self check-in and flagged as unpaid like Frozen/Inactive
-- Added cancelled status messaging in staff check-in and member portal (en + el i18n)
-
-## 2026-08-09 — Add CSV export to Retention & Attendance
-- Added "Download CSV" button to the Member Frequency Breakdown card in the Retention & Attendance pane
-- Export honors the current segment filter and includes member ID, name, belt, classes, avg/week, and segment
-
-## 2026-08-09 — Wire class capacity into schedule editor; refresh KPIs on retention pane
-- Class capacity field wired into the schedule editor UI
-- Retention pane now refreshes KPIs after data changes
-
-## 2026-08-08 — Force dd/mm/yyyy date display in admin and member portals
-- Admin and member portals now force dd/mm/yyyy date format throughout
-
-## 2026-08-07 — Custom date range view for retention statistics
-- Added custom date range picker to the retention statistics view
-- Allows admins to narrow retention analysis to arbitrary date windows
-
-## 2026-08-06 — Trial plans, trial conversion KPI, and cancelled (90d) status
-- Added trial membership plan support
-- Trial-to-paid conversion rate KPI on the admin dashboard
-- New "cancelled (past 90 days)" member status filter
-
-## 2026-08-05 — Retention & attendance analytics
-- Added retention analytics and attendance statistics to the admin dashboard
-- New charts and summary cards for member retention data
-
-## 2026-08-04 — Cap Firestore flush retry loop
-- Added a cap on the Firestore flush retry loop to prevent Firebase quota exhaustion
-
-## 2026-08-03 — Friendly member directory cards on mobile; fix sync merge-guard & admin-lock flush
-- Member directory now shows friendlier card layout on phone screens
-- Fixed a sync merge-guard bug that could discard cloud data
-- Fixed admin-lock flush that could leak sensitive data on logout
-
-## 2026-08-02 — Update AGENTS.md with deployment instructions
-- Added deployment instructions and push-reminder rule to AGENTS.md
-
-## 2026-08-01 — Fix member private data and notification sync for fresh incognito admin login
-- Fixed member private data not loading on a fresh incognito admin login
-- Fixed notification sync not triggering after admin first login
-
-## 2026-07-30 — Initial commit
-- Full initial commit of the GymDesk app (Sloth Submission Grappling)
-- Firebase Firestore backend, kiosk check-in, admin panel, member portal
-- Anonymous kiosk auth, admin email/password auth, member Google sign-in
-- Membership plans, payments, class schedules, visit logging
-- Greek/English i18n, local-first offline sync

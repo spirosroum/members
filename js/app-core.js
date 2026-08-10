@@ -304,7 +304,28 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (col === 'members') MEMBER_PRIVATE_FIELDS.forEach(f => { delete writeRec[f]; });
                         const json = JSON.stringify(writeRec);
                         if (mirror.get(key) !== json) {
-                            ops.push({ col, key, type: 'set', data: writeRec });
+                            let data = writeRec;
+                            // Field-scoped member writes: when the record already exists in the
+                            // mirror, emit only the fields that actually differ. A check-in
+                            // client (kiosk or staff) holds a copy of the member doc that can be
+                            // stale — an admin edited the name on another device — while the
+                            // mirror is frozen during a dirty flush. A whole-record merge would
+                            // write the stale name back over the newer cloud doc (Bug 1: name
+                            // edit reverts after refresh). Diffing against the mirror writes only
+                            // what this client really changed (e.g. sessionsLeft), so a stale
+                            // display field is never clobbered.
+                            if (col === 'members' && mirror.has(key)) {
+                                const prev = (() => { try { return JSON.parse(mirror.get(key)); } catch (e) { return null; } })();
+                                if (prev) {
+                                    const changed = {};
+                                    Object.keys(writeRec).forEach(k => {
+                                        if (JSON.stringify(writeRec[k]) !== JSON.stringify(prev[k])) changed[k] = writeRec[k];
+                                    });
+                                    if (Object.keys(changed).length === 0) return;
+                                    data = changed;
+                                }
+                            }
+                            ops.push({ col, key, type: 'set', data });
                             mirrorUpdates.push({ col, key, action: 'set', json });
                         }
                     });
@@ -560,7 +581,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             const seen = new Set();
             docs.forEach(rec => {
                 const key = cloudRecordKey(col, rec);
-                if (key && !seen.has(key)) { seen.add(key); cloudArr.push(rec); }
+                if (!key || seen.has(key)) return;
+                // Translate references to renamed members as records load, so a
+                // payment/visit/class-checkin/notification that arrives after the
+                // rename ledger was applied still points at the member's current
+                // id (Bug 2: ledger showed "Unknown Member" until page refresh).
+                if (rec.memberId && (col === 'payments' || col === 'visits' || col === 'classCheckins' || col === 'notifications')) {
+                    const t = resolveRenameTarget(rec.memberId);
+                    if (t && t !== rec.memberId) rec = Object.assign({}, rec, { memberId: t });
+                }
+                seen.add(key); cloudArr.push(rec);
             });
             // Local changes pending (dirty) BEFORE this collection's first
             // application: merge the cloud records under the local ones — the
