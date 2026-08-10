@@ -1715,14 +1715,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // signed in anonymously (permission-denied kills a listener for good).
                 // Without this the admin portal would stay empty after login.
                 try { FSEngine.resubscribeMissing && FSEngine.resubscribeMissing(); } catch (e) { console.warn('Admin unlock listener resubscribe error:', e); }
-                FSEngine.whenReady('payments').then(() => {
-                    try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Admin unlock reconciliation failed:', e); }
-                });
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
                 if (monthInput && !monthInput.value) monthInput.value = Utils.currentMonthLocal();
-                // Steal focus only when no member/mobile session is active.
                 const memberVisible = document.getElementById('view-member') && !document.getElementById('view-member').classList.contains('hidden');
                 const mobileVisible = document.getElementById('view-mobile-checkin') && !document.getElementById('view-mobile-checkin').classList.contains('hidden');
                 if (!memberVisible && !mobileVisible) {
@@ -1732,10 +1728,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (adminView) adminView.classList.remove('hidden');
                     App.navigate('admin-checkin');
                 }
-                // Fetch private member PII from the secure subcollection, then re-render
-                DB.fetchAllMemberPrivate().then(() => {
-                    scheduleAfterCloudSyncRender();
-                }).catch(() => {
+                Promise.all([
+                    FSEngine.whenReady('payments').then(() => {
+                        try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Admin unlock reconciliation failed:', e); }
+                    }),
+                    DB.fetchAllMemberPrivate().catch(() => {})
+                ]).then(() => {
                     scheduleAfterCloudSyncRender();
                 });
             },
