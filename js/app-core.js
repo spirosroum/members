@@ -65,7 +65,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             currency: localStorage.getItem('gym_currency') || '€',
             checkinNotice: localStorage.getItem('gym_checkin_notice') || '',
             checkinNoticeColor: localStorage.getItem('gym_checkin_notice_color') || '#fde68a',
-            memberPrivate: JSON.parse(localStorage.getItem('gym_member_private') || '{}')
+            memberPrivate: JSON.parse(localStorage.getItem('gym_member_private') || '{}'),
+            showClassCheckins: JSON.parse(localStorage.getItem('gym_show_class_checkins') ?? 'true'),
+            memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}')
         };
 
         let db = null; // firebase.firestore() compat instance
@@ -90,6 +92,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_checkin_notice', STATE.checkinNotice || '');
                 localStorage.setItem('gym_checkin_notice_color', STATE.checkinNoticeColor || '#fde68a');
                 localStorage.setItem('gym_member_private', JSON.stringify(STATE.memberPrivate || {}));
+                localStorage.setItem('gym_show_class_checkins', JSON.stringify(STATE.showClassCheckins !== false));
+                localStorage.setItem('gym_member_stats_visibility', JSON.stringify(STATE.memberStatsVisibility || {}));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -220,8 +224,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             resolveFlush: function () {
                 if (this._resolveFlush) { const r = this._resolveFlush; this._resolveFlush = null; this.flushPromise = null; r(); }
             },
-            flush: function () {
-                try { this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); } finally { this.resolveFlush(); }
+            flush: async function () {
+                try { await this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); } finally { this.resolveFlush(); }
             },
             commitOps: async function (ops) {
                 const batch = this.db.batch();
@@ -262,7 +266,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const flushedCols = new Set();
 
                 Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                    if (!self.ready[col]) return; // wait for the first snapshot before writing
+                    // Admin-only collections may be written by the admin client even
+                    // before their first snapshot arrives: their reads are denied for
+                    // anonymous auth, so on a fresh kiosk boot the listener errors and
+                    // ready stays false — a payment save would then be dropped silently
+                    // (it existed only in localStorage and was wiped on logout, so it
+                    // never reached Firestore). Writes are merge-sets keyed by record
+                    // id, so they are safe against a not-yet-loaded cloud state; the
+                    // delete pass stays guarded by the applied flag below.
+                    // Notifications are a one-way kiosk->admin alert channel whose read
+                    // is admin-only: their writes must never be gated on the first
+                    // (admin-only) snapshot either, or alerts created by the kiosk
+                    // after a logout (listener unsubscribed, ready reset) would be
+                    // dropped from the cloud and lost on the next clear.
+                    if (!self.ready[col] && col !== 'notifications' && !(isAdmin && ADMIN_ONLY_COLLECTIONS.has(col))) return;
                     if (!isAdmin && ADMIN_ONLY_COLLECTIONS.has(col)) return;
                     const cfg = CLOUD_COLLECTIONS[col];
                     const arr = STATE[cfg.state] || [];
@@ -473,7 +490,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // no-op writes (e.g. cleanBin on a fresh client) must not mark the
                 // collection dirty — that would block its first snapshot from ever
                 // being applied (schedules/closedDates never loading, etc.).
-                if (!FSEngine.ready[col]) return;
+                // Notifications are exempt: their read is admin-only, so a kiosk
+                // client never gets a snapshot, and alerts it creates must still be
+                // tracked as dirty so they flush instead of being replaced by a
+                // later cloud apply.
+                if (!FSEngine.ready[col] && col !== 'notifications') return;
                 const cfg = CLOUD_COLLECTIONS[col];
                 const arr = STATE[cfg.state] || [];
                 const mirror = FSEngine.mirrors[col] || new Map();
@@ -527,7 +548,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             return FSEngine.scheduleFlush();
         }
 
-        function applyCollectionSnapshotData(col) {
+        function applyCollectionSnapshotData(col, prevMirrorKeys) {
             // No snapshot received for this collection yet — lastDocs is empty
             // simply because nothing has loaded, not because the cloud is empty.
             // Applying (and marking the collection "applied") here would let a
@@ -563,8 +584,59 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (!merged.some(lr => cloudRecordKey(col, lr) === key)) merged.push(rec);
                 });
                 STATE[cfg.state] = merged;
-            } else if (!FSEngine.dirty.has(col)) {
-                STATE[cfg.state] = cloudArr;
+            } else if (FSEngine.dirty.has(col)) {
+                // Local edits are pending, so the snapshot cannot replace STATE (that
+                // would lose the edits). But it must not leave STATE blind to cloud
+                // records the client has never seen either: add any cloud record that
+                // is outside the diff baseline (the mirror). A record inside the
+                // baseline is a doc the client once had; if it is absent from STATE now
+                // that is a local deletion and must NOT be resurrected. Absorbing the
+                // unseen cloud records keeps the client's STATE a superset of the
+                // baseline, so a pending flush can never diff a stale STATE against a
+                // mirror that already contains newer cloud docs — which used to make a
+                // dirty client DELETE fresh cloud check-ins/payments it simply hadn't
+                // loaded yet, and re-write stale copies of docs it had yet to see
+                // (the cloud silently reverting to a previous version minutes later).
+                const local = STATE[cfg.state] || [];
+                const mirror = FSEngine.mirrors[col] || new Map();
+                const merged = local.slice();
+                cloudArr.forEach(rec => {
+                    const key = cloudRecordKey(col, rec);
+                    if (!key) return;
+                    if (merged.some(lr => cloudRecordKey(col, lr) === key)) return;
+                    if (mirror.has(key)) return;
+                    merged.push(rec);
+                });
+                STATE[cfg.state] = merged;
+            } else {
+                // Snapshot can replace STATE when no local edits are pending,
+                // but a stale snapshot re-delivery (common with multi-device
+                // admin sessions) can silently delete records that exist
+                // locally and were just written to Firestore by another
+                // device. Preserve locally-present records that were never
+                // in any previous mirror snapshot either — they are recently
+                // created and the snapshot may not have caught up yet.
+                const local = STATE[cfg.state] || [];
+                const cloudKeySet = new Set();
+                cloudArr.forEach(rec => {
+                    const key = cloudRecordKey(col, rec);
+                    if (key) cloudKeySet.add(key);
+                });
+                const preserved = [];
+                let missedLocals = false;
+                const prevKeys = prevMirrorKeys || new Set();
+                local.forEach(rec => {
+                    const key = cloudRecordKey(col, rec);
+                    if (key && !cloudKeySet.has(key) && !prevKeys.has(key)) {
+                        preserved.push(rec);
+                        missedLocals = true;
+                    }
+                });
+                STATE[cfg.state] = cloudArr.concat(preserved);
+                if (missedLocals) {
+                    FSEngine.dirty.add(col);
+                    FSEngine.scheduleFlush();
+                }
             }
             FSEngine.applied.add(col);
         }
@@ -622,6 +694,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
         function handleCollectionSnapshot(col) {
             return (snapshot) => {
+                const prevMirrorKeys = new Set();
+                const prevMirror = FSEngine.mirrors[col];
+                if (prevMirror) prevMirror.forEach((_, k) => prevMirrorKeys.add(k));
                 const mirror = new Map();
                 const docs = [];
                 snapshot.forEach(d => {
@@ -641,11 +716,22 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (col === 'members' && rec.id != null && rec.id !== d.id) return;
                     docs.push(rec);
                 });
-                FSEngine.mirrors[col] = mirror;
                 FSEngine.lastDocs[col] = docs;
                 FSEngine.ready[col] = true;
                 FSEngine.snapSeen.add(col);
-                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col); fallbackToLocal(); renderAfterCloudSync(); }
+                // Do not advance the diff baseline (mirror) while local edits are
+                // pending: STATE cannot absorb this snapshot yet, so refreshing the
+                // mirror would let the next flush diff a stale STATE against a mirror
+                // that already holds the new cloud docs. That produced destructive
+                // ops — deletes of cloud records the client simply hadn't loaded (a
+                // dirty admin client erased other devices' fresh check-ins/payments)
+                // and re-writes of stale copies (a dirty kiosk pushed an old version
+                // back over the newer cloud doc). The baseline only advances once the
+                // pending edits flush and the collection turns clean again; the
+                // catch-up merge in applyCollectionSnapshotData keeps STATE current
+                // meanwhile.
+                if (!FSEngine.dirty.has(col)) FSEngine.mirrors[col] = mirror;
+                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys); fallbackToLocal(); renderAfterCloudSync(); }
                 if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
                 if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
                     DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); renderAfterCloudSync(); });
@@ -684,7 +770,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         function resolveMigrationState() {
             if (FSEngine.migrationResolved) return;
             FSEngine.migrationResolved = true;
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col));
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col, new Set()));
             Object.keys(ARRAY_DOCS).forEach(col => {
                 if (FSEngine.arrayMirrors[col] === undefined) return;
                 const isAdmin = FSEngine.isAdminClient();
@@ -1288,17 +1374,23 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             pendingCheckinMember: null,
             pendingAdminCheckin: null,
             isMobileCheckinMode: false,
-            columnsConfig: [
-                {id: 'firstName', label: 'First Name', checked: true},
-                {id: 'lastName', label: 'Last Name', checked: true},
-                {id: 'id', label: 'ID', checked: true},
-                {id: 'gender', label: 'Gender', checked: false},
-                {id: 'age', label: 'Age', checked: true},
-                {id: 'phone', label: 'Phone', checked: true},
-                {id: 'status', label: 'Account Status', checked: true},
-                {id: 'exp', label: 'Expiration', checked: true},
-                {id: 'last-visit', label: 'Last Training', checked: false}
-            ],
+            columnsConfig: (() => {
+                try {
+                    const saved = JSON.parse(localStorage.getItem('gym_columns_config'));
+                    if (Array.isArray(saved) && saved.length > 0) return saved;
+                } catch (e) {}
+                return [
+                    {id: 'firstName', label: 'First Name', checked: true},
+                    {id: 'lastName', label: 'Last Name', checked: true},
+                    {id: 'id', label: 'ID', checked: true},
+                    {id: 'gender', label: 'Gender', checked: false},
+                    {id: 'age', label: 'Age', checked: true},
+                    {id: 'phone', label: 'Phone', checked: true},
+                    {id: 'status', label: 'Account Status', checked: true},
+                    {id: 'exp', label: 'Expiration', checked: true},
+                    {id: 'last-visit', label: 'Last Training', checked: false}
+                ];
+            })(),
             draggedColIndex: null,
             visitTimeoutHours: 1, // default timeout hours for non-class check-ins
             // Compute expectedExitTime for a given entry timestamp (ISO string). If checking in during a scheduled class
@@ -1533,9 +1625,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // Flush pending local writes to Firestore while the admin auth
                 // session is still active — once adminAuthed flips to false,
                 // admin-only collections (payments, bins, etc.) cannot write.
+                // The flush is async, so the sensitive-data wipe is deferred
+                // until the commit lands: a payment saved right before logout
+                // must not be destroyed locally before it reaches Firestore.
+                let lockFlush = Promise.resolve();
                 if (FSEngine.flushTimer) {
                     clearTimeout(FSEngine.flushTimer);
                     FSEngine.flushTimer = null;
+                    lockFlush = FSEngine.flushPromise || Promise.resolve();
                     try { FSEngine.flush(); } catch (e) {}
                 }
                 App.adminAuthed = false;
@@ -1554,7 +1651,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 App.closeModal('modal-login');
                 App.renderCheckinNotice && App.renderCheckinNotice();
-                App.clearSensitiveData();
+                lockFlush.then(() => App.clearSensitiveData());
             },
 
             // Securely erase all sensitive data from the client when admin auth
@@ -1578,6 +1675,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.removeItem('gym_notification_bin');
                 localStorage.removeItem('gym_bin');
                 ['payments','notifications','notificationBin','bin'].forEach(col => {
+                    // Unsubscribe the still-live listeners: they were created under
+                    // admin auth and would keep delivering snapshots after logout,
+                    // re-populating wiped payment data into STATE/localStorage on a
+                    // shared device. The next admin unlock re-subscribes them.
+                    if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} delete FSEngine._subs[col]; }
                     FSEngine.dirty.delete(col);
                     // Forget this collection's cloud sync state along with the local
                     // wipe: keeping ready/applied/snapSeen/mirror set would let the
