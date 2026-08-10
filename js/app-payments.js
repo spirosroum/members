@@ -666,6 +666,16 @@ Object.assign(App, {
                     }
                 }
 
+                // A manual "Unpaid" override (set from the Visit Edit modal) reflects the
+                // member's status at the moment it was set. Recording a payment now means the
+                // admin intends to cover the member's outstanding activity, so clear the stale
+                // override before reconciling — otherwise the engine's hard override check would
+                // keep the unpaid visit unpaid forever even though the new package covers it.
+                [memberId, originalPayment && originalPayment.memberId].forEach(mid => {
+                    if (!mid) return;
+                    DB.getVisits().filter(v => v.memberId === mid && v.paidOverride === 'unpaid').forEach(v => { delete v.paidOverride; });
+                });
+
                 // Reconcile visit payment status after saving this payment
                 if (originalPayment && originalPayment.memberId && originalPayment.memberId !== memberId) {
                     App.reconcileMemberPaymentVisitStatus(originalPayment.memberId);
