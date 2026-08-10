@@ -1,6 +1,6 @@
 // =====================================================================
 // app-ui.js
-// App methods: renderColorPaletteUI, selectPaletteColor, openColorPicker, saveCustomColor, selectPlanColor, updatePaletteSelection, hexToRgb, updateUICurrency, toggleSidebar, switchTab, addNotification, updateNotificationBadge, renderNotifications, markNotificationRead, deleteNotification, clearAllNotifications, renderNotificationBin, restoreNotification, deleteBinNotification, openModal, closeModal, navigate, loginAsAdmin
+// App methods: renderColorPaletteUI, selectPaletteColor, openColorPicker, saveCustomColor, selectPlanColor, updatePaletteSelection, hexToRgb, updateUICurrency, toggleSidebar, switchTab, addNotification, notificationTierColor, updateNotificationBadge, renderNotifications, markAllNotificationsRead, markNotificationRead, deleteNotification, clearAllNotifications, renderNotificationBin, restoreNotification, deleteBinNotification, openModal, closeModal, navigate, loginAsAdmin
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -113,14 +113,29 @@ Object.assign(App, {
                 App.updateNotificationBadge();
             },
             
+            notificationTierColor: (type) => {
+                if (type === 'danger') return 'var(--danger)';
+                if (type === 'warning') return 'var(--warning)';
+                if (type === 'success') return 'var(--success)';
+                return 'var(--primary)';
+            },
+
             updateNotificationBadge: () => {
-                const unread = DB.getNotifications().filter(n => !n.read).length;
+                const unread = DB.getNotifications().filter(n => !n.read);
                 const badge = document.getElementById('nav-notif-badge');
                 if (!badge) return;
-                if (unread > 0) {
-                    badge.innerText = unread;
+                if (unread.length > 0) {
+                    badge.innerText = unread.length;
                     badge.classList.remove('hidden');
-                    badge.style.background = 'var(--danger)';
+                    if (unread.some(n => n.type === 'danger')) {
+                        badge.style.background = 'var(--danger)';
+                    } else if (unread.some(n => n.type === 'warning')) {
+                        badge.style.background = 'var(--warning)';
+                    } else if (unread.some(n => n.type === 'success')) {
+                        badge.style.background = 'var(--success)';
+                    } else {
+                        badge.style.background = 'var(--primary)';
+                    }
                     badge.style.color = 'white';
                 } else {
                     badge.classList.add('hidden');
@@ -130,10 +145,10 @@ Object.assign(App, {
             renderNotifications: () => {
                 const notifs = DB.getNotifications();
                 const list = document.getElementById('notifications-list');
-                list.innerHTML = notifs.map(n => `
+                list.innerHTML = notifs.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).map(n => `
                     <div class="notif-item ${n.read ? '' : 'unread'}">
                         <div>
-                            <strong style="color: ${n.type === 'danger' ? 'var(--danger)' : 'var(--dark)'}">${Utils.escapeHTML(n.title)}</strong>
+                            <strong style="color: ${App.notificationTierColor(n.type)}">${Utils.escapeHTML(n.title)}</strong>
                             <span class="notif-time">${Utils.formatDate(n.date)} at ${Utils.formatTime(n.date)}</span>
                             <div class="mt-1 text-gray">${Utils.escapeHTML(n.msg)}</div>
                         </div>
@@ -146,6 +161,13 @@ Object.assign(App, {
                 App.updateNotificationBadge();
             },
  
+            markAllNotificationsRead: () => {
+                const notifs = DB.getNotifications();
+                notifs.forEach(n => { n.read = true; });
+                DB.saveNotifications(notifs);
+                App.renderNotifications();
+            },
+
             markNotificationRead: (id) => {
                 const notifs = DB.getNotifications();
                 const n = notifs.find(x => x.id === id);
@@ -182,10 +204,10 @@ Object.assign(App, {
             renderNotificationBin: () => {
                 const bin = DB.getNotificationBin();
                 const list = document.getElementById('notifications-bin-list');
-                list.innerHTML = bin.map(n => `
+                list.innerHTML = bin.slice().sort((a, b) => new Date(b.deletedAt || b.date) - new Date(a.deletedAt || a.date)).map(n => `
                     <div class="notif-item">
                         <div>
-                            <strong style="color: ${n.type === 'danger' ? 'var(--danger)' : 'var(--dark)'}">${Utils.escapeHTML(n.title)}</strong>
+                            <strong style="color: ${App.notificationTierColor(n.type)}">${Utils.escapeHTML(n.title)}</strong>
                             <span class="notif-time">Deleted ${Utils.formatDate(n.deletedAt)} at ${Utils.formatTime(n.deletedAt)}</span>
                             <div class="mt-1 text-gray">${Utils.escapeHTML(n.msg)}</div>
                         </div>

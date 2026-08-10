@@ -506,7 +506,10 @@
                         <h1>Notifications</h1>
                         <p class="text-gray">System alerts, expired check-in attempts, and general notices.</p>
                     </div>
-                    <button class="btn-outline btn-small" onclick="App.clearAllNotifications()">Clear All</button>
+                    <div class="flex gap-1" style="flex-wrap: wrap;">
+                        <button class="btn-outline btn-small" onclick="App.markAllNotificationsRead()">Mark All Read</button>
+                        <button class="btn-outline btn-small" onclick="App.clearAllNotifications()">Clear All</button>
+                    </div>
                 </div>
 
                 <div class="tabs mt-2">
