@@ -2,13 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
-## 2026-08-10 — v0.36 (18:30) — Fix calendar alternating between versions on restart; fix visit log render cycle
-- Root cause 1: `renderAdminDashboard()` called `autoCheckoutStaleVisits()` which modified and saved visits → Firestore snapshot → `renderAfterCloudSync()` → `renderAdminDashboard()` again → cycle producing rapid alternating re-renders
-- Removed `autoCheckoutStaleVisits()` from inside `renderAdminDashboard()` — the 60-second interval already handles stale checkouts; running it during renders caused the self-perpetuating cycle
-- Root cause 2: month picker value was unreliable on restart — browser form-state restoration (Safari) could restore a previous month after `init()` set the current one, and the picker could be empty during early snapshot renders before `init()` ran
-- Analytical calendar month now uses `localStorage['gym_analytical_month']` as the authoritative source — `renderAnalyticalCalendar` always falls back to localStorage, then to current month, and always writes the final month back
-- `changeAnalyticalMonth` also falls back through localStorage so arrows work even when the picker is empty
-- Added `autocomplete="off"` to the month picker to prevent browser form-state restoration from overwriting
+## 2026-08-10 — v0.36 (19:00) — Fix dashboard alternating between two versions on restart
+- Root cause: every Firestore snapshot arrival triggered `renderAfterCloudSync()` which re-rendered ALL admin views (dashboard, visit log, calendar, payments, schedules, etc.). During boot 5+ collections fire snapshots in rapid succession, each producing a full DOM rebuild — the intermediate renders showed partial/stale data and alternated between states depending on timing
+- Added an 80ms debounce (`scheduleAfterCloudSyncRender`) so multiple rapid snapshots coalesce into a single render after STATE has absorbed all arrivals
+- Also removed `autoCheckoutStaleVisits()` from inside `renderAdminDashboard()` — the 60-second interval already handles stale checkouts; running it during renders caused a self-perpetuating snapshot→render→save→snapshot cycle
+- Analytical calendar month now uses `localStorage['gym_analytical_month']` as authoritative source, falling back to current month if both picker and localStorage are empty
+- Added `autocomplete="off"` to the month picker to prevent browser form-state restoration
 
 ## 2026-08-10 — v0.35 (16:45) — Notifications: Mark All Read, tiered colors, newest-first ordering
 - Added "Mark All Read" button next to "Clear All" in the Notifications pane (`App.markAllNotificationsRead()`)

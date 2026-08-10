@@ -718,7 +718,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 FSEngine.dirty.add('payments');
                 FSEngine.dirty.add('notifications');
                 fallbackToLocal();
-                renderAfterCloudSync();
+                scheduleAfterCloudSyncRender();
             }
         }
 
@@ -761,10 +761,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // catch-up merge in applyCollectionSnapshotData keeps STATE current
                 // meanwhile.
                 if (!FSEngine.dirty.has(col)) FSEngine.mirrors[col] = mirror;
-                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys); fallbackToLocal(); renderAfterCloudSync(); }
+                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys); fallbackToLocal(); scheduleAfterCloudSyncRender(); }
                 if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
                 if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
-                    DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); renderAfterCloudSync(); });
+                    DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); scheduleAfterCloudSyncRender(); });
                 }
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
             };
@@ -791,7 +791,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     FSEngine.applied.add(col);
                     if (!isAdmin) FSEngine.dirty.delete(col);
                     fallbackToLocal();
-                    renderAfterCloudSync();
+                    scheduleAfterCloudSyncRender();
                 }
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
             };
@@ -811,9 +811,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
             });
             fallbackToLocal();
-            renderAfterCloudSync();
+            scheduleAfterCloudSyncRender();
             applyRenameLedger();
             FSEngine.scheduleFlush();
+        }
+
+        var renderDebounceTimer = null;
+        function scheduleAfterCloudSyncRender() {
+            if (renderDebounceTimer) return;
+            renderDebounceTimer = setTimeout(() => {
+                renderDebounceTimer = null;
+                renderAfterCloudSync();
+            }, 80);
         }
 
         function renderAfterCloudSync() {
@@ -869,7 +878,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const map = new Map();
                 snapshot.forEach(d => { const rec = d.data(); if (rec && rec.oldId && rec.newId) map.set(rec.oldId, rec.newId); });
                 FSEngine.renameMap = map;
-                if (FSEngine.migrationResolved) { applyRenameLedger(); renderAfterCloudSync(); }
+                if (FSEngine.migrationResolved) { applyRenameLedger(); scheduleAfterCloudSyncRender(); }
             }, err => console.error('Firestore listener error (memberRenames):', err));
         }
 
@@ -893,7 +902,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     FSEngine.settingsMirror = JSON.stringify(settingsPayload());
                 }
                 FSEngine.settingsReady = true;
-                if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); renderAfterCloudSync(); }
+                if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); scheduleAfterCloudSyncRender(); }
                 if (FSEngine.dirty.has('settings')) FSEngine.scheduleFlush();
             }, err => console.error('Firestore settings listener error:', err));
         }
@@ -1760,9 +1769,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 // Fetch private member PII from the secure subcollection, then re-render
                 DB.fetchAllMemberPrivate().then(() => {
-                    renderAfterCloudSync();
+                    scheduleAfterCloudSyncRender();
                 }).catch(() => {
-                    renderAfterCloudSync();
+                    scheduleAfterCloudSyncRender();
                 });
             },
 
