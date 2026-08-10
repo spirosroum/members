@@ -1756,14 +1756,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             init: () => {
-                if (FSEngine.isAdminClient()) {
-                    FSEngine.whenReady('payments').then(() => {
-                        try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Deferred reconciliation failed:', e); }
-                    });
-                } else {
-                    App.reconcileAllMemberPayments();
-                }
-                
                 App.cleanBin(); 
                 App.updateUICurrency();
  
