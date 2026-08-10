@@ -355,7 +355,7 @@
                             </div>
                             <div class="flex gap-1 align-center calendar-month-nav">
                                 <button class="btn-outline btn-small month-nav" onclick="App.changeAnalyticalMonth(-1)" title="Previous month" aria-label="Previous month">‹</button>
-                                <input type="month" id="export-month-picker" class="month-picker" onchange="App.onAnalyticalMonthChange()">
+                                <input type="month" id="export-month-picker" class="month-picker" autocomplete="off" onchange="App.onAnalyticalMonthChange()">
                                 <button class="btn-outline btn-small month-nav" onclick="App.changeAnalyticalMonth(1)" title="Next month" aria-label="Next month">›</button>
                                 <button id="analytical-month-today" class="btn-outline btn-small" onclick="App.goToCurrentMonth()">Today</button>
                             </div>

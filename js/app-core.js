@@ -1794,9 +1794,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                  
                 document.getElementById('kiosk-title-display').innerText = DB.getPortalName();
  
-                // Setup export month default picker
+                // Setup export month default picker — restore persisted month, fallback to current
+                const persistedMonth = localStorage.getItem('gym_analytical_month');
                 const nowYm = Utils.currentMonthLocal();
-                document.getElementById('export-month-picker').value = nowYm;
+                document.getElementById('export-month-picker').value = persistedMonth || nowYm;
  
                 App.renderColorPaletteUI();
                 App.renderLivePresent(); 

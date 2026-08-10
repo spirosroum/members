@@ -455,9 +455,6 @@ Object.assign(App, {
                 const visits = DB.getVisits();
                 const members = DB.getMembers();
                 const validMemberIds = new Set(members.map(m => m.id));
-                // Run auto-checkout so counts are up-to-date
-                App.autoCheckoutStaleVisits();
-                // Count only visits that belong to existing members (ignore orphan/ghost visits). A visit is "currently inside" only if exitTime===null and expectedExitTime is in the future.
                 const now = new Date();
                 const active = visits.filter(v => v.exitTime === null && v.expectedExitTime && new Date(v.expectedExitTime) > now && validMemberIds.has(v.memberId) && App.isVisitVisibleNow(v, now)).length;
                 const today = Utils.todayLocalIso();
@@ -481,6 +478,7 @@ Object.assign(App, {
 
             renderAnalyticalCalendar: () => {
                 const monthStr = document.getElementById('export-month-picker').value; // 'YYYY-MM'
+                if (monthStr) localStorage.setItem('gym_analytical_month', monthStr);
 
                 // Sync supporting UI: Today button + export section month label
                 const todayBtn = document.getElementById('analytical-month-today');
@@ -561,6 +559,7 @@ Object.assign(App, {
                 const [year, month] = input.value.split('-').map(Number);
                 const d = new Date(year, month - 1 + delta, 1);
                 input.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                localStorage.setItem('gym_analytical_month', input.value);
                 App.renderAnalyticalCalendar();
             },
 
@@ -568,6 +567,7 @@ Object.assign(App, {
                 const input = document.getElementById('export-month-picker');
                 if (!input) return;
                 input.value = Utils.currentMonthLocal();
+                localStorage.setItem('gym_analytical_month', input.value);
                 App.renderAnalyticalCalendar();
             },
 

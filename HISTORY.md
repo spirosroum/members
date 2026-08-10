@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-10 — v0.36 (18:30) — Fix calendar alternating between months on restart; fix visit log flickering
+- Root cause: `renderAdminDashboard()` called `autoCheckoutStaleVisits()` which modified and saved visits, triggering a Firestore snapshot → `renderAfterCloudSync()` → `renderAdminDashboard()` cycle — every snapshot caused another auto-checkout, producing rapid re-renders and visible alternating states in the calendar and visit log
+- Removed `autoCheckoutStaleVisits()` from inside `renderAdminDashboard()` — the 60-second interval already handles stale checkouts; running it during renders caused the self-perpetuating cycle
+- Analytical calendar month now persisted to `localStorage['gym_analytical_month']` — on restart the last-viewed month is restored instead of defaulting to current month, eliminating browser form-state restoration races (e.g. Safari restoring a previous month after `init()` sets the current one)
+- Added `autocomplete="off"` to the month picker input to prevent browser form-state restoration from overwriting the persisted value
+
 ## 2026-08-10 — v0.35 (16:45) — Notifications: Mark All Read, tiered colors, newest-first ordering
 - Added "Mark All Read" button next to "Clear All" in the Notifications pane (`App.markAllNotificationsRead()`)
 - Notifications now have visual tiers via `App.notificationTierColor()`: danger=red, warning=amber, success=green, info=blue — applied to the title in both the Inbox and Recycle Bin lists
