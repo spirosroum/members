@@ -755,7 +755,7 @@ Object.assign(App, {
                 const list = document.getElementById('visit-log-list');
                 let unpaidCount = 0;
 
-                list.innerHTML = visits.map(v => {
+                const rowsHTML = visits.map(v => {
                     let m = members.find(m => m.id === v.memberId);
                     const isDeleted = !m;
                     if (isDeleted) m = binMembers.find(m => m.id === v.memberId);
@@ -809,10 +809,12 @@ Object.assign(App, {
                     </tr>
                 `}).join('') || '<tr><td colspan="6" class="text-center text-gray">No visits found matching filters.</td></tr>';
 
-                document.getElementById('visit-summary-grid').innerHTML = `
-                    <div class="stat-card" style="padding: 1rem;"><h3>Filtered Total</h3><div class="value" style="font-size: 1.5rem;">${visits.length}</div></div>
-                    <div class="stat-card" style="padding: 1rem;"><h3>Unpaid / Expired Hits</h3><div class="value" style="font-size: 1.5rem; color:var(--danger);">${unpaidCount}</div></div>
-                `;
+                if (list.innerHTML !== rowsHTML) list.innerHTML = rowsHTML;
+
+                const newHTML = `<div class="stat-card" style="padding: 1rem;"><h3>Filtered Total</h3><div class="value" style="font-size: 1.5rem;">${visits.length}</div></div>
+                    <div class="stat-card" style="padding: 1rem;"><h3>Unpaid / Expired Hits</h3><div class="value" style="font-size: 1.5rem; color:var(--danger);">${unpaidCount}</div></div>`;
+                const summaryEl = document.getElementById('visit-summary-grid');
+                if (summaryEl.innerHTML !== newHTML) summaryEl.innerHTML = newHTML;
             },
 
             openVisitEditModal: (id) => {
