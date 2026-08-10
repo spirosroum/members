@@ -72,10 +72,9 @@ Object.assign(App, {
                 const field = document.getElementById('form-checkin-notice');
                 const colorField = document.getElementById('form-checkin-notice-color');
                 if (!field || !colorField) return;
-                const notice = field.value.trim();
-                const color = colorField.value;
-                DB.saveCheckinNotice(notice);
-                DB.saveCheckinNoticeColor(color);
+                STATE.checkinNotice = field.value.trim();
+                STATE.checkinNoticeColor = colorField.value;
+                saveToCloud();
                 App.renderCheckinNotice();
                 alert('Check-in notice updated.');
             },

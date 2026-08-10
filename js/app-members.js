@@ -337,6 +337,7 @@ Object.assign(App, {
 
             toggleColumn: (idx, isChecked) => {
                 App.columnsConfig[idx].checked = isChecked;
+                App.saveColumnsConfig();
                 App.renderMemberDirectory();
             },
 
@@ -347,8 +348,13 @@ Object.assign(App, {
                 if (srcIdx === null || srcIdx === targetIdx) return;
                 const item = App.columnsConfig.splice(srcIdx, 1)[0];
                 App.columnsConfig.splice(targetIdx, 0, item);
+                App.saveColumnsConfig();
                 App.renderColumnConfigurator();
                 App.renderMemberDirectory();
+            },
+
+            saveColumnsConfig: () => {
+                try { localStorage.setItem('gym_columns_config', JSON.stringify(App.columnsConfig)); } catch (e) {}
             },
 
             renderMemberBin: () => {
