@@ -217,7 +217,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (!this.flushPromise) {
                     this.flushPromise = new Promise(resolve => { this._resolveFlush = resolve; });
                 }
-                if (this.flushTimer) clearTimeout(this.flushTimer);
+                if (this.flushTimer) return this.flushPromise;
                 this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flush(); }, 600);
                 return this.flushPromise;
             },
@@ -569,11 +569,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             return FSEngine.scheduleFlush();
         }
 
-        function applyCollectionSnapshotData(col, prevMirrorKeys) {
-            // No snapshot received for this collection yet — lastDocs is empty
-            // simply because nothing has loaded, not because the cloud is empty.
-            // Applying (and marking the collection "applied") here would let a
-            // fresh client's flush delete the entire cloud collection.
+        function applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData) {
             if (!FSEngine.snapSeen.has(col)) return;
             const cfg = CLOUD_COLLECTIONS[col];
             const docs = FSEngine.lastDocs[col] || [];
@@ -582,29 +578,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             docs.forEach(rec => {
                 const key = cloudRecordKey(col, rec);
                 if (!key || seen.has(key)) return;
-                // Translate references to renamed members as records load, so a
-                // payment/visit/class-checkin/notification that arrives after the
-                // rename ledger was applied still points at the member's current
-                // id (Bug 2: ledger showed "Unknown Member" until page refresh).
                 if (rec.memberId && (col === 'payments' || col === 'visits' || col === 'classCheckins' || col === 'notifications')) {
                     const t = resolveRenameTarget(rec.memberId);
                     if (t && t !== rec.memberId) rec = Object.assign({}, rec, { memberId: t });
                 }
                 seen.add(key); cloudArr.push(rec);
             });
-            // Local changes pending (dirty) BEFORE this collection's first
-            // application: merge the cloud records under the local ones — the
-            // local intent wins on key conflicts, but cloud-only records are
-            // kept, so the client isn't blinded to the cloud data for the rest
-            // of the session. After the first application, dirty means real
-            // local intent (edits/deletions) and snapshots must NOT be applied —
-            // otherwise a locally-deleted member would be resurrected by the
-            // next snapshot and the deletion would never propagate.
-            // The merge guard uses !applied (not dirty && !applied) because
-            // dirty is an in-memory flag lost on page reload — a client that
-            // saved data locally but hadn't flushed to Firestore yet would
-            // otherwise lose that data on reload when the snapshot overwrites
-            // STATE with cloud-only data.
             if (!FSEngine.applied.has(col)) {
                 const local = STATE[cfg.state] || [];
                 const merged = local.slice();
@@ -615,18 +594,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 });
                 STATE[cfg.state] = merged;
             } else if (FSEngine.dirty.has(col)) {
-                // Local edits are pending, so the snapshot cannot replace STATE (that
-                // would lose the edits). But it must not leave STATE blind to cloud
-                // records the client has never seen either: add any cloud record that
-                // is outside the diff baseline (the mirror). A record inside the
-                // baseline is a doc the client once had; if it is absent from STATE now
-                // that is a local deletion and must NOT be resurrected. Absorbing the
-                // unseen cloud records keeps the client's STATE a superset of the
-                // baseline, so a pending flush can never diff a stale STATE against a
-                // mirror that already contains newer cloud docs — which used to make a
-                // dirty client DELETE fresh cloud check-ins/payments it simply hadn't
-                // loaded yet, and re-write stale copies of docs it had yet to see
-                // (the cloud silently reverting to a previous version minutes later).
                 const local = STATE[cfg.state] || [];
                 const mirror = FSEngine.mirrors[col] || new Map();
                 const merged = local.slice();
@@ -639,18 +606,30 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 });
                 STATE[cfg.state] = merged;
             } else {
-                // Snapshot can replace STATE when no local edits are pending,
-                // but a stale snapshot re-delivery (common with multi-device
-                // admin sessions) can silently delete records that exist
-                // locally and were just written to Firestore by another
-                // device. Preserve locally-present records that were never
-                // in any previous mirror snapshot either — they are recently
-                // created and the snapshot may not have caught up yet.
                 const local = STATE[cfg.state] || [];
                 const cloudKeySet = new Set();
                 cloudArr.forEach(rec => {
                     const key = cloudRecordKey(col, rec);
                     if (key) cloudKeySet.add(key);
+                });
+                const prevMirrorMap = prevMirrorData || new Map();
+                const merged = [];
+                const mergedKeys = new Set();
+                cloudArr.forEach(rec => {
+                    const key = cloudRecordKey(col, rec);
+                    if (!key || mergedKeys.has(key)) return;
+                    mergedKeys.add(key);
+                    const localRec = local.find(lr => cloudRecordKey(col, lr) === key);
+                    if (localRec) {
+                        const prevJson = prevMirrorMap.get(key);
+                        if (prevJson && JSON.stringify(localRec) !== prevJson) {
+                            merged.push(localRec);
+                        } else {
+                            merged.push(rec);
+                        }
+                    } else {
+                        merged.push(rec);
+                    }
                 });
                 const preserved = [];
                 let missedLocals = false;
@@ -662,7 +641,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         missedLocals = true;
                     }
                 });
-                STATE[cfg.state] = cloudArr.concat(preserved);
+                STATE[cfg.state] = merged.concat(preserved);
                 if (missedLocals) {
                     FSEngine.dirty.add(col);
                     FSEngine.scheduleFlush();
@@ -725,43 +704,26 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         function handleCollectionSnapshot(col) {
             return (snapshot) => {
                 const prevMirrorKeys = new Set();
+                const prevMirrorData = new Map();
                 const prevMirror = FSEngine.mirrors[col];
-                if (prevMirror) prevMirror.forEach((_, k) => prevMirrorKeys.add(k));
+                if (prevMirror) prevMirror.forEach((v, k) => { prevMirrorKeys.add(k); prevMirrorData.set(k, v); });
                 const mirror = new Map();
                 const docs = [];
                 snapshot.forEach(d => {
                     const rec = d.data();
                     if (!rec || typeof rec !== 'object') return;
-                    // Strip private fields from members collection cloud data
-                    // (they belong in the /members/{id}/private subcollection).
-                    // This handles legacy docs that still carry private fields.
                     if (col === 'members') {
                         MEMBER_PRIVATE_FIELDS.forEach(f => { delete rec[f]; });
                     }
                     mirror.set(d.id, JSON.stringify(rec));
-                    // A member doc whose id field no longer matches its docId is a
-                    // rename straggler: keep it in the mirror so a flush can delete
-                    // it, but never apply it to the local state (it would duplicate
-                    // the member or silently revert its data).
                     if (col === 'members' && rec.id != null && rec.id !== d.id) return;
                     docs.push(rec);
                 });
                 FSEngine.lastDocs[col] = docs;
                 FSEngine.ready[col] = true;
                 FSEngine.snapSeen.add(col);
-                // Do not advance the diff baseline (mirror) while local edits are
-                // pending: STATE cannot absorb this snapshot yet, so refreshing the
-                // mirror would let the next flush diff a stale STATE against a mirror
-                // that already holds the new cloud docs. That produced destructive
-                // ops — deletes of cloud records the client simply hadn't loaded (a
-                // dirty admin client erased other devices' fresh check-ins/payments)
-                // and re-writes of stale copies (a dirty kiosk pushed an old version
-                // back over the newer cloud doc). The baseline only advances once the
-                // pending edits flush and the collection turns clean again; the
-                // catch-up merge in applyCollectionSnapshotData keeps STATE current
-                // meanwhile.
                 if (!FSEngine.dirty.has(col)) FSEngine.mirrors[col] = mirror;
-                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys); fallbackToLocal(); scheduleAfterCloudSyncRender(); }
+                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData); fallbackToLocal(); scheduleAfterCloudSyncRender(); }
                 if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
                 if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
                     DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); scheduleAfterCloudSyncRender(); });
@@ -800,7 +762,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         function resolveMigrationState() {
             if (FSEngine.migrationResolved) return;
             FSEngine.migrationResolved = true;
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col, new Set()));
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col, new Set(), new Map()));
             Object.keys(ARRAY_DOCS).forEach(col => {
                 if (FSEngine.arrayMirrors[col] === undefined) return;
                 const isAdmin = FSEngine.isAdminClient();
@@ -1753,6 +1715,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 // signed in anonymously (permission-denied kills a listener for good).
                 // Without this the admin portal would stay empty after login.
                 try { FSEngine.resubscribeMissing && FSEngine.resubscribeMissing(); } catch (e) { console.warn('Admin unlock listener resubscribe error:', e); }
+                FSEngine.whenReady('payments').then(() => {
+                    try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Admin unlock reconciliation failed:', e); }
+                });
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
@@ -1791,9 +1756,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             init: () => {
+                if (FSEngine.isAdminClient()) {
+                    FSEngine.whenReady('payments').then(() => {
+                        try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Deferred reconciliation failed:', e); }
+                    });
+                } else {
+                    App.reconcileAllMemberPayments();
+                }
+                
                 App.cleanBin(); 
                 App.updateUICurrency();
-                App.reconcileAllMemberPayments();
  
                 // Member login Enter is handled by the inline onkeyup on #member-login-id in index.html.
                 // (A second listener here caused loginAsMember to run twice per Enter press.)
