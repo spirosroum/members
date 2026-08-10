@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-10 — v0.37 (18:50) — Remove Firebase Hosting; GitHub Pages is the only deployment target
+- Removed the `hosting` block from `firebase.json` — the app now deploys exclusively to GitHub Pages (`https://members.ssgbjj.gr/`)
+- Removed Firebase Hosting (`ssg-desk.web.app`) references from `AGENTS.md`; `firebase deploy --only firestore:rules` remains the only post-commit deploy command
+- No code changes; the Firebase project is still used for Firestore and Auth
+
 ## 2026-08-10 — v0.36 (19:00) — Fix dashboard alternating between two versions on restart
 - Root cause: every Firestore snapshot arrival triggered `renderAfterCloudSync()` which re-rendered ALL admin views (dashboard, visit log, calendar, payments, schedules, etc.). During boot 5+ collections fire snapshots in rapid succession, each producing a full DOM rebuild — the intermediate renders showed partial/stale data and alternated between states depending on timing
 - Added an 80ms debounce (`scheduleAfterCloudSyncRender`) so multiple rapid snapshots coalesce into a single render after STATE has absorbed all arrivals

@@ -38,14 +38,12 @@ index.html
 - **After committing, auto-push to `master`** on `https://github.com/spirosroum/members.git`. If git push fails, tell the user which files changed so they can upload manually.
 
 ### After deployment
-- **Can also deploy to Firebase Hosting:** `firebase deploy --only hosting` to `https://ssg-desk.web.app`.
+- **Deploy Firestore Rules only:** `firebase deploy --only firestore:rules`
 
 ## Deployment
 
 - **There is no dev server, no npm, no build.** Open `index.html` directly in a browser (or use `python3 -m http.server 3000` for local testing).
 - **Production:** hosted on **GitHub Pages** at `https://spirosroum.github.io/members/` with a custom domain at **`https://members.ssgbjj.gr/`**. Deploy by pushing to the `master` branch of `https://github.com/spirosroum/members.git`. When git push is not available, the user manually uploads changed files.
-- **Firebase Hosting** (`https://ssg-desk.web.app`) is also available as a secondary deployment target. Deploy with `firebase deploy --only hosting`.
-- **Deploy Firestore Rules only:** `firebase deploy --only firestore:rules`
 - **No lint, no typecheck, no tests.** There is no tooling.
 
 ## Firebase & Auth
