@@ -1020,6 +1020,11 @@
                             <p class="text-gray mb-1 mt-1">Find members duplicated by an ID change and merge them.</p>
                             <button class="btn-primary btn-small" onclick="App.repairDuplicateMembers()">Repair Duplicates</button>
                         </div>
+                        <div style="flex:1; min-width: 200px;">
+                            <strong>Resync Firestore</strong>
+                            <p class="text-gray mb-1 mt-1">Force-reload all collections from the cloud after quota limits or sync issues.</p>
+                            <button class="btn-warning btn-small" onclick="App.resyncAll()">Resync Data</button>
+                        </div>
                     </div>
                 </div>
             </div>

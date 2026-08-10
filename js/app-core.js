@@ -1043,6 +1043,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     } catch (err) { alert('Error parsing JSON file.'); }
                 };
                 reader.readAsText(fileInput.files[0]);
+            },
+
+            // Force-reload all Firestore listeners after a quota timeout or sync failure.
+            resyncAll: () => {
+                if (!FSEngine.isAdminClient()) return alert('Admin access required.');
+                FSEngine.settingsReady = false;
+                FSEngine.snapSeen.clear();
+                FSEngine.resubscribeMissing();
+                alert('Firestore listeners reattached — data should reload within a few seconds.');
             }
         };
 
