@@ -140,9 +140,16 @@ service cloud.firestore {
     }
 
     // System notifications (contains member activity alerts)
+    // Admin must be able to create them too: admin flows (member activation,
+    // manual registration, debt cleared) call addNotification in the SAME
+    // debounced Firestore batch as the payment/member write. With create
+    // kiosk-only, the atomic batch was DENIED for admin — the payment/member
+    // write silently failed along with the notification, so both never
+    // reached Firestore (payment vanished after refresh, notifications never
+    // stored).
     match /notifications/{docId} {
       allow read: if isAdmin();
-      allow create: if isKiosk();
+      allow create: if isAdmin() || isKiosk();
       allow update, delete: if isAdmin();
     }
 
