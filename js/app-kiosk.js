@@ -477,8 +477,6 @@ Object.assign(App, {
             },
 
             renderLivePresent: () => {
-                // Ensure any expectedExitTime-based auto-checkouts run first
-                App.autoCheckoutStaleVisits();
                 const members = DB.getMembers();
                 const now = new Date();
                 const activeVisits = DB.getVisits().filter(v => v.exitTime === null && v.expectedExitTime && new Date(v.expectedExitTime) > now && members.some(m => m.id === v.memberId) && App.isVisitVisibleNow(v, now));
