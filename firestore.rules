@@ -56,19 +56,20 @@ service cloud.firestore {
     // The `id` field was removed: allowing kiosks to rewrite it enabled a
     // rename-then-delete chain (rules delete permits a doc whose stored id
     // differs from its docId), letting an anonymous client tamper with
-    // arbitrary members.
+    // arbitrary members. `updatedAt` is the client-stamped revision field
+    // (Fix 3b) that every write carries.
     function kioskMemberUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft', 'updatedAt']);
     }
 
     // Kiosk check-in flows may only touch the timestamps/status of visits
     function kioskVisitUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime', 'classIds']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime', 'classIds', 'updatedAt']);
     }
 
     // Kiosk may only rewrite the memberId on class check-ins (ID changes)
     function kioskClassCheckinUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberId']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberId', 'updatedAt']);
     }
 
     // =====================================================================

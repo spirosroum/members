@@ -139,6 +139,19 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         // kiosk clients skip them — including them would fail the whole batch.
         const ADMIN_ONLY_COLLECTIONS = new Set(['payments', 'plans', 'planBin', 'scheduleBin', 'notificationBin', 'bin']);
 
+        // How long a locally-committed write is treated as "not yet confirmed" by a
+        // snapshot. During this window a possibly-stale snapshot is NOT allowed to
+        // drop or revert the record (the sync loop bug). Normal sync confirms within
+        // a second; the TTL only bounds the worst-case so a permanently-failing write
+        // cannot pin the local state forever.
+        const UNCONFIRMED_TTL = 30000;
+        // Deletes are a strong local intent: they must survive reloads (the user may
+        // close the page for minutes before the snapshot confirms). They only expire
+        // after a day so a permanently-failing delete eventually stops fighting the
+        // cloud instead of resurrecting the record on every restart.
+        const DELETE_INTENT_TTL = 24 * 60 * 60 * 1000;
+        const intentTtl = (rec) => rec && rec.deleted ? DELETE_INTENT_TTL : UNCONFIRMED_TTL;
+
         function cloudRecordKey(col, rec) {
             try { return CLOUD_COLLECTIONS[col].key(rec) || ''; } catch (e) { return ''; }
         }
@@ -175,6 +188,26 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             settingsMirror: '',
             dirty: new Set(),     // collections with local changes not yet flushed
             applied: new Set(),   // collections whose cloud state has been applied locally at least once
+            // Locally-committed writes/deletes awaiting snapshot confirmation.
+            // Persisted so a reload cannot resurrect a deleted record from a stale
+            // snapshot or drop a not-yet-landed write. col -> Map(key -> {json, at} | {deleted: true, at})
+            unconfirmed: (() => {
+                const out = {};
+                try {
+                    const raw = JSON.parse(localStorage.getItem('gym_fs_intents') || '{}');
+                    Object.keys(raw).forEach(col => {
+                        const m = new Map();
+                        Object.keys(raw[col] || {}).forEach(k => m.set(k, raw[col][k]));
+                        out[col] = m;
+                    });
+                } catch (e) {}
+                return out;
+            })(),
+            // Record keys that have EVER been applied to STATE (per collection). A
+            // mirror<->STATE divergence is only a real local deletion when the key was
+            // present in STATE before; otherwise it is a snapshot the apply has not
+            // caught up with and must never become a cloud delete.
+            seenKeys: {},
             _subs: {},            // active Firestore unsubscribe functions per collection
             // Member id renames {oldId, newId} awaiting the delete pass. Persisted
             // so a tab close / crash between "create new doc" and "delete old doc"
@@ -280,8 +313,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     // members: a kiosk may only touch the sessionsLeft counter.
                     // The id-rename / delete chain is admin-only now (rules deny
                     // kiosk id updates and member deletes), so never emit those.
+                    // updatedAt is the client-stamped revision field (Fix 3b).
                     if (op.col === 'members') {
-                        if (op.type === 'update' && op.data && Object.keys(op.data).every(k => k === 'sessionsLeft')) return true;
+                        if (op.type === 'update' && op.data && Object.keys(op.data).every(k => k === 'sessionsLeft' || k === 'updatedAt')) return true;
                         return false;
                     }
                     return op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications' || op.col === 'memberRenames';
@@ -336,6 +370,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (col === 'members') MEMBER_PRIVATE_FIELDS.forEach(f => { delete writeRec[f]; });
                         const json = JSON.stringify(writeRec);
                         if (mirror.get(key) !== json) {
+                            // The record genuinely differs from the cloud baseline. Stamp a
+                            // fresh client revision on it (STATE, the written op and the mirror
+                            // all carry the same value) so a stale snapshot can never revert it —
+                            // applyCollectionSnapshotData resolves conflicts by comparing revisions.
+                            const upd = new Date().toISOString();
+                            rec.updatedAt = upd;
+                            writeRec.updatedAt = upd;
+                            const stampedJson = JSON.stringify(writeRec);
                             let data = writeRec;
                             // Field-scoped member writes: when the record already exists in the
                             // mirror, emit only the fields that actually differ. A check-in
@@ -353,12 +395,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                                     Object.keys(writeRec).forEach(k => {
                                         if (JSON.stringify(writeRec[k]) !== JSON.stringify(prev[k])) changed[k] = writeRec[k];
                                     });
-                                    if (Object.keys(changed).length === 0) return;
+                                    // The revision must always advance, even on a same-ms rewrite
+                                    // where no other field changed.
+                                    if (Object.keys(changed).length === 0) changed.updatedAt = upd;
                                     data = changed;
                                 }
                             }
                             ops.push({ col, key, type: 'set', data });
-                            mirrorUpdates.push({ col, key, action: 'set', json });
+                            mirrorUpdates.push({ col, key, action: 'set', json: stampedJson });
                         }
                     });
                     mirror.forEach((json, key) => {
@@ -381,8 +425,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                                 return;
                             }
                         }
+                        // Never delete a record that was never present in our local
+                        // STATE: a snapshot that arrived before its apply must not be
+                        // mistaken for a local deletion (deleted fresh check-ins).
+                        if (!(self.seenKeys[col] && self.seenKeys[col].has(key))) return;
                         ops.push({ col, key, type: 'delete' });
                         mirrorUpdates.push({ col, key, action: 'delete' });
+                        // A delete intent is a real local change the moment it is
+                        // emitted; it stays until a snapshot confirms the doc is gone.
+                        if (!self.unconfirmed[col]) self.unconfirmed[col] = new Map();
+                        self.unconfirmed[col].set(key, { deleted: true, at: Date.now() });
                     });
                 });
 
@@ -471,6 +523,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         self.mirrors[u.col] = m;
                     }
                 });
+
+                // Mark the committed writes as awaiting snapshot confirmation, so a
+                // stale snapshot cannot drop or revert them (applyCollectionSnapshotData
+                // consults this set). Deletes are tracked at emission time and cleared
+                // only once a snapshot confirms the doc is gone.
+                mirrorUpdates.forEach(u => {
+                    if (u.action !== 'set') return;
+                    if (!self.unconfirmed[u.col]) self.unconfirmed[u.col] = new Map();
+                    self.unconfirmed[u.col].set(u.key, { json: u.json, at: Date.now() });
+                });
+                pruneUnconfirmed();
+                persistIntents();
 
                 // A snapshot can arrive while the batch is committing. Rebuild
                 // flushed baselines from the state that exists after that merge,
@@ -592,6 +656,34 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) !== FSEngine.arrayMirrors[col]) FSEngine.dirty.add(col);
             });
             if (FSEngine.settingsReady && JSON.stringify(settingsPayload()) !== FSEngine.settingsMirror) FSEngine.dirty.add('settings');
+
+            // Persist locally-deleted keys as pending intents. The moment a record
+            // drops out of STATE while the cloud still has it, that delete is a real
+            // intent that must survive a reload — otherwise the first snapshot after
+            // a restart re-merges the doc back and the deletion is lost forever.
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                if (!FSEngine.applied.has(col)) return;
+                const cfg = CLOUD_COLLECTIONS[col];
+                const arr = STATE[cfg.state] || [];
+                const mirror = FSEngine.mirrors[col];
+                if (!mirror) return;
+                const stateKeys = new Set();
+                arr.forEach(r => { const k = cloudRecordKey(col, r); if (k) stateKeys.add(k); });
+                mirror.forEach((json, key) => {
+                    if (stateKeys.has(key)) return;
+                    // Only a record we actually had in STATE is a real local deletion.
+                    // A key in the mirror that was never applied to STATE is just a
+                    // snapshot the apply hasn't caught up with — never turn that into a
+                    // delete intent (this was deleting freshly-checked-in visits).
+                    if (!(FSEngine.seenKeys[col] && FSEngine.seenKeys[col].has(key))) return;
+                    if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
+                    if (!FSEngine.unconfirmed[col].has(key)) {
+                        FSEngine.unconfirmed[col].set(key, { deleted: true, at: Date.now() });
+                    }
+                });
+            });
+            pruneUnconfirmed();
+            persistIntents();
         }
 
         // After a successful commit (or a no-op flush), drop the dirty flag for
@@ -626,6 +718,113 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             fallbackToLocal();
             if (!FSEngine.db || !FSEngine.db.collection) return Promise.resolve();
             return FSEngine.scheduleFlush();
+        }
+
+        // Deep value equality that ignores object key order, so a record written
+        // locally (insertion order) can be matched against the same record read
+        // back from Firestore (alphabetical field order).
+        function normalizeJsonValue(v) {
+            if (Array.isArray(v)) return v.map(normalizeJsonValue);
+            if (v && typeof v === 'object') {
+                const out = {};
+                Object.keys(v).sort().forEach(k => { out[k] = normalizeJsonValue(v[k]); });
+                return out;
+            }
+            return v;
+        }
+        function jsonEqual(a, b) { return JSON.stringify(normalizeJsonValue(a)) === JSON.stringify(normalizeJsonValue(b)); }
+
+        // Millisecond epoch of a record's updatedAt, or 0 when missing. ISO strings
+        // parse directly; a Firestore Timestamp/Date object is also accepted. Records
+        // without a revision are treated as oldest, so the cloud wins for legacy data.
+        function toTime(v) {
+            if (typeof v === 'string') { const t = Date.parse(v); return isNaN(t) ? 0 : t; }
+            if (v && typeof v === 'object' && typeof v.getTime === 'function') return v.getTime();
+            return 0;
+        }
+
+        // A write is "confirmed" once a snapshot contains a record with the exact
+        // value we wrote; a delete is "confirmed" once a snapshot no longer contains
+        // the key. Expired entries are pruned so the map stays bounded.
+        function confirmSnapshotKeys(col, mirror) {
+            const pending = FSEngine.unconfirmed[col];
+            if (!pending || !pending.size) return;
+            const now = Date.now();
+            pending.forEach((rec, key) => {
+                if (now - rec.at > intentTtl(rec)) { pending.delete(key); return; }
+                if (rec.deleted) {
+                    if (!mirror.has(key)) pending.delete(key);
+                    return;
+                }
+                const snap = mirror.get(key);
+                if (snap) {
+                    try { if (jsonEqual(JSON.parse(snap), JSON.parse(rec.json))) { pending.delete(key); return; } }
+                    catch (e) {}
+                }
+                // Presence with different content is NOT confirmation: the snapshot
+                // may still be a stale read-replica that predates our write.
+            });
+            persistIntents();
+        }
+
+        // Drop intents older than the confirmation window so the map cannot grow
+        // without bound (a permanently-failing write/delete eventually gives up).
+        function pruneUnconfirmed() {
+            const now = Date.now();
+            Object.keys(FSEngine.unconfirmed).forEach(col => {
+                const m = FSEngine.unconfirmed[col];
+                if (!m || !m.size) return;
+                m.forEach((rec, key) => { if (now - rec.at > intentTtl(rec)) m.delete(key); });
+            });
+        }
+
+        function persistIntents() {
+            try {
+                const out = {};
+                Object.keys(FSEngine.unconfirmed).forEach(col => {
+                    const m = FSEngine.unconfirmed[col];
+                    if (!m || !m.size) return;
+                    out[col] = {};
+                    m.forEach((rec, key) => { out[col][key] = rec; });
+                });
+                localStorage.setItem('gym_fs_intents', JSON.stringify(out));
+            } catch (e) {}
+        }
+
+        // Re-apply pending local intents against the last snapshot (runs after every
+        // snapshot apply, including the boot-time first apply):
+        //  - a delete intent keeps the record out of STATE and re-issues the delete
+        //    until the cloud confirms the doc is gone;
+        //  - a write intent stays local and re-flushes until the cloud reflects it.
+        function reconcilePendingIntents(col) {
+            const cfg = CLOUD_COLLECTIONS[col];
+            if (!cfg) return;
+            const pending = FSEngine.unconfirmed[col];
+            if (!pending || !pending.size) return;
+            const mirror = FSEngine.mirrors[col];
+            const now = Date.now();
+            let stateTouched = false;
+            let needsFlush = false;
+            pending.forEach((rec, key) => {
+                if (now - rec.at > intentTtl(rec)) { pending.delete(key); return; }
+                const arr = STATE[cfg.state];
+                if (rec.deleted) {
+                    // Never let a (stale) snapshot resurrect a record we deleted locally.
+                    if (Array.isArray(arr)) {
+                        const idx = arr.findIndex(r => cloudRecordKey(col, r) === key);
+                        if (idx > -1) { arr.splice(idx, 1); stateTouched = true; }
+                    }
+                    if (mirror && mirror.has(key)) needsFlush = true;
+                } else if (mirror) {
+                    const snap = mirror.get(key);
+                    let confirmed = false;
+                    if (snap) { try { confirmed = jsonEqual(JSON.parse(snap), JSON.parse(rec.json)); } catch (e) {} }
+                    if (!confirmed) needsFlush = true;
+                }
+            });
+            if (stateTouched) { fallbackToLocal(); scheduleAfterCloudSyncRender(); }
+            if (needsFlush) { FSEngine.dirty.add(col); FSEngine.scheduleFlush(); }
+            if (stateTouched) persistIntents();
         }
 
         function applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData) {
@@ -671,7 +870,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     const key = cloudRecordKey(col, rec);
                     if (key) cloudKeySet.add(key);
                 });
-                const prevMirrorMap = prevMirrorData || new Map();
+                const pending = FSEngine.unconfirmed[col];
+                const now = Date.now();
+                const isFresh = (key) => {
+                    const rec = pending ? pending.get(key) : null;
+                    return !!rec && (now - rec.at) < UNCONFIRMED_TTL;
+                };
                 const merged = [];
                 const mergedKeys = new Set();
                 cloudArr.forEach(rec => {
@@ -680,8 +884,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     mergedKeys.add(key);
                     const localRec = local.find(lr => cloudRecordKey(col, lr) === key);
                     if (localRec) {
-                        const prevJson = prevMirrorMap.get(key);
-                        if (prevJson && JSON.stringify(localRec) !== prevJson) {
+                        // Revision-based resolution: the incoming cloud record may be a stale
+                        // read-replica that predates a write this client committed. Accept the
+                        // cloud record only when its updatedAt is >= ours (newer, or the same
+                        // write echoed back); otherwise keep the local (newer) version. Records
+                        // without a revision count as oldest, so the cloud wins for legacy data.
+                        const cloudUpd = toTime(rec.updatedAt);
+                        const localUpd = toTime(localRec.updatedAt);
+                        if (localUpd > cloudUpd) {
                             merged.push(localRec);
                         } else {
                             merged.push(rec);
@@ -695,7 +905,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const prevKeys = prevMirrorKeys || new Set();
                 local.forEach(rec => {
                     const key = cloudRecordKey(col, rec);
-                    if (key && !cloudKeySet.has(key) && !prevKeys.has(key)) {
+                    // Preserve a local record the snapshot lacks when it is either a
+                    // brand-new record the snapshot hasn't caught up with, or a
+                    // recently-committed write that a stale snapshot is missing
+                    // (previously this silently dropped the just-created check-in and
+                    // let a later flush delete it from the cloud).
+                    if (key && !cloudKeySet.has(key) && (!prevKeys.has(key) || isFresh(key))) {
                         preserved.push(rec);
                         missedLocals = true;
                     }
@@ -707,6 +922,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
             }
             FSEngine.applied.add(col);
+            // Track every record key ever applied to STATE, so a mirror<->STATE
+            // divergence is only treated as a deletion when the record was actually
+            // present locally (a transient "snapshot ahead of STATE" gap must never
+            // turn into a cloud delete).
+            const seenArr = STATE[cfg.state];
+            if (Array.isArray(seenArr)) {
+                if (!FSEngine.seenKeys[col]) FSEngine.seenKeys[col] = new Set();
+                seenArr.forEach(r => { const k = cloudRecordKey(col, r); if (k) FSEngine.seenKeys[col].add(k); });
+            }
         }
 
         // Reconcile stale local data after a member id rename that happened on
@@ -717,13 +941,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         function applyRenameLedger() {
             const map = FSEngine.renameMap;
             if (!map || !map.size) return;
-            let touched = false;
+            const changedCols = new Set();
 
             // 1) Translate references to the renamed member in local visits,
             //    class check-ins, payments and notifications.
-            [STATE.visits, STATE.classCheckins, STATE.payments, STATE.notifications].forEach(arr => {
+            [['visits', STATE.visits], ['classCheckins', STATE.classCheckins], ['payments', STATE.payments], ['notifications', STATE.notifications]].forEach(pair => {
+                const name = pair[0];
+                const arr = pair[1];
                 if (!Array.isArray(arr)) return;
-                arr.forEach(r => { if (r && r.memberId && map.has(r.memberId)) { r.memberId = map.get(r.memberId); touched = true; } });
+                arr.forEach(r => { if (r && r.memberId && map.has(r.memberId)) { r.memberId = map.get(r.memberId); changedCols.add(name); } });
             });
 
             // 2) Replace any locally-kept record of the renamed member with the
@@ -747,14 +973,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 if (!seen.has(m.id)) { seen.add(m.id); keep.push(m); }
             });
-            if (replaced) { STATE.members = keep; touched = true; }
+            if (replaced) { STATE.members = keep; changedCols.add('members'); }
 
-            if (touched) {
-                FSEngine.dirty.add('members');
-                FSEngine.dirty.add('visits');
-                FSEngine.dirty.add('classCheckins');
-                FSEngine.dirty.add('payments');
-                FSEngine.dirty.add('notifications');
+            if (changedCols.size) {
+                changedCols.forEach(c => FSEngine.dirty.add(c));
                 fallbackToLocal();
                 scheduleAfterCloudSyncRender();
             }
@@ -778,15 +1000,47 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (col === 'members' && rec.id != null && rec.id !== d.id) return;
                     docs.push(rec);
                 });
+                const wasReady = FSEngine.ready[col];
                 FSEngine.lastDocs[col] = docs;
                 FSEngine.ready[col] = true;
                 FSEngine.snapSeen.add(col);
                 if (!FSEngine.dirty.has(col)) FSEngine.mirrors[col] = mirror;
-                if (FSEngine.migrationResolved) { applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData); fallbackToLocal(); scheduleAfterCloudSyncRender(); }
-                if (FSEngine.migrationResolved && col === 'members') applyRenameLedger();
+
+                // Locally-committed writes are confirmed once this snapshot reflects
+                // the exact value we wrote (order-insensitive content match).
+                confirmSnapshotKeys(col, mirror);
+
+                // Byte-identical re-delivery (re-subscribe / eventual read replica)
+                // carries no new information: skip the apply + full re-render so a
+                // snapshot storm cannot re-enter the sync loop.
+                let unchanged = false;
+                if (wasReady && !FSEngine.dirty.has(col) && prevMirror && prevMirror.size === mirror.size) {
+                    unchanged = true;
+                    for (const k of prevMirror.keys()) {
+                        if (prevMirror.get(k) !== mirror.get(k)) { unchanged = false; break; }
+                    }
+                }
+
+                if (FSEngine.migrationResolved) {
+                    if (!unchanged) {
+                        applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData);
+                        fallbackToLocal();
+                        scheduleAfterCloudSyncRender();
+                    }
+                }
+                if (FSEngine.migrationResolved && col === 'members' && !unchanged) {
+                    // Reconcile renames only when the members snapshot actually
+                    // changed (not on every delivery). The rename ledger snapshot
+                    // itself also drives applyRenameLedger.
+                    applyRenameLedger();
+                }
                 if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
                     DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); scheduleAfterCloudSyncRender(); });
                 }
+                // Re-apply pending local intents (deletes must not be resurrected by a
+                // stale snapshot; unconfirmed writes must be re-flushed). Runs even when
+                // the snapshot is unchanged so boot-time reconciliation is not skipped.
+                if (FSEngine.migrationResolved) reconcilePendingIntents(col);
                 if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
             };
         }
@@ -821,7 +1075,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         function resolveMigrationState() {
             if (FSEngine.migrationResolved) return;
             FSEngine.migrationResolved = true;
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => applyCollectionSnapshotData(col, new Set(), new Map()));
+            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
+                applyCollectionSnapshotData(col, new Set(), new Map());
+                // Boot-time reconciliation of persisted local intents (e.g. a delete
+                // that didn't land before a reload): keep them deleted locally and
+                // re-issue the cloud write/delete.
+                reconcilePendingIntents(col);
+            });
             Object.keys(ARRAY_DOCS).forEach(col => {
                 if (FSEngine.arrayMirrors[col] === undefined) return;
                 const isAdmin = FSEngine.isAdminClient();
@@ -843,7 +1103,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             renderDebounceTimer = setTimeout(() => {
                 renderDebounceTimer = null;
                 renderAfterCloudSync();
-            }, 80);
+            }, 200);
         }
 
         function renderAfterCloudSync() {
@@ -1084,14 +1344,33 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 
-            fetchAllMemberPrivate: async () => {
+            fetchAllMemberPrivate: async (force) => {
                 if (!db || !db.collection) return;
                 await FSEngine.whenReady('members');
                 const members = STATE.members || [];
-                const priv = {};
-                const promises = members.map(m => {
-                    if (!m.id) return Promise.resolve();
-                    return db.collection('members').doc(m.id).collection('private').doc('info').get()
+                if (!members.length) return;
+                // Fetch the private subcollection only for members whose PUBLIC doc
+                // changed since the last fetch (order-insensitive content signature).
+                // This was previously issuing N reads on EVERY members snapshot —
+                // the main driver of the Firestore read-quota blowup.
+                const sigs = DB._privateSignature || (DB._privateSignature = {});
+                const memberPrivate = Object.assign({}, STATE.memberPrivate || {});
+                const changedIds = [];
+                const currentIds = new Set();
+                members.forEach(m => {
+                    if (!m.id) return;
+                    currentIds.add(m.id);
+                    const sig = JSON.stringify(normalizeJsonValue(m));
+                    if (force || sigs[m.id] !== sig) {
+                        sigs[m.id] = sig;
+                        changedIds.push(m.id);
+                    }
+                });
+                // Drop signatures for removed members so they refetch if re-added.
+                Object.keys(sigs).forEach(id => { if (!currentIds.has(id)) delete sigs[id]; });
+                if (!changedIds.length) return;
+                const promises = changedIds.map(id => {
+                    return db.collection('members').doc(id).collection('private').doc('info').get()
                         .then(doc => {
                             if (doc.exists) {
                                 const data = doc.data() || {};
@@ -1099,13 +1378,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                                 MEMBER_PRIVATE_FIELDS.forEach(f => {
                                     if (data[f] !== undefined) entry[f] = data[f];
                                 });
-                                if (Object.keys(entry).length > 0) priv[m.id] = entry;
+                                if (Object.keys(entry).length > 0) memberPrivate[id] = entry;
+                                else delete memberPrivate[id];
+                            } else {
+                                delete memberPrivate[id];
                             }
                         })
                         .catch(() => {});
                 });
                 await Promise.all(promises);
-                STATE.memberPrivate = priv;
+                STATE.memberPrivate = memberPrivate;
                 fallbackToLocal();
             },
 
@@ -1720,6 +2002,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // operation data via devtools / localStorage inspection.
             clearSensitiveData: () => {
                 STATE.memberPrivate = {};
+                DB._privateSignature = undefined;
                 STATE.payments = [];
                 STATE.notifications = [];
                 STATE.notificationBin = [];
@@ -1750,9 +2033,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     FSEngine.ready[col] = false;
                     FSEngine.applied.delete(col);
                     FSEngine.snapSeen.delete(col);
+                    delete FSEngine.unconfirmed[col];
+                    delete FSEngine.seenKeys[col];
                     delete FSEngine.mirrors[col];
                     delete FSEngine.lastDocs[col];
                 });
+                persistIntents();
                 fallbackToLocal();
             },
 
@@ -1900,7 +2186,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.initAuth();
 
                 App.autoCheckoutStaleVisits();
-                setInterval(App.autoCheckoutStaleVisits, 60000);
+                setInterval(() => {
+                    App.autoCheckoutStaleVisits();
+                    App.autoDeactivateDormant && App.autoDeactivateDormant();
+                }, 60000);
 
                 App.renderCheckinQR();
                 const queryParams = new URLSearchParams(window.location.search);

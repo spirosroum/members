@@ -75,7 +75,6 @@ Object.assign(App, {
             },
 
             renderMemberDirectory: () => {
-                App.autoDeactivateDormant();
                 const members = DB.getMembers();
                 const visits = DB.getVisits();
                 const rawQuery = document.getElementById('member-directory-search').value.trim();
