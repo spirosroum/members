@@ -150,9 +150,9 @@ Object.assign(App, {
                 // Fresh clients (incognito, cleared cache) load members from the
                 // cloud on boot — wait for the first snapshot instead of failing
                 // the lookup against an empty local state.
-                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                if (FSEngine && typeof FSEngine.whenReadyAll === 'function') {
                     App.showKioskMessage('Loading member list…', 'warning');
-                    await FSEngine.whenReady('members');
+                    await FSEngine.whenReadyAll(['members', 'schedules', 'classCheckins']);
                 }
 
                 const member = DB.getMembers().find(m => m.id === id);
@@ -359,6 +359,16 @@ Object.assign(App, {
                 const expected = App.computeExpectedExitTime(entryIso, validSelections, validSelections.length === 0);
                 const classIds = [...new Set(validSelections.map(sel => sel.classId))];
 
+                const duplicateSelection = validSelections.some(selection => DB.getClassCheckins().some(checkin =>
+                     checkin.memberId === member.id && checkin.slotDate === selection.slotDate &&
+                     checkin.classId === selection.classId && checkin.slotStart === selection.slotStart &&
+                     checkin.slotEnd === selection.slotEnd));
+                 if (duplicateSelection) {
+                     App.pendingCheckinMember = { member, isUnpaidVisit, membershipAlert };
+                     App.openCheckinClassModal();
+                     return App.showKioskMessage(map.checkinAlreadyCheckedInText || 'You have already checked into this class.', 'warning');
+                 }
+
                 // If the member is already inside an active visit, keep that visit open and attach the
                 // new class(es) to it, so back-to-back classes all display next to the member's name.
                 // A check-in for a class that has already ended is a historical/attendance record, so it
@@ -389,7 +399,7 @@ Object.assign(App, {
                 const checkins = DB.getClassCheckins();
                 validSelections.forEach((selection, idx) => {
                     checkins.push({
-                        id: 'CC-' + Date.now() + '-' + idx,
+                        id: 'CC-' + member.id + '-' + selection.slotKey,
                         visitId,
                         memberId: member.id,
                         classId: selection.classId,

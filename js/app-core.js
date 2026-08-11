@@ -21,18 +21,26 @@
         }
 
         // =====================================================================
-        // ADMIN AUTH (Firebase Authentication, email/password)
-        // Only this email is recognized as the gym administrator.
-        // Create this user in Firebase Console -> Authentication -> Users.
+        // ADMIN AUTH (Firebase Authentication)
+        // Admin is identified by the `admin` custom claim on the ID token, set
+        // via the Firebase Admin SDK / a Cloud Function — never by a hardcoded
+        // email in client code. The email-based check was removed (pentest F4):
+        // it leaked the admin address and made the browser the source of truth.
         // =====================================================================
-        const ADMIN_EMAIL = 'spirosroumeliotis29@gmail.com';
-
         function getAuth() {
             return (window.firebase && firebase.auth) ? firebase.auth() : null;
         }
 
-        function isAdminUser(user) {
-            return !!(user && user.email && user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase());
+        // Async: the ID token's custom claims must be fetched before deciding.
+        // Returns true only when the token carries claims.admin === true.
+        async function isAdminUser(user) {
+            if (!user) return false;
+            try {
+                const idTokenResult = await user.getIdTokenResult();
+                return !!(idTokenResult.claims && idTokenResult.claims.admin === true);
+            } catch (e) {
+                return false;
+            }
         }
 
 const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777', '#334155', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#0f766e', '#86198f'];
@@ -178,6 +186,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             flushPromise: null,
             _resolveFlush: null,
             retryTimer: null,
+            flushing: false,
+            flushAgain: false,
             migrationResolved: false,
             migratePoll: null,
 
@@ -210,6 +220,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     }, 200);
                 });
             },
+            whenReadyAll: function (cols, timeoutMs) {
+                const needed = (cols || []).filter(col => !this.ready[col] || !this.migrationResolved);
+                if (!needed.length) return Promise.resolve();
+                const t = timeoutMs || 12000;
+                return new Promise(resolve => {
+                    const t0 = Date.now();
+                    const iv = setInterval(() => {
+                        if ((this.migrationResolved && needed.every(col => this.ready[col])) || Date.now() - t0 > t) {
+                            clearInterval(iv);
+                            resolve();
+                        }
+                    }, 200);
+                });
+            },
 
             // Debounce: one check-in triggers several DB setters in a row —
             // collapse them into a single flush so Firestore sees one small batch.
@@ -225,7 +249,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (this._resolveFlush) { const r = this._resolveFlush; this._resolveFlush = null; this.flushPromise = null; r(); }
             },
             flush: async function () {
-                try { await this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); } finally { this.resolveFlush(); }
+                if (this.flushing) {
+                    this.flushAgain = true;
+                    return;
+                }
+                this.flushing = true;
+                try { await this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); }
+                finally {
+                    this.flushing = false;
+                    this.resolveFlush();
+                    if (this.flushAgain) {
+                        this.flushAgain = false;
+                        this.scheduleFlush();
+                    }
+                }
             },
             commitOps: async function (ops) {
                 const batch = this.db.batch();
@@ -240,21 +277,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // left for the admin client to perform later (rules deny them for kiosk).
             kioskCanWrite: function (op) {
                 if (op.type === 'set' || op.type === 'update') {
-                    return op.col === 'members' || op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications' || op.col === 'memberRenames';
-                }
-                if (op.type === 'delete') {
-                    if (op.kioskAllowed) return true; // member rename deletes only
-                    // A member doc whose id field no longer matches its docId is a
-                    // rename straggler — safe for kiosk cleanup (rules also enforce
-                    // id != docId before allowing an anonymous delete).
+                    // members: a kiosk may only touch the sessionsLeft counter.
+                    // The id-rename / delete chain is admin-only now (rules deny
+                    // kiosk id updates and member deletes), so never emit those.
                     if (op.col === 'members') {
-                        const m = this.mirrors[op.col];
-                        if (m && m.has(op.key)) {
-                            try { const rec = JSON.parse(m.get(op.key)); return rec.id !== op.key; } catch (e) { return false; }
-                        }
+                        if (op.type === 'update' && op.data && Object.keys(op.data).every(k => k === 'sessionsLeft')) return true;
+                        return false;
                     }
-                    return false;
+                    return op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications' || op.col === 'memberRenames';
                 }
+                // Deletes are admin-only for kiosk clients (rules deny them).
                 return false;
             },
             diffAndWrite: async function () {
@@ -337,12 +369,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         // a fresh client (empty localStorage) erase the whole cloud
                         // collection on its first flush.
                         if (!self.applied.has(col)) return;
+                        if (col === 'members' && !isAdmin) return; // member renames/deletes are admin-only (rules deny kiosk id updates and deletes)
                         if (col === 'members') {
                             const rename = self.renames.find(r => r.oldId === key) || (self.renameMap && self.renameMap.has(key) ? { oldId: key, newId: self.renameMap.get(key) } : null);
                             if (rename) {
                                 // Update the old doc's id field first; its delete is
-                                // deferred until the update lands (kiosk deletes are
-                                // only allowed when id != docId).
+                                // deferred until the update lands.
                                 ops.push({ col, key, type: 'update', data: { id: rename.newId } });
                                 mirrorUpdates.push({ col, key, action: 'set', json: JSON.stringify(Object.assign({}, JSON.parse(json), { id: rename.newId })) });
                                 self.deferredDeletes.push({ col, key });
@@ -356,9 +388,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
                 // Publish pending renames to the cloud ledger so every client can
                 // reconcile stale local copies instead of resurrecting the old doc.
+                // Only emit ledger ops if the rename hasn't been written yet (avoid
+                // rewriting with a fresh timestamp on every flush, which causes
+                // continuous memberRenames snapshots on all admin clients).
                 if (self.renames.length) {
                     self.renames.forEach(r => {
+                        const ledgerKey = `rename_${r.oldId}_${r.newId}`;
+                        if (!self._ledgerWritten) self._ledgerWritten = new Set();
+                        if (self._ledgerWritten.has(ledgerKey)) return;
                         ops.push({ col: 'memberRenames', key: r.oldId, type: 'set', data: { oldId: r.oldId, newId: r.newId, at: new Date().toISOString(), by: isAdmin ? 'admin' : 'kiosk' } });
+                        self._ledgerWritten.add(ledgerKey);
                     });
                 }
 
@@ -433,9 +472,29 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     }
                 });
 
+                // A snapshot can arrive while the batch is committing. Rebuild
+                // flushed baselines from the state that exists after that merge,
+                // rather than diffing the next flush against an older snapshot.
+                flushedCols.forEach(col => {
+                    if (!CLOUD_COLLECTIONS[col] || !FSEngine.ready[col]) return;
+                    const current = new Map();
+                    (STATE[CLOUD_COLLECTIONS[col].state] || []).forEach(rec => {
+                        const key = cloudRecordKey(col, rec);
+                        if (key) current.set(key, JSON.stringify(col === 'members'
+                            ? Object.keys(rec).reduce((out, field) => {
+                                if (!MEMBER_PRIVATE_FIELDS.includes(field)) out[field] = rec[field];
+                                return out;
+                            }, {})
+                            : rec));
+                    });
+                    self.mirrors[col] = current;
+                });
+
                 // Member renames: delete the old doc only after its id field has
                 // been updated (the sequential awaits guarantee ordering).
-                if (self.deferredDeletes.length) {
+                // Admin-only: rules deny member deletes for kiosk clients, so a
+                // kiosk never has deferred member deletes to clear.
+                if (self.deferredDeletes.length && isAdmin) {
                     const next = self.deferredDeletes;
                     self.deferredDeletes = [];
                     try {
@@ -938,7 +997,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         const DB = {
             // getters
             getMembers: () => {
-                const members = (STATE.members || []).slice();
+                const members = (STATE.members || []).map(m => Object.assign({}, m));
                 if (!FSEngine.isAdminClient()) return members;
                 const priv = STATE.memberPrivate || {};
                 members.forEach(m => {
@@ -1580,7 +1639,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             // ---------- ADMIN AUTH & VIEW GATING ----------
-            // True only while the Firebase Auth user matches ADMIN_EMAIL.
+            // True only while a user with the `admin` custom claim is signed in.
             // Every admin entry point (navigate, renders) checks this flag,
             // and the admin view is CSS-hidden when locked (data protection is
             // enforced at the Firestore rules level, not the UI).
@@ -1592,8 +1651,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     console.warn('Firebase Auth not available — admin login disabled.');
                     return;
                 }
-                auth.onAuthStateChanged((user) => {
-                    if (isAdminUser(user)) {
+                auth.onAuthStateChanged(async (user) => {
+                    if (await isAdminUser(user)) {
                         App.authUser = user;
                         App.unlockAdmin();
                     } else {
@@ -1890,5 +1949,3 @@ window.App = App;
 window.DB = DB;
 window.Utils = Utils;
 window.FSEngine = FSEngine;
-
-

@@ -16,8 +16,8 @@ service cloud.firestore {
     //                   dob, notes). Admin-only read/write.
     //   * WRITE       — admin may write everything. Authenticated kiosk
     //                   (anonymous) may create/update visits, classCheckins,
-    //                   notifications; update member sessionsLeft/id;
-    //                   create/delete member docs for self-service ID renames.
+    //                   notifications; update member sessionsLeft only.
+    //                   Member creation/rename/delete is admin-only.
     //
     // MEMBER PRIVATE DATA:
     //   Sensitive PII (phone, dob, notes) lives in a per-member
@@ -29,17 +29,17 @@ service cloud.firestore {
     // =====================================================================
 
     // The gym administrator account.
-    // Custom claims (request.auth.token.admin == true) are the primary check
-    // (set via Admin SDK or a Cloud Function). The email fallback is kept for
-    // backward-compatibility during the transition and can be removed later.
+    // Custom claims (request.auth.token.admin == true) are the ONLY check
+    // (set via Admin SDK or a Cloud Function). The email fallback was removed:
+    // it allowed any account whose email matched to act as admin, and it leaked
+    // the admin address into the rules file that ships publicly on GitHub.
     // NOTE: In Firestore rules, reading a missing token claim (e.g.
     // request.auth.token.email) throws instead of returning null, which would
     // deny every request. Always guard claim access with `in`.
     function isAdmin() {
       return request.auth != null &&
-             (('admin' in request.auth.token && request.auth.token.admin == true) ||
-              ('email' in request.auth.token &&
-               request.auth.token.email.lower() == 'spirosroumeliotis29@gmail.com'));
+             'admin' in request.auth.token &&
+             request.auth.token.admin == true;
     }
 
     // Anonymous kiosk / member self-service flows.
@@ -52,14 +52,18 @@ service cloud.firestore {
       return request.auth != null && !('email' in request.auth.token);
     }
 
-    // Kiosk may only adjust session counts and its own ID on member docs
+    // Kiosk may only adjust the session counter on member docs.
+    // The `id` field was removed: allowing kiosks to rewrite it enabled a
+    // rename-then-delete chain (rules delete permits a doc whose stored id
+    // differs from its docId), letting an anonymous client tamper with
+    // arbitrary members.
     function kioskMemberUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft', 'id']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['sessionsLeft']);
     }
 
     // Kiosk check-in flows may only touch the timestamps/status of visits
     function kioskVisitUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['exitTime', 'expectedExitTime', 'isUnpaid', 'memberId', 'entryTime', 'classIds']);
     }
 
     // Kiosk may only rewrite the memberId on class check-ins (ID changes)
@@ -124,7 +128,7 @@ service cloud.firestore {
     // class-details modal check-in history)
     match /classCheckins/{docId} {
       allow read: if request.auth != null;
-      allow create: if isKiosk();
+      allow create: if isAdmin() || (isKiosk() && !exists(/databases/$(database)/documents/classCheckins/$(docId)));
       allow update: if isAdmin() || (isKiosk() && kioskClassCheckinUpdate());
       allow delete: if isAdmin();
     }
@@ -191,7 +195,10 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if isAdmin() || (isKiosk() && request.resource.data.id == docId && request.resource.data.name is string);
       allow update: if isAdmin() || (isKiosk() && kioskMemberUpdate());
-      allow delete: if isAdmin() || (isKiosk() && resource.data.id != docId);
+      // Delete is admin-only. The old kiosk condition (resource.data.id != docId)
+      // combined with the removed `id` update permission was the rename-then-delete
+      // tampering chain — an anonymous client could re-ID a member then delete it.
+      allow delete: if isAdmin();
     }
 
     // Private member subcollection: email, phone, dob, notes

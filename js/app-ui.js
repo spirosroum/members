@@ -397,14 +397,16 @@ Object.assign(App, {
                 const provider = new firebase.auth.GoogleAuthProvider();
                 auth.signInWithPopup(provider)
                     .then((cred) => {
-                        if (isAdminUser(cred.user)) {
-                            App.closeModal('modal-login');
-                            App.unlockAdmin();
-                        } else {
-                            // Signed in with Google, but not the admin account — revoke immediately.
-                            auth.signOut();
-                            alert('This Google account does not have admin access.');
-                        }
+                        isAdminUser(cred.user).then((isAdmin) => {
+                            if (isAdmin) {
+                                App.closeModal('modal-login');
+                                App.unlockAdmin();
+                            } else {
+                                // Signed in with Google, but not the admin account — revoke immediately.
+                                auth.signOut();
+                                alert('This Google account does not have admin access.');
+                            }
+                        });
                     })
                     .catch((err) => {
                         if (!err) return;
@@ -425,15 +427,17 @@ Object.assign(App, {
                 if (!auth) return alert('Firebase Auth is not available. Check your connection.');
                 auth.signInWithEmailAndPassword(email, pwd)
                     .then((cred) => {
-                        if (isAdminUser(cred.user)) {
-                            pwdInput.value = '';
-                            App.closeModal('modal-login');
-                            App.unlockAdmin();
-                        } else {
-                            // Signed in, but not the admin account — revoke immediately.
-                            auth.signOut();
-                            alert('This account does not have admin access.');
-                        }
+                        isAdminUser(cred.user).then((isAdmin) => {
+                            if (isAdmin) {
+                                pwdInput.value = '';
+                                App.closeModal('modal-login');
+                                App.unlockAdmin();
+                            } else {
+                                // Signed in, but not the admin account — revoke immediately.
+                                auth.signOut();
+                                alert('This account does not have admin access.');
+                            }
+                        });
                     })
                     .catch((err) => {
                         let msg = 'Sign-in failed. Please try again.';

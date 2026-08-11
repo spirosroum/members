@@ -1,0 +1,8 @@
+{
+  "name": "ssg-tools",
+  "private": true,
+  "description": "One-off operational scripts for ssg-desk (FIX-PLAN steps 2.1 / 8.3). Service-account keys must never be committed.",
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

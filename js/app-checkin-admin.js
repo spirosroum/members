@@ -327,6 +327,13 @@ Object.assign(App, {
                 }));
 
                 const { member, isUnpaidVisit } = App.pendingAdminCheckin;
+                const duplicateSelection = selectedClasses.some(selection => DB.getClassCheckins().some(checkin =>
+                    checkin.memberId === member.id && checkin.slotDate === selection.slotDate &&
+                    checkin.classId === selection.classId && checkin.slotStart === selection.slotStart &&
+                    checkin.slotEnd === selection.slotEnd));
+                if (duplicateSelection) {
+                    return App.showKioskMessage('This member is already checked into one of the selected classes.', 'warning');
+                }
                 App.pendingAdminCheckin = null;
                 App.closeModal('modal-admin-checkin-classes');
 
@@ -375,7 +382,7 @@ Object.assign(App, {
                     const checkins = DB.getClassCheckins();
                     selectedClasses.forEach((selection, idx) => {
                         checkins.push({
-                            id: 'CC-' + Date.now() + '-' + idx,
+                            id: 'CC-' + member.id + '-' + selection.slotKey,
                             visitId,
                             memberId: member.id,
                             classId: selection.classId,

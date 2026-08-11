@@ -166,9 +166,9 @@ Object.assign(App, {
                 if (!input) return;
                 const id = input.value.trim();
                 if (!id) return;
-                if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
+                if (FSEngine && typeof FSEngine.whenReadyAll === 'function') {
                     App.showKioskMessage('Loading member list…', 'warning');
-                    await FSEngine.whenReady('members');
+                    await FSEngine.whenReadyAll(['members', 'schedules', 'classCheckins']);
                 }
                 const member = DB.getMembers().find(m => m.id === id);
                 if (!member) {

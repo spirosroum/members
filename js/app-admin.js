@@ -445,9 +445,12 @@ Object.assign(App, {
             sendAdminPasswordReset: () => {
                 const auth = getAuth();
                 if (!auth) return alert('Firebase Auth is not available.');
-                if (!ADMIN_EMAIL) return alert('No admin email configured for this app.');
-                auth.sendPasswordResetEmail(ADMIN_EMAIL)
-                    .then(() => alert(`Password reset email sent to ${ADMIN_EMAIL}. Check your inbox.`))
+                // Use the signed-in admin's email — the account is identified by the
+                // `admin` custom claim, not a hardcoded address (pentest F4).
+                const email = App.authUser && App.authUser.email;
+                if (!email) return alert('No admin email available. Please sign in to send a password reset.');
+                auth.sendPasswordResetEmail(email)
+                    .then(() => alert(`Password reset email sent to ${email}. Check your inbox.`))
                     .catch(err => alert('Failed to send reset email: ' + (err && err.message ? err.message : err)));
             },
 
