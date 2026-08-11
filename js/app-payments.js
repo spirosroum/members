@@ -687,13 +687,19 @@ Object.assign(App, {
                 // immediately consumed by outstanding unpaid check-ins (e.g. a 1-session bundle
                 // after 2 unpaid visits), the member ends with 0 sessions and must NOT be
                 // activated. A generic custom payment with no plan must not activate either.
-                if (m && m.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0) {
-                    const hasUsableCoverage = (m.sessionsTotal && (parseInt(m.sessionsLeft, 10) || 0) > 0)
-                        || (m.expirationDate && Utils.getDaysRemaining(m.expirationDate) >= 0);
+                // IMPORTANT: re-read the member from STATE after reconcile — the earlier `m`
+                // copy still holds the PRE-reconcile sessionsLeft, and saving it would revert
+                // the session consumed by the outstanding debt (member ends "activated" with a
+                // full balance it should not have).
+                const reconciledMembers = DB.getMembers();
+                const reconciledMember = reconciledMembers.find(x => x.id === memberId);
+                if (reconciledMember && reconciledMember.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0) {
+                    const hasUsableCoverage = (reconciledMember.sessionsTotal && (parseInt(reconciledMember.sessionsLeft, 10) || 0) > 0)
+                        || (reconciledMember.expirationDate && Utils.getDaysRemaining(reconciledMember.expirationDate) >= 0);
                     if (hasUsableCoverage) {
-                        m.accountStatus = 'Active';
-                        DB.saveMembers(members);
-                        App.addNotification('Member Activated', `${m.firstName} ${m.lastName} was activated by recorded payment.`, 'success', m.id);
+                        reconciledMember.accountStatus = 'Active';
+                        DB.saveMembers(reconciledMembers);
+                        App.addNotification('Member Activated', `${reconciledMember.firstName} ${reconciledMember.lastName} was activated by recorded payment.`, 'success', reconciledMember.id);
                     }
                 }
 
