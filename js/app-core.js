@@ -629,25 +629,41 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         };
 
         function markDirtyCollections() {
+            const upd = new Date().toISOString();
             Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                // Not loaded yet: there is nothing to diff against, and boot-time
-                // no-op writes (e.g. cleanBin on a fresh client) must not mark the
-                // collection dirty — that would block its first snapshot from ever
-                // being applied (schedules/closedDates never loading, etc.).
-                // Notifications are exempt: their read is admin-only, so a kiosk
-                // client never gets a snapshot, and alerts it creates must still be
-                // tracked as dirty so they flush instead of being replaced by a
-                // later cloud apply.
                 if (!FSEngine.ready[col] && col !== 'notifications') return;
                 const cfg = CLOUD_COLLECTIONS[col];
                 const arr = STATE[cfg.state] || [];
                 const mirror = FSEngine.mirrors[col] || new Map();
-                if (arr.length !== mirror.size) { FSEngine.dirty.add(col); return; }
+                if (arr.length !== mirror.size) {
+                    FSEngine.dirty.add(col);
+                    arr.forEach(rec => {
+                        if (rec) rec.updatedAt = upd;
+                        const key = cloudRecordKey(col, rec);
+                        if (key && (!mirror.has(key) || mirror.get(key) !== JSON.stringify(rec))) {
+                            if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
+                            const existing = FSEngine.unconfirmed[col].get(key);
+                            if (!existing || !existing.deleted) {
+                                FSEngine.unconfirmed[col].set(key, { json: JSON.stringify(rec), at: Date.now() });
+                            }
+                        }
+                    });
+                    return;
+                }
                 const seen = new Set();
                 for (let i = 0; i < arr.length; i++) {
                     const key = cloudRecordKey(col, arr[i]);
-                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) { FSEngine.dirty.add(col); return; }
-                    seen.add(key);
+                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) {
+                        FSEngine.dirty.add(col);
+                        if (arr[i]) arr[i].updatedAt = upd;
+                        if (key && (!mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i]))) {
+                            if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
+                            if (!FSEngine.unconfirmed[col].has(key)) {
+                                FSEngine.unconfirmed[col].set(key, { json: JSON.stringify(arr[i]), at: Date.now() });
+                            }
+                        }
+                    }
+                    if (key) seen.add(key);
                 }
                 for (const k of mirror.keys()) if (!seen.has(k)) { FSEngine.dirty.add(col); return; }
             });
@@ -677,7 +693,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     // delete intent (this was deleting freshly-checked-in visits).
                     if (!(FSEngine.seenKeys[col] && FSEngine.seenKeys[col].has(key))) return;
                     if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
-                    if (!FSEngine.unconfirmed[col].has(key)) {
+                    const existing = FSEngine.unconfirmed[col].get(key);
+                    if (!existing || !existing.deleted) {
                         FSEngine.unconfirmed[col].set(key, { deleted: true, at: Date.now() });
                     }
                 });
@@ -845,10 +862,27 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             if (!FSEngine.applied.has(col)) {
                 const local = STATE[cfg.state] || [];
                 const merged = local.slice();
+                const pending = FSEngine.unconfirmed[col];
+                const now = Date.now();
+                const isFresh = (key) => {
+                    const rec = pending ? pending.get(key) : null;
+                    return !!rec && (now - rec.at) < UNCONFIRMED_TTL;
+                };
                 cloudArr.forEach(rec => {
                     const key = cloudRecordKey(col, rec);
                     if (!key) return;
-                    if (!merged.some(lr => cloudRecordKey(col, lr) === key)) merged.push(rec);
+                    const localIdx = merged.findIndex(lr => cloudRecordKey(col, lr) === key);
+                    if (localIdx > -1) {
+                        if (isFresh(key)) return;
+                        const cloudUpd = toTime(rec.updatedAt);
+                        const localUpd = toTime(merged[localIdx].updatedAt);
+                        if (cloudUpd > localUpd) {
+                            merged[localIdx] = rec;
+                        }
+                        return;
+                    }
+                    if (isFresh(key)) return;
+                    merged.push(rec);
                 });
                 STATE[cfg.state] = merged;
             } else if (FSEngine.dirty.has(col)) {
@@ -2074,7 +2108,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     App.navigate('admin-checkin');
                 }
                 Promise.all([
-                    FSEngine.whenReady('payments').then(() => {
+                    Promise.all([
+                        FSEngine.whenReady('payments'),
+                        FSEngine.whenReady('visits'),
+                        FSEngine.whenReady('members')
+                    ]).then(() => {
                         try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Admin unlock reconciliation failed:', e); }
                     }),
                     DB.fetchAllMemberPrivate().catch(() => {})

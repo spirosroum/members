@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-12 — v0.38 (16:03) — Fix sync engine losing local modifications on hard refresh
+- `markDirtyCollections` now sets `updatedAt` on modified records and tracks unconfirmed write intents (persisted to localStorage via `persistIntents`). Previously only dirty flags were set — local modifications had no protection against cloud snapshots overwriting them on reload.
+- First-apply merge (`applyCollectionSnapshotData`) now uses revision-based resolution (same as the clean path): local records with fresh unconfirmed intents are always preserved, and records with a newer `updatedAt` win over cloud records with an older one.
+- `reconcileAllMemberPayments` now waits for `whenReady('visits')` and `whenReady('members')` in addition to `payments`, preventing reconciliation from running with incomplete data on fresh boot.
+- Delete intents can now overwrite stale write intents: the `!has(key)` guard changed to `!existing || !existing.deleted` so a create-then-delete sequence before flush commit survives hard refresh without resurrecting the deleted record.
+- Size-mismatch path in `markDirtyCollections` now also tracks modified records (not just new ones) as unconfirmed intents.
+
 ## 2026-08-10 — v0.37 (18:50) — Remove Firebase Hosting; GitHub Pages is the only deployment target
 - Removed the `hosting` block from `firebase.json` — the app now deploys exclusively to GitHub Pages (`https://members.ssgbjj.gr/`)
 - Removed Firebase Hosting (`ssg-desk.web.app`) references from `AGENTS.md`; `firebase deploy --only firestore:rules` remains the only post-commit deploy command
