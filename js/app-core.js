@@ -347,7 +347,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         const Sync = {
             loaded: false,
             ready: {},
-            mirrors: {},          // col -> Map(id -> JSON string)
+            mirrors: {},          // col -> Map(id -> JSON string of row)
+            settingsMirror: null,
+            privateMirror: null,
             _waiters: {},         // col -> [resolve]
             _subs: {},            // realtime channel per collection
             _flushTimer: null,
@@ -383,7 +385,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (error) throw error;
                 const arr = (data || []).map(map.from);
                 STATE[map.state] = arr;
-                this.mirrors[col] = new Map(arr.map(r => [String(r.id), JSON.stringify(r)]));
+                this.mirrors[col] = new Map(arr.map(r => [String(r.id), JSON.stringify(map.to(r))]));
                 this._markReady(col);
             },
 
@@ -420,6 +422,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (s.checkin_notice_color != null) STATE.checkinNoticeColor = s.checkin_notice_color;
                 if (s.show_class_checkins != null) STATE.showClassCheckins = !!s.show_class_checkins;
                 if (s.member_stats_visibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, s.member_stats_visibility);
+                this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
             },
 
@@ -428,6 +431,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const priv = {};
                 rows.forEach(r => { if (r.member_id) priv[r.member_id] = MAPS_EXTRA.privateFrom(r); });
                 STATE.memberPrivate = priv;
+                this.privateMirror = JSON.stringify(priv);
             },
 
             async loadBins() {
@@ -473,17 +477,26 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 this.loaded = true;
             },
 
-            // Full-replace persist for a per-record collection (upsert + delete).
+            // Persist a per-record collection: only write rows that actually changed
+            // (vs the canonical mirror) and delete rows removed from STATE. Supabase
+            // needs no full-table rewrite on every save — this is a diff, not a wipe.
             // `members` is upsert-only: deletions/renames go through the bin /
             // rename_member flows, never a hard cascade delete.
             async persist(col, opts) {
                 if (!sb || !this.ready[col]) return;
                 const map = MAPS[col];
                 const arr = STATE[map.state] || [];
-                const rows = arr.map(map.to).filter(r => r && r.id);
                 const mirror = this.mirrors[col] || new Map();
-                const keys = new Set(rows.map(r => String(r.id)));
-                for (const c of chunkRows(rows)) {
+                const keys = new Set();
+                const upserts = [];
+                arr.forEach(camel => {
+                    if (!camel || !camel.id) return;
+                    const k = String(camel.id);
+                    keys.add(k);
+                    const row = map.to(camel);
+                    if (mirror.get(k) !== JSON.stringify(row)) upserts.push(row);
+                });
+                for (const c of chunkRows(upserts)) {
                     const { error } = await sb.from(map.table).upsert(c, { onConflict: 'id' });
                     if (error) throw error;
                 }
@@ -502,7 +515,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (error) throw error;
                     }
                 }
-                this.mirrors[col] = new Map(rows.map(r => [String(r.id), JSON.stringify(r)]));
+                this.mirrors[col] = new Map(arr.filter(r => r && r.id).map(r => [String(r.id), JSON.stringify(map.to(r))]));
             },
 
             async persistSchedules() {
@@ -535,6 +548,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             async persistSettings() {
                 if (!sb || !this.ready.settings) return;
                 const p = settingsPayload();
+                const json = JSON.stringify(p);
+                if (this.settingsMirror === json) return;
                 const rows = [
                     { key: 'portal_name', value: p.portalName },
                     { key: 'hidden_belts', value: p.hiddenBelts },
@@ -545,13 +560,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'member_stats_visibility', value: p.memberStatsVisibility }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
+                this.settingsMirror = json;
             },
 
             async persistMemberPrivate() {
                 if (!sb) return;
                 const priv = STATE.memberPrivate || {};
+                const json = JSON.stringify(priv);
+                if (this.privateMirror === json) return;
                 const rows = Object.keys(priv).map(mid => Object.assign({ member_id: mid }, priv[mid]));
                 for (const c of chunkRows(rows)) await sb.from('member_private').upsert(c, { onConflict: 'member_id' });
+                this.privateMirror = json;
             },
 
             async persistBins() {
@@ -657,7 +676,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 try {
                     const rows = await this._fetch('visits');
                     STATE.visits = rows.map(MAPS.visits.from);
-                    this.mirrors.visits = new Map(STATE.visits.map(r => [String(r.id), JSON.stringify(r)]));
+                    this.mirrors.visits = new Map(STATE.visits.map(r => [String(r.id), JSON.stringify(MAPS.visits.to(r))]));
                     fallbackToLocal();
                     scheduleAfterCloudSyncRender();
                 } catch (e) { console.warn('realtime visits refresh failed', e); }
@@ -668,7 +687,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 try {
                     const rows = await this._fetch('notifications');
                     STATE.notifications = rows.map(MAPS.notifications.from);
-                    this.mirrors.notifications = new Map(STATE.notifications.map(r => [String(r.id), JSON.stringify(r)]));
+                    this.mirrors.notifications = new Map(STATE.notifications.map(r => [String(r.id), JSON.stringify(MAPS.notifications.to(r))]));
                     fallbackToLocal();
                     scheduleAfterCloudSyncRender();
                 } catch (e) { console.warn('realtime notifications refresh failed', e); }
