@@ -1346,9 +1346,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     console.warn('Supabase Auth not available — admin login disabled.');
                     return;
                 }
+                let lastAdmin = null;
                 auth.onAuthStateChanged(async (user) => {
                     App.authUser = user || null;
-                    if (await isAdminUser(user)) {
+                    const isAdmin = await isAdminUser(user);
+                    // Only react to real admin-status transitions. Supabase fires
+                    // onAuthStateChange for TOKEN_REFRESHED / INITIAL_SESSION etc., which
+                    // previously re-ran unlockAdmin() and yanked the admin back to Staff Check-in.
+                    if (isAdmin === lastAdmin) return;
+                    lastAdmin = isAdmin;
+                    if (isAdmin) {
                         App.unlockAdmin();
                     } else {
                         App.lockAdmin();
@@ -1371,6 +1378,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             lockAdmin: () => {
+                const wasAuthed = App.adminAuthed;
                 App.adminAuthed = false;
                 App.adminListenersBound = false;
                 Sync.unsubscribeRealtime();
@@ -1388,7 +1396,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 App.closeModal('modal-login');
                 App.renderCheckinNotice && App.renderCheckinNotice();
-                App.clearSensitiveData();
+                if (wasAuthed) App.clearSensitiveData();
             },
 
             clearSensitiveData: () => {
@@ -1413,6 +1421,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             unlockAdmin: () => {
+                const wasLocked = !App.adminAuthed;
                 App.adminAuthed = true;
                 const adminView = document.getElementById('view-admin');
                 if (!adminView) {
@@ -1421,7 +1430,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     return;
                 }
                 App.bindAdminListeners();
-                // Load admin-only collections and (re)subscribe realtime.
+                if (!wasLocked) return; // already unlocked — don't re-navigate or re-load
                 Sync.loadAdminOnly()
                     .then(() => {
                         Sync.subscribeRealtime();

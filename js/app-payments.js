@@ -676,11 +676,17 @@ Object.assign(App, {
                     DB.getVisits().filter(v => v.memberId === mid && v.paidOverride === 'unpaid').forEach(v => { delete v.paidOverride; });
                 });
 
-                // Reconcile visit payment status after saving this payment
-                if (originalPayment && originalPayment.memberId && originalPayment.memberId !== memberId) {
-                    App.reconcileMemberPaymentVisitStatus(originalPayment.memberId);
+                // Reconcile visit payment status after saving this payment.
+                // Guarded so a reconciliation error can never leave the modal open
+                // (the payment itself is already saved above).
+                try {
+                    if (originalPayment && originalPayment.memberId && originalPayment.memberId !== memberId) {
+                        App.reconcileMemberPaymentVisitStatus(originalPayment.memberId);
+                    }
+                    App.reconcileMemberPaymentVisitStatus(memberId);
+                } catch (err) {
+                    console.warn('Payment reconciliation failed:', err);
                 }
-                App.reconcileMemberPaymentVisitStatus(memberId);
 
                 // Auto-activate member on positive payment amount — only when the member has
                 // USABLE coverage left AFTER reconciliation. If the purchased sessions were
