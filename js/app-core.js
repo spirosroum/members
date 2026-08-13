@@ -651,6 +651,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
             async refreshVisits() {
                 if (!this.loaded) return;
+                // Skip while a local write is pending/flushing: a stale server fetch here
+                // would resurrect records this client just deleted (realtime race).
+                if (this._flushPromise) return;
                 try {
                     const rows = await this._fetch('visits');
                     STATE.visits = rows.map(MAPS.visits.from);
@@ -661,6 +664,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
             async refreshNotifications() {
                 if (!this.loaded) return;
+                if (this._flushPromise) return;
                 try {
                     const rows = await this._fetch('notifications');
                     STATE.notifications = rows.map(MAPS.notifications.from);
