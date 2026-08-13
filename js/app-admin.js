@@ -77,6 +77,21 @@ Object.assign(App, {
                 rows.sort((a, b) => a.perWeek - b.perWeek || a.member.lastName.localeCompare(b.member.lastName));
                 App.retentionRows = rows;
 
+                // Frequency breakdown uses a separate list: EVERY member (any account
+                // status) who trained at least once in the window, sorted by frequency.
+                App.frequencyRows = DB.getMembers().map(m => {
+                    const count = App.getMemberTrainingCount(m.id, since, until);
+                    if (count <= 0) return null;
+                    const firstTraining = App.getMemberFirstTrainingDate(m.id);
+                    const windowStart = (firstTraining && firstTraining > since) ? firstTraining : since;
+                    const windowWeeks = Math.max(1, Math.round((until - windowStart) / (1000 * 60 * 60 * 24 * 7)));
+                    const perWeek = count / windowWeeks;
+                    let segment = 'active';
+                    if (perWeek < 1) segment = 'high';
+                    else if (perWeek < 3) segment = 'moderate';
+                    return { member: m, count, perWeek, segment };
+                }).filter(Boolean).sort((a, b) => a.perWeek - b.perWeek || a.member.lastName.localeCompare(b.member.lastName));
+
                 const total = rows.length;
                 const segCount = { high: 0, moderate: 0, active: 0 };
                 rows.forEach(r => segCount[r.segment]++);
@@ -131,7 +146,7 @@ Object.assign(App, {
 
             renderRetentionTable: () => {
                 const filter = document.getElementById('retention-segment-filter').value;
-                const rows = (App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
+                const rows = (App.frequencyRows || App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
                 const list = document.getElementById('retention-member-list');
                 const headers = document.getElementById('retention-member-headers');
                 const sortCol = App.retentionSortCol || 'perWeek';
@@ -210,12 +225,12 @@ Object.assign(App, {
                             </td>
                             <td data-label="Segment"><span class="badge ${meta.cls}">${meta.label}</span></td>
                         </tr>`;
-                }).join('') || '<tr><td colspan="5" class="text-center text-gray">No active members found in this segment.</td></tr>';
+                }).join('') || '<tr><td colspan="5" class="text-center text-gray">No members trained in this window for this segment.</td></tr>';
             },
 
             exportRetentionExcel: () => {
                 const filter = document.getElementById('retention-segment-filter').value;
-                const rows = (App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
+                const rows = (App.frequencyRows || App.retentionRows || []).filter(r => filter === 'all' || r.segment === filter);
                 if (!rows.length) return alert('No data to export for the current segment filter.');
                 const segLabels = { high: 'High Risk', moderate: 'Moderate Risk', active: 'Active / Healthy' };
                 let csvContent = "data:text/csv;charset=utf-8,";
@@ -323,14 +338,18 @@ Object.assign(App, {
                 const retainedStudents = studentsAtEnd - newStudents;
                 const retentionPct = studentsAtStart > 0 ? (retainedStudents / studentsAtStart) * 100 : null;
 
-                // ---- 3. REVENUE PER MEMBER (period) ----
+                // ---- 3. REVENUE PER MEMBER (period, normalized to monthly) ----
                 const revenueThisPeriod = payments.filter(p => {
                     if (!p.date || !(parseFloat(p.amount) > 0)) return false;
                     const d = new Date(p.date + 'T12:00:00');
                     return d >= winStart && d < winEnd;
                 }).reduce((s, p) => s + parseFloat(p.amount), 0);
                 const activeCount = members.filter(m => (m.accountStatus || 'Active') === 'Active').length;
-                const rpm = activeCount > 0 ? revenueThisPeriod / activeCount : null;
+                // Normalize the window's revenue to a monthly equivalent so the KPI is
+                // comparable across 4/8/13-week (and custom) windows.
+                const windowDays = Math.max(1, (winEnd - winStart) / (24 * 60 * 60 * 1000));
+                const monthlyRevenue = revenueThisPeriod / (windowDays / 30.44);
+                const rpm = activeCount > 0 ? monthlyRevenue / activeCount : null;
 
                 // ---- 4. CLASS ATTENDANCE (period) ----
                 // Attendance rate = students who attended ÷ students enrolled in that class × 100.
@@ -411,8 +430,8 @@ Object.assign(App, {
                         'Goal: match market benchmark',
                         rpm != null ? `${currency}${rpm.toFixed(2)}` : '—',
                         'info',
-                        `Counted: ${currency}${revenueThisPeriod.toFixed(2)} revenue ${isCustom ? 'in the selected period' : 'this month'} ÷ ${activeCount} active members.`,
-                        rpm != null ? `<div class="kpi-sub">${currency}${revenueThisPeriod.toFixed(2)} total / ${activeCount} active</div>` : ''
+                        `Counted: ${currency}${monthlyRevenue.toFixed(2)} monthly revenue ÷ ${activeCount} active members (${currency}${revenueThisPeriod.toFixed(2)} in window).`,
+                        rpm != null ? `<div class="kpi-sub">${currency}${monthlyRevenue.toFixed(2)} monthly / ${activeCount} active</div>` : ''
                     ) +
                     card(
                         'Class Attendance',

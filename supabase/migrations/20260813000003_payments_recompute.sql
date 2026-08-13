@@ -142,7 +142,8 @@ begin
   if v_plan_id is not null and v_plan.id is not null then
     if v_plan.is_trial then
       update members set trial_participant = true where id = v_member_id;
-    elsif v_amount > 0 then
+    elsif v_amount > 0 and exists (select 1 from members where id = v_member_id and trial_participant) then
+      -- Only a member who was already a trial participant can "convert".
       update members set trial_converted = true where id = v_member_id;
     end if;
     if v_plan.days is not null and v_plan.days > 0 and (v_plan.sessions is null or v_plan.sessions = 0) then
