@@ -1540,9 +1540,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     })
                     .catch(err => console.warn('Initial data load failed:', err));
 
-                App.autoCheckoutStaleVisits();
+                // Stale-visit auto-checkout is handled server-side by the pg_cron
+                // "auto-checkout-visits" job; the client only runs the dormancy check.
                 setInterval(() => {
-                    App.autoCheckoutStaleVisits();
                     App.autoDeactivateDormant && App.autoDeactivateDormant();
                 }, 60000);
 
@@ -1558,31 +1558,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const now = new Date();
                 const filtered = bin.filter(m => (now - new Date(m.deletedAt)) < (365 * 24 * 60 * 60 * 1000));
                 DB.saveBin(filtered);
-            },
-            
-            autoCheckoutStaleVisits: () => {
-                const visits = DB.getVisits();
-                let updated = false;
-                const now = new Date();
-                visits.forEach(v => {
-                    if (!v.expectedExitTime) {
-                        v.expectedExitTime = App.computeExpectedExitTime(v.entryTime);
-                        updated = true;
-                    }
-                    if (!v.exitTime) {
-                        const expected = v.expectedExitTime ? new Date(v.expectedExitTime) : null;
-                        if (expected && expected <= now) {
-                            v.exitTime = v.expectedExitTime;
-                            updated = true;
-                        }
-                    }
-                });
-                if (updated) {
-                    DB.saveVisits(visits);
-                    App.renderLivePresent();
-                    const dashboardPane = document.getElementById('pane-admin-dashboard');
-                    if (dashboardPane && !dashboardPane.classList.contains('hidden')) App.renderAdminDashboard();
-                }
             },
 
         };

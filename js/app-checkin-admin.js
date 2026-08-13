@@ -108,8 +108,6 @@ Object.assign(App, {
 
                 if (!m) { resultCard.classList.add('hidden'); return; }
                 
-                // Ensure auto-checkout is applied then determine active visit using expectedExitTime
-                App.autoCheckoutStaleVisits();
                 const now = new Date();
                 const activeVisits = DB.getVisits().filter(v => v.exitTime === null && v.expectedExitTime && new Date(v.expectedExitTime) > now && v.memberId === m.id);
                 const isInside = activeVisits.length > 0;
@@ -373,8 +371,6 @@ Object.assign(App, {
                 document.getElementById('checkin-search').value = '';
                 document.getElementById('checkin-member-card').classList.add('hidden');
                 App.renderLivePresent();
-                // Backdated sessions happened in the past; finalize them immediately.
-                if (isBackdated) App.autoCheckoutStaleVisits();
             },
 
             getCheckinQRUrl: () => {

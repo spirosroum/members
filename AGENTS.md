@@ -2,23 +2,23 @@
 
 ## Architecture
 
-This is a **single-page static web app** with no build step, no bundler, no CI. Hosted on **GitHub Pages** (`spirosroum.github.io/members`). Three view containers in `index.html` (kiosk, admin, member) are toggled via CSS `hidden`. Firebase Firestore is the cloud DB, localStorage is the local cache/fallback. All JS is loaded via `<script>` tags — **load order is critical** (see below). Firebase compat SDK v10.8.0 (not modular v9+ API).
+This is a **single-page static web app** with no build step, no bundler, no CI. Hosted on **GitHub Pages** (`spirosroum.github.io/members`, custom domain `members.ssgbjj.gr`). Three view containers in `index.html` (kiosk, admin, member) are toggled via CSS `hidden`. **Supabase (PostgreSQL)** is the backend/database; the client is **online-first** (no offline queue — localStorage is only a last-known-state cache). All JS is loaded via `<script>` tags — **load order is critical** (see below). `@supabase/supabase-js` v2 is loaded from CDN (UMD, exposes `window.supabase`).
 
 ```
 index.html
 ├── styles.css
-├── firebase-app-compat.js / firebase-firestore-compat.js / firebase-auth-compat.js (CDN)
+├── @supabase/supabase-js@2 (CDN)   ← window.supabase
 ├── qrcode.min.js (CDN)
-├── js/app-core.js     ← STATE, DB, FSEngine, Utils, global App object, boot init
+├── js/app-core.js     ← Supabase client, STATE, DB, Sync adapter, Utils, global App, auth, boot init
 ├── js/app-ui.js       ← modals, navigation, color palettes, sidebar, admin login UI
 ├── js/app-kiosk.js    ← public kiosk check-in, leaderboard, numpad, live present list
-├── js/app-member-portal.js    ← member dashboard, Google sign-in, self-service
+├── js/app-member-portal.js    ← member dashboard, self-service (Google sign-in deferred)
 ├── js/app-checkin-admin.js    ← staff check-in, broadcast notice, QR code
 ├── js/app-mobile-checkin.js   ← mobile self-check-in flow
 ├── js/app-members.js   ← member directory, exports, freeze/unfreeze, member modal
 ├── js/app-plans.js     ← membership plans, public plans/classes, closed dates
 ├── js/app-schedule.js  ← class schedules, draft slots, calendar view
-├── js/app-payments.js  ← payment ledger, payment modal, reconciliation
+├── js/app-payments.js  ← payment ledger, payment modal (calls apply_payment/delete_payment RPCs)
 ├── js/app-admin.js     ← dashboard, analytical calendar, visit log, settings
 └── js/app-i18n.js      ← Greek/English kiosk translations, window.onload boot hook (MUST BE LAST)
 ```
@@ -33,43 +33,45 @@ index.html
 - **Minimal edits:** change only what is necessary. Do not refactor unrelated code. Do not add comments.
 
 ### On every commit/push
-- **Update `HISTORY.md`** — append a new entry at the top with today's date, a short version name (e.g. `0.1`), the current time (HH:MM), a one-line summary, and a bullet list of what changed. Header format: `## YYYY-MM-DD — v0.1 (HH:MM) — Short summary`. Bump the version name on each change (minor bump per change: `0.1` → `0.2`). For a major update (breaking change, big new feature, large refactor), suggest bumping the major version (`0.x` → `1.0`) and flag it to the user. When `HISTORY.md` grows past ~15 entries, move the older entries to the top of `HISTORY-ARCHIVE.md`.
-- **Write a descriptive commit message** — summarize what changed and why (e.g. `Fix visit log date filter for UTC+2 timezone` not `fix bug`). Keep it under 72 chars for the subject line.
-- **After committing, auto-push to `master`** on `https://github.com/spirosroum/members.git`. If git push fails, tell the user which files changed so they can upload manually.
+- **Update `HISTORY.md`** — append a new entry at the top with today's date, a short version name (e.g. `0.1`), the current time (HH:MM), a one-line summary, and a bullet list of what changed. Header format: `## YYYY-MM-DD — v0.1 (HH:MM) — Short summary`. Bump the version name on each change (minor bump per change: `0.1` → `0.2`). For a major update, suggest bumping the major version and flag it to the user. When `HISTORY.md` grows past ~15 entries, move the older entries to the top of `HISTORY-ARCHIVE.md`.
+- **Write a descriptive commit message** — summarize what changed and why. Keep it under 72 chars for the subject line.
+- **After committing, auto-push to `main`** on `https://github.com/spirosroum/members.git` (GitHub Pages deploys from `main`, not `master`). If git push fails, tell the user which files changed so they can upload manually.
 
-### After deployment
-- **Deploy Firestore Rules only:** `firebase deploy --only firestore:rules`
+### After deployment (schema changes only)
+- Supabase schema lives in `supabase/migrations/*.sql`. Apply a new migration via the SQL editor, the Supabase CLI (`supabase db push`), or `node migration/apply-remote.js` with a Personal Access Token. **Never edit the live DB without also updating the migration files.**
 
 ## Deployment
 
-- **There is no dev server, no npm, no build.** Open `index.html` directly in a browser (or use `python3 -m http.server 3000` for local testing).
-- **Production:** hosted on **GitHub Pages** at `https://spirosroum.github.io/members/` with a custom domain at **`https://members.ssgbjj.gr/`**. Deploy by pushing to the `master` branch of `https://github.com/spirosroum/members.git`. When git push is not available, the user manually uploads changed files.
+- **There is no dev server, no npm, no build.** Open `index.html` directly in a browser (or use `python3 -m http.server 3000` for local testing). The `migration/` dir has its own `package.json` for the one-off ETL scripts only.
+- **Production:** GitHub Pages serves the `main` branch. Deploy by pushing to `main`. When git push is not available, the user manually uploads changed files. The version guard in `index.html` reads `version.txt` and auto-reloads stale clients — bump `version.txt` AND the `?v=` cache-busters on every deploy.
 - **No lint, no typecheck, no tests.** There is no tooling.
 
-## Firebase & Auth
+## Supabase & Auth
 
-- **Project:** `ssg-desk` in europe-west1
-- **Admin email:** hardcoded in `js/app-core.js` as `ADMIN_EMAIL = 'spirosroumeliotis29@gmail.com'`. Admin auth uses Firebase email/password. The `isAdmin()` function in `firestore.rules` checks both `request.auth.token.admin` custom claim AND the email fallback.
-- **kiosk (anonymous) flows:** On boot, the app signs in anonymously (`auth.signInAnonymously()`). This provides an auth token so Firestore rules (which require `request.auth != null`) allow reads. Unauthenticated REST API requests are denied by rules.
-- **Member Google sign-in:** Members link their Google account to their member record via the `email` field. Resolution is case-insensitive client-side. Email is intentionally public (not in the private subcollection) to enable this resolution.
+- **Project URL:** `https://lwmwihdfwafnhtykslbz.supabase.co`. Client config (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) is at the top of `js/app-core.js`. The **service-role key and any Firebase/DB secrets must never be committed**.
+- **Admin auth:** Supabase Auth (email/password). A user is admin iff `public.profiles.role = 'admin'` (checked server-side by the `is_admin()` RLS helper and client-side by `isAdminUser()`). The `handle_new_user` trigger auto-creates a `profiles` row on signup. Single admin today; the `staff_role` enum is ready for RBAC.
+- **Kiosk (anonymous) flows:** use the **anon key** — no sign-in required. `RLS` (Row Level Security) grants anon read-only access to public tables and execute access to the `SECURITY DEFINER` RPCs (`check_in_member`, `create_notification`). There is no anonymous auth user.
+- **Member Google sign-in is deferred** during migration; member self-service logs in by member ID only.
+- **RLS replaces Firestore rules.** Permissions are enforced in Postgres (`supabase/migrations/20260813000001_init.sql`), not in client code. Anon can never read `member_private`, `payments`, or `notifications`.
 
 ## Data Model & Sync
 
-- **Per-record architecture:** Each logical collection (`members`, `visits`, `payments`, `plans`, etc.) maps to a Firestore collection where `docId == record.id`. `schedules` and `closedDates` are stored as single array docs because order matters and only admin writes them.
-- **Local-first:** `STATE` is the in-memory source of truth. `DB.getX()`/`DB.saveX()` read/write STATE and persist to localStorage via `fallbackToLocal()`, then sync to Firestore via `FSEngine.scheduleFlush()` (debounced 600ms). The app works fully offline and syncs when online.
-- **PII isolation:** Sensitive fields (`phone`, `dob`, `notes`) are in `/members/{id}/private/info` — admin-only read/write. `DB.getMembers()` merges them in (admin only; stripped for kiosk). `DB.saveMembers()` strips them out, writes them to the private subcollection as a fire-and-forget.
-- **Cloud sync guard:** `FSEngine.applied` prevents an empty-localState client from deleting the entire cloud collection on its first flush. The `dirty` flag prevents local edits from being overwritten by incoming snapshots.
-- **Array docs vs. per-record collections:** `schedules`/`closedDates` are single array docs that are admin-only writes. On kiosk/member (non-admin) clients the local `dirty` flag for them is always spurious, so `handleArrayDocSnapshot()` and `resolveMigrationState()` apply the cloud state regardless of it. Do not reintroduce a `!dirty` gate for non-admin array-doc applies — a fresh incognito client would show an empty schedule (snapshot never re-fires, dirty never clears).
+- **Relational schema:** each Firestore collection became a Postgres table (`members`, `member_private`, `visits`, `class_checkins`, `payments`, `plans`, `schedules`, `schedule_slots`, `closed_dates`, `notifications`, `bins`, `settings`, `profiles`, `member_pins`). Foreign keys (e.g. `visits.member_id → members.id`) enforce integrity; `ON DELETE/UPDATE CASCADE` handles member renames/deletes without orphan risk.
+- **Online-first adapter (`Sync` in app-core.js):** `STATE` is the in-memory cache. `loadAll()` hydrates it from Supabase; realtime subscriptions keep `visits` + `notifications` live; `DB.saveX()` updates STATE then flushes (debounced 600ms) via `persist()`, which **diffs against a canonical mirror and writes only changed rows** (plus deletes removed rows). `members` is upsert-only (soft-delete via `deleted_at`, never a hard cascade delete).
+- **camelCase ↔ snake_case** mapping lives in `MAPS` (per-table `to`/`from`) in app-core.js. STATE/UI is camelCase; the DB is snake_case.
+- **PII isolation:** `phone`, `dob`, `notes`, `email` live in `member_private` (admin-only via RLS). `DB.getMembers()` merges them in for admins only.
+- **Server-side RPCs (the "rules"):** `check_in_member` (atomic check-in), `apply_payment` + `delete_payment` + `recompute_member` (atomic payment/coverage), `rename_member` (PK rename + cascade), `create_notification`, `verify_member_pin` (future PIN kiosk), `is_admin`. All are `SECURITY DEFINER`.
+- **Scheduled jobs (`pg_cron`):** `auto-checkout-visits` (closes stale visits every minute), `anonymize-deleted-members` (scrubs PII >365d), `purge-bins` (deletes old bin entries). These replace the old client-side `setInterval` logic.
 
 ## Critical Invariants
 
-- **Member IDs** are 4–8 digit numeric strings. IDs are autogenerated as random 4-digit numbers (`Math.floor(1000 + Math.random() * 9000)`).
-- **Member renames** (member self-service ID changes) are a multi-step fire-and-forget: create new doc → update old doc's `id` field → delete old doc. Pending renames are persisted to localStorage (`gym_fs_renames`) so a crash mid-rename doesn't orphan data.
-- **`cleanBin()`** auto-deletes recycle bin entries older than 365 days on every app init.
-- **`autoCheckoutStaleVisits()`** runs every 60 seconds and auto-closes visits whose `expectedExitTime` has passed.
-- **Date handling:** All dates use `Utils.dateToLocalIso()` — NOT `.toISOString()` — because UTC conversion shifts days for positive-offset timezones (Greece is UTC+2/+3).
-- **Admin view locking:** When auth state changes to non-admin, `clearSensitiveData()` wipes `memberPrivate`, `payments`, `notifications`, and `bin` from STATE and localStorage to prevent data leakage on shared devices.
-- **`MEMBER_PRIVATE_FIELDS`** (line 47 in app-core.js): `['phone', 'dob', 'notes']`. Adding a field here makes it admin-only. Making a field public means removing it from this array AND from the Firestore subcollection writes.
+- **Member IDs** are 4–8 digit numeric strings (enforced by the member form; the DB accepts any non-empty string for legacy IDs).
+- **Member renames** go through the `rename_member` RPC — a single `UPDATE members SET id` that cascades to visits/check-ins/payments/notifications atomically. Do **not** implement renames client-side by inserting the new ID then deleting the old.
+- **`cleanBin()`** auto-deletes recycle bin entries older than 365 days on app init (backed by the `purge-bins` cron).
+- **Auto-checkout** is server-side (`pg_cron`); the client no longer runs `autoCheckoutStaleVisits`.
+- **Date handling:** all dates use `Utils.dateToLocalIso()` — NOT `.toISOString()` — because UTC conversion shifts days for positive-offset timezones (Greece is UTC+2/+3).
+- **Admin view locking:** when auth changes to non-admin, `clearSensitiveData()` wipes `memberPrivate`, `payments`, `notifications`, and `bin` from STATE and localStorage. `initAuth` only reacts to real admin-status transitions (not every token refresh), and `lockAdmin`/`unlockAdmin` are idempotent — do not reintroduce re-navigation on auth events.
+- **`MEMBER_PRIVATE_FIELDS`** (`['phone', 'dob', 'notes']`) in app-core.js marks fields that go to `member_private`. `email` is also private now (Google sign-in deferred). Adding a field here makes it admin-only.
 
 ## i18n (Greek Localization)
 
@@ -87,7 +89,7 @@ index.html
 - **Inline event handlers** in HTML (`onclick="App.foo()"`, `onchange="App.bar()"`) are the norm — used alongside programmatic `addEventListener` bindings in `bindAdminListeners()`.
 - **CSS variables** (`--primary`, `--gray-light`, etc.) are in `:root` at the top of `styles.css`. All new UI should use these, not hardcoded colors.
 - **Responsive breakpoint:** 768px (`@media (max-width: 768px)`). Below this, the sidebar becomes a sliding drawer, numpad appears, and tables switch to mobile card layout (`.mobile-cards`).
-- **Touch device detection:** `('ontouchstart' in window) || (navigator.maxTouchPoints > 0)` — used to choose redirect vs popup for Google sign-in on mobile.
+- **Touch device detection:** `('ontouchstart' in window) || (navigator.maxTouchPoints > 0)`.
 - **`Utils.escapeHTML()`** must be used on any user-generated content rendered as innerHTML. This is the app's XSS defense since it builds HTML strings in JS.
 
 ## UI Aesthetics & Component Consistency
@@ -115,4 +117,3 @@ Beyond the mandatory rules above, these are recommended for the best results:
 - **Prefer editing existing files** over creating new ones — the app's simplicity (14 JS files total) is a feature, not a bug.
 - **Never introduce build tools, npm, TypeScript, or frameworks** — the zero-build philosophy is deliberate.
 - **Don't add comments** — the codebase convention is clean, comment-free code. Only add them for genuinely non-obvious logic.
-- **Ignore Firebase quota warnings** on kiosk refreshes — the app already caps retries, and anonymous read spikes during gym hours are expected.
