@@ -520,7 +520,7 @@ Object.assign(App, {
              * 4. Auto-activates account if positive payment is logged.
              * 5. Triggers visit reconciliation (`reconcileMemberPaymentVisitStatus`) and updates all UI views (`syncPaymentViews`).
              */
-            savePayment: (e) => {
+            savePayment: async (e) => {
                 e.preventDefault();
                 // Re-entrancy guard: the submit button can be clicked repeatedly before the
                 // modal closes. Without this, rapid clicks record duplicate memberships.
@@ -529,188 +529,48 @@ Object.assign(App, {
                 const saveBtn = document.getElementById('btn-save-payment');
                 if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving…'; }
                 try {
-                const pays = DB.getPayments();
-                const id = document.getElementById('form-pay-id').value || 'PAY-' + Date.now();
-                const isNew = !document.getElementById('form-pay-id').value;
-                const memberId = document.getElementById('form-pay-member').value;
-                if (!memberId) return alert('Please search and select a member.');
-                const newExp = document.getElementById('form-pay-exp').value;
-                const planSelect = document.getElementById('form-pay-plan');
-                const selectedOption = planSelect ? planSelect.options[planSelect.selectedIndex] : null;
-                const planId = selectedOption && selectedOption.value ? selectedOption.value : null;
-
-                const members = DB.getMembers();
-                const m = members.find(x => x.id === memberId);
-                const prevExp = m ? (m.expirationDate || '') : '';
-                const originalPayment = !isNew ? pays.find(p => p.id === id) : null;
-
-                // Extract session count from plan definition if applicable
-                // (multiplied by the quantity selector for multiple memberships)
-                let sessionsGranted = null;
-                if (planId) {
-                    const plan = DB.getPlans().find(p => p.id === planId);
+                    const id = document.getElementById('form-pay-id').value || 'PAY-' + Date.now();
+                    const memberId = document.getElementById('form-pay-member').value;
+                    if (!memberId) return alert('Please search and select a member.');
+                    const planSelect = document.getElementById('form-pay-plan');
+                    const selectedOption = planSelect ? planSelect.options[planSelect.selectedIndex] : null;
+                    const planId = selectedOption && selectedOption.value ? selectedOption.value : null;
                     const qty = parseInt(document.getElementById('form-pay-qty').value, 10) || 1;
-                    if (plan && plan.sessions != null && plan.sessions !== '') {
-                        sessionsGranted = (parseInt(plan.sessions, 10) || 0) * qty;
-                    } else if (selectedOption && selectedOption.getAttribute('data-sessions')) {
-                        sessionsGranted = (parseInt(selectedOption.getAttribute('data-sessions'), 10) || 0) * qty;
-                    }
-                }
 
-                // Capture outstanding unpaid visit IDs at the moment of payment creation
-                // Only clear visits covered by the plan's validity window (or all past if it's a generic debt payment)
-                let clearedVisitIds = [];
-                if (originalPayment && Array.isArray(originalPayment.clearedVisitIds) && originalPayment.memberId === memberId) {
-                    clearedVisitIds = Array.from(new Set(originalPayment.clearedVisitIds));
-                } else if (!planId) {
-                    clearedVisitIds = DB.getVisits().filter(v => v.memberId === memberId && v.isUnpaid).map(v => v.id);
-                } else if (sessionsGranted != null && sessionsGranted > 0) {
-                    // Session bundles: do NOT explicitly clear unpaid visits here. The
-                    // reconciliation engine covers them chronologically with the session quota,
-                    // so the purchased sessions are actually CONSUMED by the outstanding debt
-                    // (e.g. a 1-session bundle after 2 unpaid check-ins pays for one visit and
-                    // leaves 0 sessions) instead of clearing the visits for free and leaving
-                    // the member with a full balance + Active status.
-                    clearedVisitIds = [];
-                } else {
-                    const formPayStart = document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value;
-                    const formPayExp = document.getElementById('form-pay-exp').value;
-                    clearedVisitIds = DB.getVisits().filter(v => {
-                        if (v.memberId !== memberId || !v.isUnpaid) return false;
-                        let coversVisit = true;
-                        if (formPayStart) {
-                            const visitDateObj = new Date(v.entryTime);
-                            const visitYMD = visitDateObj.getFullYear() + '-' + String(visitDateObj.getMonth()+1).padStart(2,'0') + '-' + String(visitDateObj.getDate()).padStart(2,'0');
-                            if (visitYMD < formPayStart) coversVisit = false;
-                            if (formPayExp && visitYMD > formPayExp) coversVisit = false;
+                    // Session quota from the plan definition (multiplied by quantity).
+                    let sessionsGranted = null;
+                    if (planId) {
+                        const plan = DB.getPlans().find(p => p.id === planId);
+                        if (plan && plan.sessions != null && plan.sessions !== '') {
+                            sessionsGranted = (parseInt(plan.sessions, 10) || 0) * qty;
+                        } else if (selectedOption && selectedOption.getAttribute('data-sessions')) {
+                            sessionsGranted = (parseInt(selectedOption.getAttribute('data-sessions'), 10) || 0) * qty;
                         }
-                        return coversVisit;
-                    }).map(v => v.id);
-                }
-
-                // For session-granting payments (e.g. a drop-in bundle), anchor the bundle's
-                // starting day to the member's first unpaid training: the newly granted sessions
-                // are consumed starting from that date, so the recorded start must match it.
-                let bundleStartIso = null;
-                if (sessionsGranted != null && sessionsGranted > 0) {
-                    const unpaidVisits = DB.getVisits().filter(v => v.memberId === memberId && v.isUnpaid);
-                    let earliestMs = Infinity;
-                    unpaidVisits.forEach(v => {
-                        const t = v.entryTime ? new Date(v.entryTime).getTime() : NaN;
-                        if (!isNaN(t) && t < earliestMs) earliestMs = t;
-                    });
-                    if (isFinite(earliestMs)) {
-                        const d = new Date(earliestMs);
-                        bundleStartIso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
                     }
-                }
 
-                const newPay = {
-                    id,
-                    memberId,
-                    date: document.getElementById('form-pay-date').value,
-                    amount: parseFloat(document.getElementById('form-pay-amount').value),
-                    note: document.getElementById('form-pay-note').value,
-                    planId: planId || (originalPayment ? originalPayment.planId : null),
-                    sessionsGranted: sessionsGranted !== null ? sessionsGranted : (originalPayment ? originalPayment.sessionsGranted : null),
-                    appliedExpiration: newExp || null,
-                    appliedStartDate: bundleStartIso || document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value,
-                    prevExpiration: prevExp || null,
-                    clearedVisitIds
-                };
+                    const m = DB.getMembers().find(x => x.id === memberId);
+                    const newPay = {
+                        id,
+                        memberId,
+                        date: document.getElementById('form-pay-date').value,
+                        amount: parseFloat(document.getElementById('form-pay-amount').value),
+                        note: document.getElementById('form-pay-note').value,
+                        planId: planId || null,
+                        sessionsGranted,
+                        appliedExpiration: document.getElementById('form-pay-exp').value || null,
+                        appliedStartDate: document.getElementById('form-pay-start').value || document.getElementById('form-pay-date').value || null,
+                        prevExpiration: m ? (m.expirationDate || null) : null
+                    };
 
-                if (isNew) pays.push(newPay);
-                else {
-                    const idx = pays.findIndex(p => p.id === id);
-                    if (idx > -1) pays[idx] = newPay;
-                }
-                DB.savePayments(pays);
+                    // Server-side, atomic: upsert payment + recompute member coverage.
+                    await Sync.applyPayment(newPay);
+                    await Sync.reloadPaymentData();
 
-                // Apply session plan updates to member profile
-                if (m && sessionsGranted != null && sessionsGranted > 0) {
-                    m.sessionsTotal = true;
-                    const oldSessionsGranted = (originalPayment && originalPayment.sessionsGranted) ? parseInt(originalPayment.sessionsGranted, 10) : 0;
-                    const netChange = isNew ? sessionsGranted : (sessionsGranted - oldSessionsGranted);
-                    m.sessionsLeft = Math.max(0, (parseInt(m.sessionsLeft, 10) || 0) + netChange);
-                    DB.saveMembers(members);
-                }
-
-                // Track the active plan type on the member. A pure time-based plan (validity days,
-                // no sessions) marks an unlimited membership — its active period must not consume
-                // leftover session bundles. Any session-granting plan resets planDays to null so
-                // the member is treated as session-based.
-                if (m && planId) {
-                    const plan = DB.getPlans().find(p => p.id === planId);
-                    const isTimeBasedPlan = !!(plan && plan.days != null && plan.days !== ''
-                        && !(plan.sessions != null && plan.sessions !== ''));
-                    const newPlanDays = isTimeBasedPlan ? (parseInt(plan.days, 10) || 0) * qty : null;
-                    if ((m.planDays != null ? m.planDays : null) !== newPlanDays) {
-                        m.planDays = newPlanDays;
-                        DB.saveMembers(members);
-                    }
-                    // Record trial participation/conversion when this payment applies a plan,
-                    // then persist if the member's trial status changed.
-                    const prevTrialState = (!!m.trialParticipant) + '|' + (!!m.trialConverted);
-                    App.applyPlanTrialTracking(m, plan);
-                    if (prevTrialState !== ((!!m.trialParticipant) + '|' + (!!m.trialConverted))) {
-                        DB.saveMembers(members);
-                    }
-                }
-
-                // Apply expiration plan updates to member profile
-                if (newExp && m) {
-                    m.expirationDate = newExp;
-                    DB.saveMembers(members);
-                    if (!document.getElementById('modal-member').classList.contains('hidden') && document.getElementById('form-member-id').value === memberId) {
-                        document.getElementById('form-expiration').value = newExp;
-                    }
-                }
-
-                // A manual "Unpaid" override (set from the Visit Edit modal) reflects the
-                // member's status at the moment it was set. Recording a payment now means the
-                // admin intends to cover the member's outstanding activity, so clear the stale
-                // override before reconciling — otherwise the engine's hard override check would
-                // keep the unpaid visit unpaid forever even though the new package covers it.
-                [memberId, originalPayment && originalPayment.memberId].forEach(mid => {
-                    if (!mid) return;
-                    DB.getVisits().filter(v => v.memberId === mid && v.paidOverride === 'unpaid').forEach(v => { delete v.paidOverride; });
-                });
-
-                // Reconcile visit payment status after saving this payment.
-                // Guarded so a reconciliation error can never leave the modal open
-                // (the payment itself is already saved above).
-                try {
-                    if (originalPayment && originalPayment.memberId && originalPayment.memberId !== memberId) {
-                        App.reconcileMemberPaymentVisitStatus(originalPayment.memberId);
-                    }
-                    App.reconcileMemberPaymentVisitStatus(memberId);
+                    App.closeModal('modal-payment');
+                    App.syncPaymentViews(memberId);
                 } catch (err) {
-                    console.warn('Payment reconciliation failed:', err);
-                }
-
-                // Auto-activate member on positive payment amount — only when the member has
-                // USABLE coverage left AFTER reconciliation. If the purchased sessions were
-                // immediately consumed by outstanding unpaid check-ins (e.g. a 1-session bundle
-                // after 2 unpaid visits), the member ends with 0 sessions and must NOT be
-                // activated. A generic custom payment with no plan must not activate either.
-                // IMPORTANT: re-read the member from STATE after reconcile — the earlier `m`
-                // copy still holds the PRE-reconcile sessionsLeft, and saving it would revert
-                // the session consumed by the outstanding debt (member ends "activated" with a
-                // full balance it should not have).
-                const reconciledMembers = DB.getMembers();
-                const reconciledMember = reconciledMembers.find(x => x.id === memberId);
-                if (reconciledMember && reconciledMember.accountStatus !== 'Active' && newPay.amount && parseFloat(newPay.amount) > 0) {
-                    const hasUsableCoverage = (reconciledMember.sessionsTotal && (parseInt(reconciledMember.sessionsLeft, 10) || 0) > 0)
-                        || (reconciledMember.expirationDate && Utils.getDaysRemaining(reconciledMember.expirationDate) >= 0);
-                    if (hasUsableCoverage) {
-                        reconciledMember.accountStatus = 'Active';
-                        DB.saveMembers(reconciledMembers);
-                        App.addNotification('Member Activated', `${reconciledMember.firstName} ${reconciledMember.lastName} was activated by recorded payment.`, 'success', reconciledMember.id);
-                    }
-                }
-
-                App.closeModal('modal-payment');
-                App.syncPaymentViews(memberId);
+                    console.error('Payment save failed:', err);
+                    alert('Payment failed to save: ' + (err && err.message ? err.message : err));
                 } finally {
                     App.paymentSaveBusy = false;
                     if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Payment'; }
@@ -803,80 +663,21 @@ Object.assign(App, {
              *    payment are correctly re-evaluated (marked unpaid when no other coverage exists).
              * 6. Invokes syncPaymentViews to immediately update all 4 system views.
              */
-            deletePayment: () => {
+            deletePayment: async () => {
                 if (!confirm('Permanently delete this payment record?')) return;
                 const id = document.getElementById('form-pay-id').value;
-                const pays = DB.getPayments();
-                const toDelete = pays.find(p => p.id === id);
-                if (!toDelete) return;
-
-                // Remove payment record from database
-                const remainingPays = pays.filter(p => p.id !== id);
-                DB.savePayments(remainingPays);
-
-                const members = DB.getMembers();
-                const mIdx = members.findIndex(x => x.id === toDelete.memberId);
-
-                if (mIdx > -1) {
-                    const memberPays = remainingPays.filter(p => p.memberId === toDelete.memberId);
-
-                    // --- Sessions: recompute from remaining session-granting payments ---
-                    const totalRemainingSessionsGranted = memberPays.reduce((sum, p) => {
-                        return sum + (p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0 ? parseInt(p.sessionsGranted, 10) : 0);
-                    }, 0);
-
-                    if (totalRemainingSessionsGranted > 0) {
-                        // Keep sessionsTotal; recalculate sessionsLeft by subtracting sessions already used
-                        const usedSessions = DB.getVisits().filter(v => v.memberId === toDelete.memberId && !v.isUnpaid).length;
-                        members[mIdx].sessionsTotal = true;
-                        members[mIdx].sessionsLeft = Math.max(0, totalRemainingSessionsGranted - usedSessions);
-                    } else if (members[mIdx].sessionsTotal) {
-                        // Deleted payment was the only session source — clear sessions entirely
-                        members[mIdx].sessionsTotal = false;
-                        members[mIdx].sessionsLeft = null;
-                    }
-
-                    // --- Expiration: recompute from the latest appliedExpiration in remaining payments ---
-                    const expDates = memberPays
-                        .filter(p => p.appliedExpiration)
-                        .map(p => p.appliedExpiration)
-                        .sort();
-                    if (expDates.length > 0) {
-                        members[mIdx].expirationDate = expDates[expDates.length - 1];
-                    } else if (toDelete.appliedExpiration) {
-                        // Deleted payment was the only one that set an expiration — clear it
-                        members[mIdx].expirationDate = '';
-                    }
-
-                    // --- planDays: recompute from the remaining time-based (unlimited) payments ---
-                    const timePayments = memberPays
-                        .filter(p => p.planId && p.appliedExpiration)
-                        .sort((a, b) => new Date(b.date) - new Date(a.date));
-                    const latestTimePayment = timePayments[0];
-                    const timePlan = latestTimePayment ? DB.getPlans().find(pl => pl.id === latestTimePayment.planId) : null;
-                    const isTimeBasedPlan = !!(timePlan && timePlan.days != null && timePlan.days !== ''
-                        && !(timePlan.sessions != null && timePlan.sessions !== ''));
-                    members[mIdx].planDays = isTimeBasedPlan ? (parseInt(timePlan.days, 10) || 0) : null;
-
-                    // --- Account Status: set Inactive if no remaining payments cover this member ---
-                    const hasRemainingCoverage = memberPays.length > 0 && (
-                        totalRemainingSessionsGranted > 0 ||
-                        expDates.some(d => Utils.getDaysRemaining(d) >= 0)
-                    );
-                    if (!hasRemainingCoverage) {
-                        members[mIdx].accountStatus = 'Inactive';
-                    }
-
-                    DB.saveMembers(members);
+                const memberId = document.getElementById('form-pay-member').value;
+                if (!id || !memberId) return;
+                try {
+                    // Server-side, atomic: delete payment + recompute member coverage.
+                    await Sync.deletePayment(memberId, id);
+                    await Sync.reloadPaymentData();
+                    App.closeModal('modal-payment');
+                    App.syncPaymentViews(memberId);
+                } catch (err) {
+                    console.error('Payment delete failed:', err);
+                    alert('Payment failed to delete: ' + (err && err.message ? err.message : err));
                 }
-
-                // Reconcile visit payment status based on remaining active payments
-                if (toDelete.memberId) {
-                    App.reconcileMemberPaymentVisitStatus(toDelete.memberId, toDelete);
-                }
-
-                App.closeModal('modal-payment');
-                App.syncPaymentViews(toDelete.memberId);
             },
 
             renderMemberPayments: (memberId) => {
