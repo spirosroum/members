@@ -43,8 +43,8 @@ begin
         and p.applied_expiration is not null
         and coalesce(p.sessions_granted, 0) = 0
         and p.applied_start_date is not null
-        and visits.entry_time::date >= p.applied_start_date
-        and visits.entry_time::date <= p.applied_expiration
+        and (visits.entry_time at time zone 'Europe/Athens')::date >= p.applied_start_date
+        and (visits.entry_time at time zone 'Europe/Athens')::date <= p.applied_expiration
     );
 
   -- 2) Session quota, consumed chronologically.
@@ -67,7 +67,7 @@ begin
   if v_exp is not null and v_exp >= current_date then
     update visits set is_unpaid = false
     where member_id = p_member_id and is_unpaid and paid_override is null
-      and entry_time::date <= v_exp;
+      and (entry_time at time zone 'Europe/Athens')::date <= v_exp;
   end if;
 
   update members set

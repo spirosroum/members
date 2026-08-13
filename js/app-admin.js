@@ -526,7 +526,7 @@ Object.assign(App, {
 
                 for(let day=1; day<=daysInMonth; day++) {
                     const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                    const dayVisits = visits.filter(v => v.entryTime.startsWith(dateStr) && validMemberIds.has(v.memberId));
+                    const dayVisits = visits.filter(v => v.entryTime && Utils.dateToLocalIso(new Date(v.entryTime)) === dateStr && validMemberIds.has(v.memberId));
                     const vCount = dayVisits.length;
                     
                         let bg = '#fff';
