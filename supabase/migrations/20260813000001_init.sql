@@ -337,12 +337,11 @@ begin
     return;
   end if;
 
-  if v_mem.account_status in ('frozen','cancelled','inactive') then
+  if v_mem.account_status in ('frozen','cancelled') then
     perform public.create_notification(
       case v_mem.account_status
         when 'frozen' then 'Frozen Check-in Attempt'
-        when 'cancelled' then 'Cancelled Check-in Attempt'
-        else 'Inactive Check-in Attempt'
+        else 'Cancelled Check-in Attempt'
       end,
       v_mem.first_name || ' ' || v_mem.last_name
         || ' attempted to check in, but their account is ' || lower(v_mem.account_status) || '.',
