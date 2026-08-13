@@ -693,15 +693,18 @@ Object.assign(App, {
                     }
                 }
 
-                // 3. Covered by session quota — replicate chronological session consumption
-                const sessionPayments = payments.filter(p => p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0);
+                // 3. Covered by session quota — chronological consumption across the
+                // member's session payments, attributing each visit to the specific
+                // payment (drop-in) that actually covered it.
+                const sessionPayments = payments.filter(p => p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
                 if (sessionPayments.length > 0) {
-                    const totalCapacity = sessionPayments.reduce((s, p) => s + parseInt(p.sessionsGranted, 10), 0);
                     const memberVisits = DB.getVisits()
                         .filter(x => x.memberId === v.memberId)
                         .sort((a, b) => new Date(a.entryTime) - new Date(b.entryTime));
-                    let sessionsUsed = 0;
-                    const sessionsCoveredIds = [];
+                    const coveredBy = new Map();
+                    let payIdx = 0;
+                    let remaining = parseInt(sessionPayments[0].sessionsGranted, 10) || 0;
                     memberVisits.forEach(x => {
                         const xEntry = x.entryTime ? new Date(x.entryTime) : null;
                         // Ignore clearedVisitIds from session-granting payments (legacy artifacts)
@@ -716,14 +719,17 @@ Object.assign(App, {
                             const end = new Date(p.appliedExpiration);
                             return !isNaN(start.getTime()) && !isNaN(end.getTime()) && xEntry >= start && xEntry <= end;
                         });
-                        if (!xExplicit && !xTime && sessionsUsed < totalCapacity) {
-                            sessionsUsed++;
-                            sessionsCoveredIds.push(x.id);
+                        if (xExplicit || xTime || x.paidOverride) return;
+                        while (payIdx < sessionPayments.length && remaining <= 0) {
+                            payIdx++;
+                            remaining = payIdx < sessionPayments.length ? (parseInt(sessionPayments[payIdx].sessionsGranted, 10) || 0) : 0;
+                        }
+                        if (payIdx < sessionPayments.length && remaining > 0) {
+                            remaining--;
+                            coveredBy.set(x.id, sessionPayments[payIdx]);
                         }
                     });
-                    if (sessionsCoveredIds.includes(v.id)) {
-                        return sessionPayments.sort((a, b) => new Date(a.date) - new Date(b.date))[0];
-                    }
+                    if (coveredBy.has(v.id)) return coveredBy.get(v.id);
                 }
 
                 return null;
