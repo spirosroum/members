@@ -675,7 +675,7 @@ Object.assign(App, {
                 }
             },
 
-            saveMember: (e) => {
+            saveMember: async (e) => {
                 e.preventDefault();
                 // Re-entrancy guard: rapid double-clicks on Save Member would otherwise
                 // create duplicate member records AND duplicate auto-log payments.
@@ -694,6 +694,16 @@ Object.assign(App, {
                 }
                 if (originalId !== id && DB.getBin().find(m => m.id === id)) {
                     return alert("This ID belongs to a member in the Recycle Bin. Restore or permanently delete them first.");
+                }
+
+                // Rename first, server-side (single UPDATE + ON UPDATE CASCADE), so the
+                // new id exists before any member/payment/visit writes reference it.
+                if (originalId && originalId !== id) {
+                    try {
+                        await FSEngine.notifyRename(originalId, id);
+                    } catch (err) {
+                        return alert('ID update failed: ' + (err && err.message ? err.message : err));
+                    }
                 }
 
                 const mData = {
@@ -774,13 +784,12 @@ Object.assign(App, {
                 // If the member's ID changed, rewrite class check-ins so attendance records
                 // keep following the member (visits are rewritten below by the caller paths).
                 if (originalId && originalId !== id) {
+                    // The rename already cascaded server-side; rewrite local references
+                    // only for immediate UI consistency (idempotent upserts).
                     const checkins = DB.getClassCheckins();
                     let ccChanged = false;
                     checkins.forEach(c => { if (c.memberId === originalId) { c.memberId = id; ccChanged = true; } });
                     if (ccChanged) DB.saveClassCheckins(checkins);
-                    // Tell the sync engine so it can move the member doc
-                    // (create new docId + defer deleting the old one).
-                    FSEngine.notifyRename(originalId, id);
                 }
 
                 // Ensure new registration accountStatus is enforced based on payment+plan

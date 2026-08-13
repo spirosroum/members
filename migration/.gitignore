@@ -1,0 +1,5 @@
+# Sensitive export/transform artifacts — never commit these.
+export/
+transformed/
+node_modules/
+*.log

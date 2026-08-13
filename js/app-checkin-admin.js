@@ -312,7 +312,7 @@ Object.assign(App, {
                 App.closeModal('modal-admin-checkin-classes');
             },
 
-            confirmAdminCheckinSelection: () => {
+            confirmAdminCheckinSelection: async () => {
                 if (!App.pendingAdminCheckin) return App.closeModal('modal-admin-checkin-classes');
 
                 const allInputs = Array.from(document.querySelectorAll('#admin-checkin-classes-content input[name="admin-checkin-class"]'));
@@ -326,7 +326,7 @@ Object.assign(App, {
                     slotDate: input.dataset.slotDate
                 }));
 
-                const { member, isUnpaidVisit } = App.pendingAdminCheckin;
+                const { member } = App.pendingAdminCheckin;
                 const duplicateSelection = selectedClasses.some(selection => DB.getClassCheckins().some(checkin =>
                     checkin.memberId === member.id && checkin.slotDate === selection.slotDate &&
                     checkin.classId === selection.classId && checkin.slotStart === selection.slotStart &&
@@ -337,92 +337,43 @@ Object.assign(App, {
                 App.pendingAdminCheckin = null;
                 App.closeModal('modal-admin-checkin-classes');
 
-                App.autoCheckoutStaleVisits();
-                const visits = DB.getVisits();
                 const now = new Date();
                 const todayIso = Utils.dateToLocalIso(now);
                 const dateInput = document.getElementById('admin-checkin-classes-date-input');
                 const selectedDateIso = dateInput && dateInput.value ? dateInput.value : todayIso;
                 const isBackdated = selectedDateIso !== todayIso;
                 const entryIso = App.buildAdminBackdatedEntryIso(selectedDateIso, selectedClasses, todayIso);
-                const expected = App.computeExpectedExitTime(entryIso, selectedClasses, selectedClasses.length === 0);
-                const classIds = [...new Set(selectedClasses.map(sel => sel.classId))];
 
-                // If the member is already inside an active visit, keep that visit open and attach the
-                // new class(es) to it, so back-to-back classes all display next to the member's name.
-                // Backdated sessions always create their own visit so they never merge with a live visit,
-                // and neither does a check-in for a class that has already ended — such a check-in is a
-                // historical/attendance record, so it gets its own visit that is finalized (checked out)
-                // immediately instead of leaving the member "inside".
-                const alreadyEnded = new Date(expected) <= now;
-                let visitId;
-                const activeVisit = !isBackdated && !alreadyEnded
-                    ? visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now)
-                    : null;
-                if (activeVisit) {
-                    visitId = activeVisit.id;
-                    if (new Date(expected).getTime() > new Date(activeVisit.expectedExitTime).getTime()) {
-                        activeVisit.expectedExitTime = expected;
-                    }
-                    activeVisit.classIds = [...new Set([...(activeVisit.classIds || []), ...classIds])];
-                    activeVisit.isUnpaid = !!(activeVisit.isUnpaid || isUnpaidVisit);
-                } else {
-                    // Close any legacy open visit at this entry time to avoid duplicates (live check-ins only).
-                    // Skip for ended-class check-ins so an unrelated live visit (member already inside) is left open.
-                    if (!isBackdated && !alreadyEnded) {
-                        const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
-                        if (prevOpen) prevOpen.exitTime = entryIso;
-                    }
-                    visitId = 'V-' + Date.now();
-                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: alreadyEnded ? expected : null, isUnpaid: isUnpaidVisit, classIds });
-                }
-                DB.saveVisits(visits);
+                const selections = selectedClasses.map(s => ({
+                    classId: s.classId,
+                    slotDate: s.slotDate,
+                    slotDay: s.slotDay,
+                    slotStart: s.slotStart,
+                    slotEnd: s.slotEnd
+                }));
 
-                if (selectedClasses.length > 0) {
-                    const checkins = DB.getClassCheckins();
-                    selectedClasses.forEach((selection, idx) => {
-                        checkins.push({
-                            id: 'CC-' + member.id + '-' + selection.slotKey,
-                            visitId,
-                            memberId: member.id,
-                            classId: selection.classId,
-                            entryTime: entryIso,
-                            slotDate: selection.slotDate,
-                            slotDay: selection.slotDay,
-                            slotStart: selection.slotStart,
-                            slotEnd: selection.slotEnd
-                        });
-                    });
-                    DB.saveClassCheckins(checkins);
-                    App.cleanupClassCheckins();
-                }
-
-                // Decrement sessions only when the visit is paid — and skip it while the member is
-                // covered by an active time-based membership, so an unlimited monthly plan does not
-                // consume leftover session bundles.
-                // NOTE — session accounting is per CHECK-IN ACTION, not per class:
-                //   * One check-in selecting 2 back-to-back classes consumes a single session.
-                //   * Two separate check-ins consume one session each (1 session on the first,
-                //     then the second is flagged as an unpaid/Needs-Renew visit because
-                //     computeVisitUnpaid() treats sessionsLeft <= 0 as unpaid, and no further
-                //     decrement happens). The merge above keeps both classes on one visit.
-                const onActiveTimePlan = member.planDays != null && parseInt(member.planDays, 10) > 0
-                    && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0;
-                if (member.sessionsTotal && !isUnpaidVisit && !onActiveTimePlan) {
-                    member.sessionsLeft = (parseInt(member.sessionsLeft) || 0) - 1;
-                    let allMembers = DB.getMembers();
-                    let mIdx = allMembers.findIndex(mem => mem.id === member.id);
-                    if (mIdx > -1) {
-                        allMembers[mIdx] = member;
-                        DB.saveMembers(allMembers);
+                try {
+                    const rows = await FSEngine.checkIn({ p_member_id: member.id, p_class_selections: selections, p_entry_time: entryIso, p_backdated: isBackdated });
+                    const res = (rows && rows[0]) || null;
+                    await FSEngine.reloadCheckinData();
+                    if (res && res.rejected) {
+                        if (res.reason === 'already_checked_in') {
+                            App.showKioskMessage('This member is already checked into one of the selected classes.', 'warning');
+                        } else {
+                            App.showKioskMessage('Check-in is not allowed for this account.', 'danger');
+                        }
+                        return;
                     }
+                } catch (err) {
+                    console.error('admin check-in failed', err);
+                    App.showKioskMessage(err && err.message ? err.message : 'Check-in failed. Please try again.', 'danger');
+                    return;
                 }
 
                 document.getElementById('checkin-search').value = '';
                 document.getElementById('checkin-member-card').classList.add('hidden');
                 App.renderLivePresent();
-                // Backdated sessions happened in the past, so finalize them immediately so they
-                // appear as completed entries in the check-in log rather than lingering open.
+                // Backdated sessions happened in the past; finalize them immediately.
                 if (isBackdated) App.autoCheckoutStaleVisits();
             },
 

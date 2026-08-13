@@ -75,30 +75,9 @@ Object.assign(App, {
 
             // "Sign in with Google" button in the login modal (Member Dashboard section).
             memberGoogleLogin: () => {
-                const auth = getAuth();
-                if (!auth) return alert('Firebase Auth is not available.');
-                const provider = new firebase.auth.GoogleAuthProvider();
-                const finish = () => {
-                    const member = App.getMemberByFirebaseEmail();
-                    if (member) {
-                        App.setMemberSession(member);
-                        App.showMemberDashboardFor(member);
-                    } else {
-                        alert('No member is linked to this Google account yet. Enter your member ID once to link it (or ask staff to add your email).');
-                        document.getElementById('member-login-id').focus();
-                    }
-                };
-                const fail = (err) => {
-                    if (!err) return;
-                    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
-                    if (err.code === 'auth/unauthorized-domain') return alert('This domain is not authorized for Google sign-in. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.');
-                    alert(err.message || 'Google sign-in failed. Please try again.');
-                };
-                if (App.isTouchDevice()) {
-                    auth.signInWithRedirect(provider).catch(fail);
-                } else {
-                    auth.signInWithPopup(provider).then(finish).catch(fail);
-                }
+                // Google sign-in is deferred during the Supabase migration. Members
+                // sign in with their member ID instead.
+                return alert('Google sign-in is not available yet. Enter your member ID to sign in.');
             },
 
             loginAsMember: async () => {
@@ -133,7 +112,7 @@ Object.assign(App, {
                 App.renderMemberDashboard();
             },
 
-            changeMemberId: () => {
+            changeMemberId: async () => {
                 const newId = document.getElementById('member-new-id').value.trim();
                 if (!newId || !/^\d{1,8}$/.test(newId)) return alert("Please enter a valid numeric ID (up to 8 digits).");
                 if (newId === App.currentUser.id) return alert("This is already your ID.");
@@ -142,28 +121,24 @@ Object.assign(App, {
                 if (members.find(m => m.id === newId)) return alert("This ID is already taken by another member.");
                 
                 const oldId = App.currentUser.id;
-                const index = members.findIndex(m => m.id === oldId);
-                if (index > -1) {
-                    members[index].id = newId;
+                try {
+                    // Server-side rename: single UPDATE + ON UPDATE CASCADE moves the
+                    // member and every visit/check-in/payment reference atomically.
+                    await FSEngine.notifyRename(oldId, newId);
+                    members.forEach(m => { if (m.id === oldId) m.id = newId; });
                     DB.saveMembers(members);
-                    // Tell the sync engine so it can move the member doc
-                    // (create new docId + defer deleting the old one).
-                    FSEngine.notifyRename(oldId, newId);
-                    
                     const visits = DB.getVisits();
                     visits.forEach(v => { if (v.memberId === oldId) v.memberId = newId; });
                     DB.saveVisits(visits);
-                    
-                    // Rewrite class check-ins too, or their attendance would be orphaned
-                    // (classCheckins are matched by memberId everywhere: kiosk, admin, leaderboard).
                     const checkins = DB.getClassCheckins();
                     checkins.forEach(c => { if (c.memberId === oldId) c.memberId = newId; });
                     DB.saveClassCheckins(checkins);
-                    
-                    App.currentUser = members[index];
+                    App.currentUser = members.find(m => m.id === newId);
                     localStorage.setItem('gym_member_session', newId);
                     alert("ID successfully updated!");
                     document.getElementById('member-new-id').value = '';
+                } catch (err) {
+                    alert("ID update failed: " + (err && err.message ? err.message : err));
                 }
             },
 

@@ -308,7 +308,7 @@ Object.assign(App, {
                 }
             },
  
-            confirmKioskClassSelection: (skipClassRequired = false) => {
+            confirmKioskClassSelection: async (skipClassRequired = false) => {
                 if (!App.pendingCheckinMember) return App.closeModal('modal-checkin-classes');
 
                 const lang = App.currentKioskLang || 'en';
@@ -346,105 +346,44 @@ Object.assign(App, {
                 }
  
                 const member = App.pendingCheckinMember.member;
-                // pendingCheckinMember now stores isUnpaidVisit
-                const isUnpaidVisit = !!App.pendingCheckinMember.isUnpaidVisit;
                 const membershipAlert = App.pendingCheckinMember.membershipAlert;
                 App.pendingCheckinMember = null;
                 App.closeModal('modal-checkin-classes');
- 
-                App.autoCheckoutStaleVisits();
-                const visits = DB.getVisits();
-                const now = new Date();
-                const entryIso = now.toISOString();
-                const expected = App.computeExpectedExitTime(entryIso, validSelections, validSelections.length === 0);
-                const classIds = [...new Set(validSelections.map(sel => sel.classId))];
 
-                const duplicateSelection = validSelections.some(selection => DB.getClassCheckins().some(checkin =>
-                     checkin.memberId === member.id && checkin.slotDate === selection.slotDate &&
-                     checkin.classId === selection.classId && checkin.slotStart === selection.slotStart &&
-                     checkin.slotEnd === selection.slotEnd));
-                 if (duplicateSelection) {
-                     App.pendingCheckinMember = { member, isUnpaidVisit, membershipAlert };
-                     App.openCheckinClassModal();
-                     return App.showKioskMessage(map.checkinAlreadyCheckedInText || 'You have already checked into this class.', 'warning');
-                 }
+                const entryIso = new Date().toISOString();
+                const selections = validSelections.map(s => ({
+                    classId: s.classId,
+                    slotDate: s.slotDate,
+                    slotDay: s.slotDay,
+                    slotStart: s.slotStart,
+                    slotEnd: s.slotEnd
+                }));
 
-                // If the member is already inside an active visit, keep that visit open and attach the
-                // new class(es) to it, so back-to-back classes all display next to the member's name.
-                // A check-in for a class that has already ended is a historical/attendance record, so it
-                // gets its own visit that is finalized (checked out) immediately instead of leaving the
-                // member "inside".
-                const alreadyEnded = new Date(expected) <= now;
-                let visitId;
-                const activeVisit = !alreadyEnded && visits.find(v => v.memberId === member.id && !v.exitTime && v.expectedExitTime && new Date(v.expectedExitTime) > now);
-                if (activeVisit) {
-                    visitId = activeVisit.id;
-                    if (new Date(expected).getTime() > new Date(activeVisit.expectedExitTime).getTime()) {
-                        activeVisit.expectedExitTime = expected;
+                try {
+                    const rows = await FSEngine.checkIn({ p_member_id: member.id, p_class_selections: selections, p_entry_time: entryIso });
+                    const res = (rows && rows[0]) || null;
+                    await FSEngine.reloadCheckinData();
+                    App.renderLivePresent();
+                    App.renderKioskLeaderboard();
+                    if (res && res.rejected) {
+                        if (res.reason === 'already_checked_in') {
+                            App.showKioskMessage(map.checkinAlreadyCheckedInText || 'You have already checked into this class.', 'warning');
+                        } else {
+                            App.showKioskMessage(map.checkinBlockedText || 'Check-in is not allowed for this account.', 'danger');
+                        }
+                        return false;
                     }
-                    activeVisit.classIds = [...new Set([...(activeVisit.classIds || []), ...classIds])];
-                    activeVisit.isUnpaid = !!(activeVisit.isUnpaid || isUnpaidVisit);
-                } else {
-                    // Close any legacy open visit to avoid duplicates (live check-ins only).
-                    // Skip for ended-class check-ins so an unrelated live visit (member already inside) is left open.
-                    if (!alreadyEnded) {
-                        const prevOpen = visits.find(v => v.memberId === member.id && !v.exitTime);
-                        if (prevOpen) prevOpen.exitTime = entryIso;
+                    if (res && res.is_unpaid) {
+                        App.showKioskAlert(map.kioskAlertMembershipTitle || 'Membership Alert', membershipAlert || map.kioskAlertExpired || 'Attention: Your membership has expired or you are out of sessions. Please see staff.', 'var(--danger)');
+                    } else if (membershipAlert) {
+                        App.showKioskAlert(map.noticeTitle || 'Membership Notice', membershipAlert, 'var(--warning)');
                     }
-                    visitId = 'V-' + Date.now();
-                    visits.push({ id: visitId, memberId: member.id, entryTime: entryIso, expectedExitTime: expected, exitTime: alreadyEnded ? expected : null, isUnpaid: isUnpaidVisit, classIds });
+                    return true;
+                } catch (err) {
+                    console.error('check-in failed', err);
+                    App.showKioskMessage(err && err.message ? err.message : 'Check-in failed. Please try again.', 'danger');
+                    return false;
                 }
-                DB.saveVisits(visits);
-
-                const checkins = DB.getClassCheckins();
-                validSelections.forEach((selection, idx) => {
-                    checkins.push({
-                        id: 'CC-' + member.id + '-' + selection.slotKey,
-                        visitId,
-                        memberId: member.id,
-                        classId: selection.classId,
-                        entryTime: entryIso,
-                        slotDate: selection.slotDate,
-                        slotDay: selection.slotDay,
-                        slotStart: selection.slotStart,
-                        slotEnd: selection.slotEnd
-                    });
-                });
-                DB.saveClassCheckins(checkins);
-                App.cleanupClassCheckins();
-
-                // Decrement sessionsLeft only when the visit is considered paid (i.e., not unpaid)
-                // and the member is NOT currently covered by an active time-based membership —
-                // during an unlimited monthly plan, leftover session bundles must not be consumed.
-                // NOTE — session accounting is per CHECK-IN ACTION, not per class:
-                //   * One check-in selecting 2 back-to-back classes consumes a single session.
-                //   * Two separate check-ins consume one session each (1 session on the first,
-                //     then the second is flagged as an unpaid/Needs-Renew visit because
-                //     computeVisitUnpaid() treats sessionsLeft <= 0 as unpaid, and no further
-                //     decrement happens). The merge above keeps both classes on one visit.
-                const onActiveTimePlan = member.planDays != null && parseInt(member.planDays, 10) > 0
-                    && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0;
-                if (member.sessionsTotal && !isUnpaidVisit && !onActiveTimePlan) {
-                    member.sessionsLeft = (parseInt(member.sessionsLeft) || 0) - 1;
-                    const allMembers = DB.getMembers();
-                    const mIdx = allMembers.findIndex(m => m.id === member.id);
-                    if (mIdx > -1) {
-                        allMembers[mIdx] = member;
-                        DB.saveMembers(allMembers);
-                    }
-                }
-
-                if (isUnpaidVisit) {
-                    const lang = App.currentKioskLang || 'en';
-                    const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
-                    App.addNotification('Expired/Unpaid Member Check-in', `${member.firstName} ${member.lastName} checked in, but their visit is unpaid or they are out of sessions.`, 'danger', member.id);
-                    App.showKioskAlert(map.kioskAlertMembershipTitle || 'Membership Alert', membershipAlert || map.kioskAlertExpired || 'Attention: Your membership has expired or you are out of sessions. Please see staff.', 'var(--danger)');
-                } else if (membershipAlert) {
-                    App.showKioskAlert(map.noticeTitle || 'Membership Notice', membershipAlert, 'var(--warning)');
-                }
-
-                App.renderLivePresent();
-                App.renderKioskLeaderboard();
             },
 
             showKioskMessage: (text, type) => {

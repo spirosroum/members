@@ -88,34 +88,7 @@ Object.assign(App, {
             mobileGoogleLogin: () => {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
-                const auth = getAuth();
-                if (!auth) return App.showKioskMessage(map.mobileAuthUnavailable || 'Firebase Auth is not available.', 'danger');
-                const provider = new firebase.auth.GoogleAuthProvider();
-                const finish = () => {
-                    const member = App.getMemberByFirebaseEmail();
-                    if (member) {
-                        App.setMemberSession(member);
-                        App.showMobileCheckinLanding();
-                    } else {
-                        const link = document.getElementById('mobile-checkin-link');
-                        const identify = document.getElementById('mobile-checkin-identify');
-                        if (identify) identify.classList.add('hidden');
-                        if (link) link.classList.remove('hidden');
-                        const input = document.getElementById('mobile-link-id');
-                        if (input) setTimeout(() => input.focus(), 300);
-                    }
-                };
-                const fail = (err) => {
-                    if (!err) return;
-                    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
-                    if (err.code === 'auth/unauthorized-domain') return App.showKioskMessage(map.mobileDomainUnauthorized || 'Domain not authorized for Google sign-in.', 'danger');
-                    App.showKioskMessage(err.message || map.mobileGoogleFailed || 'Google sign-in failed.', 'danger');
-                };
-                if (App.isTouchDevice()) {
-                    auth.signInWithRedirect(provider).catch(fail);
-                } else {
-                    auth.signInWithPopup(provider).then(finish).catch(fail);
-                }
+                App.showKioskMessage(map.mobileGoogleDeferred || 'Google sign-in is not available yet. Enter your member ID instead.', 'warning');
             },
 
             // Submit the member ID on the "link your Google account" screen.
@@ -231,9 +204,9 @@ Object.assign(App, {
                 }
             },
 
-            mobileCheckinConfirm: (skipClassRequired) => {
-                App.confirmKioskClassSelection(!!skipClassRequired);
-                if (App.pendingCheckinMember) return; // validation failed, message already shown
+            mobileCheckinConfirm: async (skipClassRequired) => {
+                const ok = await App.confirmKioskClassSelection(!!skipClassRequired);
+                if (!ok) return; // validation failed or check-in blocked; message already shown
                 App.showMobileCheckinSuccess();
             },
 

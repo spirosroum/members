@@ -107,9 +107,15 @@ Object.assign(App, {
             },
 
             addNotification: (title, msg, type = 'info', memberId = null) => {
-                const notifs = DB.getNotifications();
-                notifs.unshift({ id: 'N-'+Date.now(), title, msg, type, date: new Date().toISOString(), read: false, memberId });
-                DB.saveNotifications(notifs);
+                if (FSEngine.isAdminClient()) {
+                    const notifs = DB.getNotifications();
+                    notifs.unshift({ id: 'N-'+Date.now(), title, msg, type, date: new Date().toISOString(), read: false, memberId });
+                    DB.saveNotifications(notifs);
+                } else if (typeof Sync !== 'undefined' && Sync.createNotification) {
+                    // Anon kiosk cannot write notifications directly (RLS admin-only);
+                    // route through the SECURITY DEFINER RPC.
+                    Sync.createNotification(title, msg, type, memberId).catch(() => {});
+                }
                 App.updateNotificationBadge();
             },
             
@@ -392,29 +398,8 @@ Object.assign(App, {
             },
 
             loginWithGoogle: () => {
-                const auth = getAuth();
-                if (!auth) return alert('Firebase Auth is not available.');
-                const provider = new firebase.auth.GoogleAuthProvider();
-                auth.signInWithPopup(provider)
-                    .then((cred) => {
-                        isAdminUser(cred.user).then((isAdmin) => {
-                            if (isAdmin) {
-                                App.closeModal('modal-login');
-                                App.unlockAdmin();
-                            } else {
-                                // Signed in with Google, but not the admin account — revoke immediately.
-                                auth.signOut();
-                                alert('This Google account does not have admin access.');
-                            }
-                        });
-                    })
-                    .catch((err) => {
-                        if (!err) return;
-                        if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') return;
-                        if (err.code === 'auth/popup-blocked') return alert('Google popup was blocked. Allow popups for this site and try again.');
-                        if (err.code === 'auth/unauthorized-domain') return alert('This domain is not authorized for Google sign-in. Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.');
-                        alert(err.message || 'Google sign-in failed. Please try again.');
-                    });
+                // Google sign-in is deferred during the Supabase migration.
+                return alert('Google sign-in is not available yet. Use the admin email/password login.');
             },
 
             loginAsAdmin: () => {

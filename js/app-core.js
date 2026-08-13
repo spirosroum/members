@@ -1,43 +1,90 @@
 // =====================================================================
 // app-core.js
-// Firebase config, global STATE, persistence, DB layer, Utils, and base App object.
+// Supabase config, global STATE, data layer (Supabase adapter), Utils,
+// and base App object.
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
+//
+// NOTE: Migrated from Firebase/Firestore to Supabase (PostgreSQL).
+// The hand-rolled Firestore sync engine (mirrors/dirty/unconfirmed/rename
+// ledger) is replaced by a thin online-first Supabase adapter. The DB /
+// STATE / Utils / App API surface is unchanged so the UI files keep
+// working; check-in / payment / rename flows are being moved onto the
+// server-side RPCs (see supabase/migrations/*).
 // =====================================================================
-        // Your web app's Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyCByr-xf2ptBhLEb8GXtiChJGKSNBIWDp4",
-            authDomain: "ssg-desk.firebaseapp.com",
-            databaseURL: "https://ssg-desk-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "ssg-desk",
-            storageBucket: "ssg-desk.firebasestorage.app",
-            messagingSenderId: "999682511515",
-            appId: "1:999682511515:web:4ef0be1919233eaef1ec3e"
-        };
+        // Your Supabase project credentials.
+        // Replace with your project URL + anon (public) key.
+        const SUPABASE_URL = 'https://lwmwihdfwafnhtykslbz.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3bXdpaGRmd2Fmbmh0eWtzbGJ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTAwMDUsImV4cCI6MjEwMjIyNjAwNX0._8UucT18itw47qMcEhHhT1gxFqq1SCGGlqdrkwl_06U';
 
-        // Initialize Firebase
-        if (window.firebase) {
-            firebase.initializeApp(firebaseConfig);
+        // Initialize Supabase client
+        let sb = null;
+        if (window.supabase && window.supabase.createClient) {
+            sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } else {
+            console.warn('Supabase JS client not loaded — data sync disabled.');
         }
 
         // =====================================================================
-        // ADMIN AUTH (Firebase Authentication)
-        // Admin is identified by the `admin` custom claim on the ID token, set
-        // via the Firebase Admin SDK / a Cloud Function — never by a hardcoded
-        // email in client code. The email-based check was removed (pentest F4):
-        // it leaked the admin address and made the browser the source of truth.
+        // AUTH (Supabase Auth)
+        // Admin is identified by profiles.role = 'admin' (set server-side),
+        // never by a hardcoded email in client code. Kiosk/member flows use
+        // the anon key (no sign-in required); RLS enforces permissions.
         // =====================================================================
+        let currentAuthUser = null;
+
+        // Firebase-compatible auth facade so the existing UI call sites
+        // (signInWithEmailAndPassword / signOut / onAuthStateChanged /
+        // sendPasswordResetEmail) keep working unchanged.
         function getAuth() {
-            return (window.firebase && firebase.auth) ? firebase.auth() : null;
+            if (!sb) return null;
+            const mapErr = (err) => {
+                const e = Object.assign({}, err || {});
+                const m = (err && err.message) || '';
+                if (/invalid login credentials/i.test(m)) e.code = 'auth/invalid-credential';
+                else if (/user not found/i.test(m)) e.code = 'auth/user-not-found';
+                else if (/invalid email/i.test(m)) e.code = 'auth/invalid-email';
+                return e;
+            };
+            return {
+                currentUser: currentAuthUser,
+                onAuthStateChanged(cb) {
+                    sb.auth.getSession().then(({ data }) => {
+                        const u = (data && data.session) ? data.session.user : null;
+                        currentAuthUser = u;
+                        if (cb) cb(u);
+                    });
+                    const { data } = sb.auth.onAuthStateChange((_evt, session) => {
+                        const u = session ? session.user : null;
+                        currentAuthUser = u;
+                        if (cb) cb(u);
+                    });
+                    return data.subscription.unsubscribe;
+                },
+                signInWithEmailAndPassword(email, pwd) {
+                    return sb.auth.signInWithPassword({ email, password: pwd })
+                        .then(r => ({ user: r.data.user }))
+                        .catch(err => { throw mapErr(err); });
+                },
+                signOut() { return sb.auth.signOut(); },
+                sendPasswordResetEmail(email) {
+                    return sb.auth.resetPasswordForEmail(email).then(() => ({}));
+                },
+                // Google sign-in deferred during migration.
+                signInWithPopup() {
+                    return Promise.reject(Object.assign(new Error('Google sign-in is deferred during migration.'),
+                        { code: 'auth/operation-not-supported' }));
+                }
+            };
         }
 
-        // Async: the ID token's custom claims must be fetched before deciding.
-        // Returns true only when the token carries claims.admin === true.
+        // Async: true only when the signed-in user has the admin role.
         async function isAdminUser(user) {
-            if (!user) return false;
+            if (!user || !sb) return false;
             try {
-                const idTokenResult = await user.getIdTokenResult();
-                return !!(idTokenResult.claims && idTokenResult.claims.admin === true);
+                const { data, error } = await sb.from('profiles').select('role').eq('id', user.id).maybeSingle();
+                if (error || !data) return false;
+                return data.role === 'admin';
             } catch (e) {
                 return false;
             }
@@ -45,16 +92,12 @@
 
 const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '#0891b2', '#db2777', '#334155', '#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#0f766e', '#86198f'];
 
-        // Sensitive member fields stored in /members/{id}/private/info subcollection.
-        // These are never sent to non-admin clients. The top-level member doc
-        // contains only public/display fields (name, belt, expiration, etc.).
-        // Email is intentionally kept public — it is required for the member
-        // Google sign-in email-to-member-ID resolution on the client side.
-        // For stronger email privacy, a Cloud Function can be added later to
-        // resolve this server-side without exposing emails client-side.
+        // Sensitive member fields now live in the member_private table
+        // (admin-only via RLS). Email was kept public in Firestore; it moves
+        // to member_private in the relational schema.
         const MEMBER_PRIVATE_FIELDS = ['phone', 'dob', 'notes'];
 
-        // CLOUD-SYNCED DATA LAYER (Firestore)
+        // CLOUD-SYNCED DATA LAYER (Supabase)
         const STATE = {
             members: JSON.parse(localStorage.getItem('gym_members') || '[]'),
             visits: JSON.parse(localStorage.getItem('gym_visits') || '[]'),
@@ -77,8 +120,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             showClassCheckins: JSON.parse(localStorage.getItem('gym_show_class_checkins') ?? 'true'),
             memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}')
         };
-
-        let db = null; // firebase.firestore() compat instance
 
         function fallbackToLocal() {
             try {
@@ -107,64 +148,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             }
         }
 
-        // =====================================================================
-        // FIRESTORE PER-RECORD SYNC ENGINE
-        // Replaces the legacy single-document (gym/data) architecture.
-        //
-        // Every logical collection maps to a Firestore collection of per-record
-        // documents (docId == record.id), so concurrent kiosk check-ins no
-        // longer overwrite each other's entire document (the old last-write-wins
-        // data-loss bug) and documents stay far below the 1 MiB limit.
-        // Writes are debounced and diffed against a mirror of the last-known
-        // cloud state. schedules/closedDates stay in single small array docs
-        // because their order matters and only the admin writes them.
-        // =====================================================================
-        const CLOUD_COLLECTIONS = {
-            members:         { state: 'members',         key: rec => rec.id },
-            visits:          { state: 'visits',          key: rec => rec.id },
-            payments:        { state: 'payments',        key: rec => rec.id },
-            plans:           { state: 'plans',           key: rec => rec.id },
-            planBin:         { state: 'planBin',         key: rec => rec.id },
-            scheduleBin:     { state: 'scheduleBin',     key: rec => rec.id },
-            notificationBin: { state: 'notificationBin', key: rec => rec.id },
-            classCheckins:   { state: 'classCheckins',   key: rec => rec.id },
-            notifications:   { state: 'notifications',   key: rec => rec.id },
-            bin:             { state: 'bin',             key: rec => rec.id }
-        };
-        const ARRAY_DOCS = {
-            schedules:   { state: 'schedules',   doc: 'global' },
-            closedDates: { state: 'closedDates', doc: 'global' }
-        };
-        // Collections only the authenticated admin client may write. Anonymous
-        // kiosk clients skip them — including them would fail the whole batch.
-        const ADMIN_ONLY_COLLECTIONS = new Set(['payments', 'plans', 'planBin', 'scheduleBin', 'notificationBin', 'bin']);
-
-        // How long a locally-committed write is treated as "not yet confirmed" by a
-        // snapshot. During this window a possibly-stale snapshot is NOT allowed to
-        // drop or revert the record (the sync loop bug). Normal sync confirms within
-        // a second; the TTL only bounds the worst-case so a permanently-failing write
-        // cannot pin the local state forever.
-        const UNCONFIRMED_TTL = 30000;
-        // Deletes are a strong local intent: they must survive reloads (the user may
-        // close the page for minutes before the snapshot confirms). They only expire
-        // after a day so a permanently-failing delete eventually stops fighting the
-        // cloud instead of resurrecting the record on every restart.
-        const DELETE_INTENT_TTL = 24 * 60 * 60 * 1000;
-        const intentTtl = (rec) => rec && rec.deleted ? DELETE_INTENT_TTL : UNCONFIRMED_TTL;
-
-        function cloudRecordKey(col, rec) {
-            try { return CLOUD_COLLECTIONS[col].key(rec) || ''; } catch (e) { return ''; }
-        }
-
-        // Resolve a member id that was renamed (via the cloud ledger, or a local
-        // pending rename) to its successor id, or null when not renamed.
-        function resolveRenameTarget(id) {
-            if (!id) return null;
-            if (FSEngine.renameMap && FSEngine.renameMap.has(id)) return FSEngine.renameMap.get(id);
-            const r = (FSEngine.renames || []).find(x => x.oldId === id);
-            return r ? r.newId : null;
-        }
-
         function settingsPayload() {
             return {
                 portalName: STATE.portalName || '🥋 BJJ Kiosk Portal',
@@ -177,958 +160,605 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             };
         }
 
-        const FSEngine = {
-            db: null,
-            mirrors: {},          // per-record collection -> Map(docId -> JSON string of record)
-            arrayMirrors: {},     // array-doc collection -> JSON string of items
-            lastDocs: {},         // per-record collection -> last snapshot records
-            ready: {},            // collection -> first snapshot received
-            snapSeen: new Set(),  // collection -> snapshot actually received (even if empty)
-            settingsReady: false,
-            settingsMirror: '',
-            dirty: new Set(),     // collections with local changes not yet flushed
-            applied: new Set(),   // collections whose cloud state has been applied locally at least once
-            // Locally-committed writes/deletes awaiting snapshot confirmation.
-            // Persisted so a reload cannot resurrect a deleted record from a stale
-            // snapshot or drop a not-yet-landed write. col -> Map(key -> {json, at} | {deleted: true, at})
-            unconfirmed: (() => {
-                const out = {};
-                try {
-                    const raw = JSON.parse(localStorage.getItem('gym_fs_intents') || '{}');
-                    Object.keys(raw).forEach(col => {
-                        const m = new Map();
-                        Object.keys(raw[col] || {}).forEach(k => m.set(k, raw[col][k]));
-                        out[col] = m;
-                    });
-                } catch (e) {}
-                return out;
-            })(),
-            // Record keys that have EVER been applied to STATE (per collection). A
-            // mirror<->STATE divergence is only a real local deletion when the key was
-            // present in STATE before; otherwise it is a snapshot the apply has not
-            // caught up with and must never become a cloud delete.
-            seenKeys: {},
-            _subs: {},            // active Firestore unsubscribe functions per collection
-            // Member id renames {oldId, newId} awaiting the delete pass. Persisted
-            // so a tab close / crash between "create new doc" and "delete old doc"
-            // does not orphan the old doc (which would duplicate the member).
-            renames: (() => { try { return JSON.parse(localStorage.getItem('gym_fs_renames') || '[]'); } catch (e) { return []; } })(),
-            deferredDeletes: (() => { try { return JSON.parse(localStorage.getItem('gym_fs_deferred') || '[]'); } catch (e) { return []; } })(),
-            renameMap: new Map(), // oldId -> newId from the cloud rename ledger
-            flushTimer: null,
-            flushPromise: null,
-            _resolveFlush: null,
-            retryTimer: null,
-            flushing: false,
-            flushAgain: false,
-            migrationResolved: false,
-            migratePoll: null,
-
-            persistPending: function () {
-                try {
-                    localStorage.setItem('gym_fs_renames', JSON.stringify(this.renames));
-                    localStorage.setItem('gym_fs_deferred', JSON.stringify(this.deferredDeletes));
-                } catch (e) {}
+        // =====================================================================
+        // SUPABASE ADAPTER (replaces the Firestore per-record sync engine)
+        //
+        // camelCase (STATE) <-> snake_case (Postgres) row maps. Online-first:
+        // loadAll() hydrates STATE, realtime keeps visits/notifications live,
+        // and DB setters full-replace their collection via persist().
+        // =====================================================================
+        const MAPS = {
+            members: {
+                table: 'members',
+                state: 'members',
+                to: (m) => ({
+                    id: m.id,
+                    first_name: m.firstName || '',
+                    last_name: m.lastName || '',
+                    gender: m.gender || null,
+                    belt: m.belt || 'White',
+                    expiration_date: m.expirationDate || null,
+                    account_status: (m.accountStatus || 'active').toLowerCase(),
+                    sessions_total: !!m.sessionsTotal,
+                    sessions_left: parseInt(m.sessionsLeft) || 0,
+                    plan_days: (m.planDays != null && m.planDays !== '') ? parseInt(m.planDays, 10) : null,
+                    hide_from_leaderboard: !!m.hideFromLeaderboard,
+                    trial_participant: !!m.trialParticipant,
+                    trial_converted: !!m.trialConverted,
+                    deleted_at: null
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    firstName: r.first_name,
+                    lastName: r.last_name,
+                    gender: r.gender,
+                    belt: r.belt,
+                    expirationDate: r.expiration_date,
+                    accountStatus: r.account_status ? (r.account_status.charAt(0).toUpperCase() + r.account_status.slice(1)) : 'Active',
+                    sessionsTotal: r.sessions_total,
+                    sessionsLeft: r.sessions_left,
+                    planDays: r.plan_days,
+                    hideFromLeaderboard: r.hide_from_leaderboard,
+                    trialParticipant: r.trial_participant,
+                    trialConverted: r.trial_converted
+                })
             },
-
-            isAdminClient: () => { try { return !!App.isAdminAuthed && App.isAdminAuthed(); } catch (e) { return false; } },
-
-            notifyRename: function (oldId, newId) { this.renames.push({ oldId, newId }); this.persistPending(); },
-
-            // Resolves once the collection's first snapshot has been received AND
-            // the migration state is resolved — i.e. the point where STATE is a
-            // reliable view of the cloud data. Fresh clients (empty localStorage,
-            // e.g. incognito or a kiosk after cache clear) hit this as a 1-2s
-            // boot delay; lookups must wait for it instead of failing early.
-            whenReady: function (col, timeoutMs) {
-                const t = timeoutMs || 12000;
-                if (this.ready[col] && this.migrationResolved) return Promise.resolve();
-                return new Promise(resolve => {
-                    const t0 = Date.now();
-                    const iv = setInterval(() => {
-                        if ((this.ready[col] && this.migrationResolved) || Date.now() - t0 > t) {
-                            clearInterval(iv);
-                            resolve();
-                        }
-                    }, 200);
-                });
+            visits: {
+                table: 'visits',
+                state: 'visits',
+                to: (v) => ({
+                    id: v.id,
+                    member_id: v.memberId,
+                    entry_time: v.entryTime || new Date().toISOString(),
+                    expected_exit_time: v.expectedExitTime || null,
+                    exit_time: v.exitTime || null,
+                    is_unpaid: !!v.isUnpaid,
+                    paid_override: v.paidOverride || null,
+                    class_ids: Array.isArray(v.classIds) ? v.classIds : []
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    memberId: r.member_id,
+                    entryTime: r.entry_time,
+                    expectedExitTime: r.expected_exit_time,
+                    exitTime: r.exit_time,
+                    isUnpaid: r.is_unpaid,
+                    paidOverride: r.paid_override,
+                    classIds: r.class_ids || []
+                })
             },
-            whenReadyAll: function (cols, timeoutMs) {
-                const needed = (cols || []).filter(col => !this.ready[col] || !this.migrationResolved);
-                if (!needed.length) return Promise.resolve();
-                const t = timeoutMs || 12000;
-                return new Promise(resolve => {
-                    const t0 = Date.now();
-                    const iv = setInterval(() => {
-                        if ((this.migrationResolved && needed.every(col => this.ready[col])) || Date.now() - t0 > t) {
-                            clearInterval(iv);
-                            resolve();
-                        }
-                    }, 200);
-                });
+            payments: {
+                table: 'payments',
+                state: 'payments',
+                to: (p) => ({
+                    id: p.id,
+                    member_id: p.memberId,
+                    date: p.date,
+                    amount: parseFloat(p.amount) || 0,
+                    note: p.note || null,
+                    plan_id: p.planId || null,
+                    sessions_granted: (p.sessionsGranted != null && p.sessionsGranted !== '') ? parseInt(p.sessionsGranted, 10) : null,
+                    applied_expiration: p.appliedExpiration || null,
+                    applied_start_date: p.appliedStartDate || null,
+                    prev_expiration: p.prevExpiration || null,
+                    cleared_visit_ids: Array.isArray(p.clearedVisitIds) ? p.clearedVisitIds : []
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    memberId: r.member_id,
+                    date: r.date,
+                    amount: r.amount,
+                    note: r.note,
+                    planId: r.plan_id,
+                    sessionsGranted: r.sessions_granted,
+                    appliedExpiration: r.applied_expiration,
+                    appliedStartDate: r.applied_start_date,
+                    prevExpiration: r.prev_expiration,
+                    clearedVisitIds: r.cleared_visit_ids || []
+                })
             },
-
-            // Debounce: one check-in triggers several DB setters in a row —
-            // collapse them into a single flush so Firestore sees one small batch.
-            scheduleFlush: function () {
-                if (!this.flushPromise) {
-                    this.flushPromise = new Promise(resolve => { this._resolveFlush = resolve; });
-                }
-                if (this.flushTimer) return this.flushPromise;
-                this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flush(); }, 600);
-                return this.flushPromise;
+            plans: {
+                table: 'plans',
+                state: 'plans',
+                to: (p) => ({
+                    id: p.id,
+                    name: p.name,
+                    description: p.description || null,
+                    description_html: !!p.descriptionHtml,
+                    days: (p.days != null && p.days !== '') ? parseInt(p.days, 10) : null,
+                    sessions: (p.sessions != null && p.sessions !== '') ? parseInt(p.sessions, 10) : null,
+                    price: parseFloat(p.price) || 0,
+                    color: p.color || '#2563eb',
+                    is_public: p.isPublic !== false,
+                    starred: !!p.starred,
+                    is_trial: !!p.isTrial
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    name: r.name,
+                    description: r.description,
+                    descriptionHtml: r.description_html,
+                    days: r.days,
+                    sessions: r.sessions,
+                    price: r.price,
+                    color: r.color,
+                    isPublic: r.is_public,
+                    starred: r.starred,
+                    isTrial: r.is_trial
+                })
             },
-            resolveFlush: function () {
-                if (this._resolveFlush) { const r = this._resolveFlush; this._resolveFlush = null; this.flushPromise = null; r(); }
+            classCheckins: {
+                table: 'class_checkins',
+                state: 'classCheckins',
+                to: (c) => ({
+                    id: c.id,
+                    visit_id: c.visitId,
+                    member_id: c.memberId,
+                    class_id: c.classId,
+                    slot_date: c.slotDate || null,
+                    slot_day: c.slotDay || null,
+                    slot_start: c.slotStart || null,
+                    slot_end: c.slotEnd || null,
+                    entry_time: c.entryTime || null
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    visitId: r.visit_id,
+                    memberId: r.member_id,
+                    classId: r.class_id,
+                    slotDate: r.slot_date,
+                    slotDay: r.slot_day,
+                    slotStart: r.slot_start,
+                    slotEnd: r.slot_end,
+                    entryTime: r.entry_time
+                })
             },
-            flush: async function () {
-                if (this.flushing) {
-                    this.flushAgain = true;
-                    return;
-                }
-                this.flushing = true;
-                try { await this.diffAndWrite(); } catch (e) { console.error('Flush failed:', e); }
-                finally {
-                    this.flushing = false;
-                    this.resolveFlush();
-                    if (this.flushAgain) {
-                        this.flushAgain = false;
-                        this.scheduleFlush();
-                    }
-                }
-            },
-            commitOps: async function (ops) {
-                const batch = this.db.batch();
-                ops.forEach(op => {
-                    const ref = this.db.collection(op.col).doc(op.key);
-                    if (op.type === 'delete') batch.delete(ref);
-                    else batch.set(ref, op.data, { merge: true });
-                });
-                await batch.commit();
-            },
-            // Ops an anonymous kiosk client is allowed to perform. Skipped ops are
-            // left for the admin client to perform later (rules deny them for kiosk).
-            kioskCanWrite: function (op) {
-                if (op.type === 'set' || op.type === 'update') {
-                    // members: a kiosk may only touch the sessionsLeft counter.
-                    // The id-rename / delete chain is admin-only now (rules deny
-                    // kiosk id updates and member deletes), so never emit those.
-                    // updatedAt is the client-stamped revision field (Fix 3b).
-                    if (op.col === 'members') {
-                        if (op.type === 'update' && op.data && Object.keys(op.data).every(k => k === 'sessionsLeft' || k === 'updatedAt')) return true;
-                        return false;
-                    }
-                    return op.col === 'visits' || op.col === 'classCheckins' || op.col === 'notifications' || op.col === 'memberRenames';
-                }
-                // Deletes are admin-only for kiosk clients (rules deny them).
-                return false;
-            },
-            diffAndWrite: async function () {
-                const self = this;
-                if (!this.db || !this.db.collection) return;
-                const isAdmin = this.isAdminClient();
-                const ops = [];
-                const mirrorUpdates = []; // applied only after commits succeed
-                const flushedCols = new Set();
-
-                Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                    // Admin-only collections may be written by the admin client even
-                    // before their first snapshot arrives: their reads are denied for
-                    // anonymous auth, so on a fresh kiosk boot the listener errors and
-                    // ready stays false — a payment save would then be dropped silently
-                    // (it existed only in localStorage and was wiped on logout, so it
-                    // never reached Firestore). Writes are merge-sets keyed by record
-                    // id, so they are safe against a not-yet-loaded cloud state; the
-                    // delete pass stays guarded by the applied flag below.
-                    // Notifications are a one-way kiosk->admin alert channel whose read
-                    // is admin-only: their writes must never be gated on the first
-                    // (admin-only) snapshot either, or alerts created by the kiosk
-                    // after a logout (listener unsubscribed, ready reset) would be
-                    // dropped from the cloud and lost on the next clear.
-                    if (!self.ready[col] && col !== 'notifications' && !(isAdmin && ADMIN_ONLY_COLLECTIONS.has(col))) return;
-                    if (!isAdmin && ADMIN_ONLY_COLLECTIONS.has(col)) return;
-                    const cfg = CLOUD_COLLECTIONS[col];
-                    const arr = STATE[cfg.state] || [];
-                    const mirror = self.mirrors[col] || new Map();
-                    const stateKeys = new Set();
-                    arr.forEach(rec => {
-                        const key = cloudRecordKey(col, rec);
-                        if (!key) return;
-                        stateKeys.add(key);
-                        // If this record references a member that was renamed,
-                        // translate the reference so stale offline data (visits,
-                        // class check-ins, payments, notifications) follows the
-                        // member instead of re-creating the old id anywhere.
-                        let writeRec = rec;
-                        if (rec.memberId && (col === 'visits' || col === 'classCheckins' || col === 'notifications' || col === 'payments')) {
-                            const t = resolveRenameTarget(rec.memberId);
-                            if (t && t !== rec.memberId) writeRec = Object.assign({}, rec, { memberId: t });
-                        }
-                        // Strip private fields from member writes — they belong in
-                        // the /members/{id}/private subcollection, never in the top-level doc.
-                        if (col === 'members') writeRec = Object.assign({}, writeRec);
-                        if (col === 'members') MEMBER_PRIVATE_FIELDS.forEach(f => { delete writeRec[f]; });
-                        const json = JSON.stringify(writeRec);
-                        if (mirror.get(key) !== json) {
-                            // The record genuinely differs from the cloud baseline. Stamp a
-                            // fresh client revision on it (STATE, the written op and the mirror
-                            // all carry the same value) so a stale snapshot can never revert it —
-                            // applyCollectionSnapshotData resolves conflicts by comparing revisions.
-                            const upd = new Date().toISOString();
-                            rec.updatedAt = upd;
-                            writeRec.updatedAt = upd;
-                            const stampedJson = JSON.stringify(writeRec);
-                            let data = writeRec;
-                            // Field-scoped member writes: when the record already exists in the
-                            // mirror, emit only the fields that actually differ. A check-in
-                            // client (kiosk or staff) holds a copy of the member doc that can be
-                            // stale — an admin edited the name on another device — while the
-                            // mirror is frozen during a dirty flush. A whole-record merge would
-                            // write the stale name back over the newer cloud doc (Bug 1: name
-                            // edit reverts after refresh). Diffing against the mirror writes only
-                            // what this client really changed (e.g. sessionsLeft), so a stale
-                            // display field is never clobbered.
-                            if (col === 'members' && mirror.has(key)) {
-                                const prev = (() => { try { return JSON.parse(mirror.get(key)); } catch (e) { return null; } })();
-                                if (prev) {
-                                    const changed = {};
-                                    Object.keys(writeRec).forEach(k => {
-                                        if (JSON.stringify(writeRec[k]) !== JSON.stringify(prev[k])) changed[k] = writeRec[k];
-                                    });
-                                    // The revision must always advance, even on a same-ms rewrite
-                                    // where no other field changed.
-                                    if (Object.keys(changed).length === 0) changed.updatedAt = upd;
-                                    data = changed;
-                                }
-                            }
-                            ops.push({ col, key, type: 'set', data });
-                            mirrorUpdates.push({ col, key, action: 'set', json: stampedJson });
-                        }
-                    });
-                    mirror.forEach((json, key) => {
-                        if (stateKeys.has(key)) return;
-                        // Data-wipe guard: until this collection's cloud state has
-                        // been applied locally, "missing from local state" means "not
-                        // loaded yet", not "deleted". Emitting deletes here would let
-                        // a fresh client (empty localStorage) erase the whole cloud
-                        // collection on its first flush.
-                        if (!self.applied.has(col)) return;
-                        if (col === 'members' && !isAdmin) return; // member renames/deletes are admin-only (rules deny kiosk id updates and deletes)
-                        if (col === 'members') {
-                            const rename = self.renames.find(r => r.oldId === key) || (self.renameMap && self.renameMap.has(key) ? { oldId: key, newId: self.renameMap.get(key) } : null);
-                            if (rename) {
-                                // Update the old doc's id field first; its delete is
-                                // deferred until the update lands.
-                                ops.push({ col, key, type: 'update', data: { id: rename.newId } });
-                                mirrorUpdates.push({ col, key, action: 'set', json: JSON.stringify(Object.assign({}, JSON.parse(json), { id: rename.newId })) });
-                                self.deferredDeletes.push({ col, key });
-                                return;
-                            }
-                        }
-                        // Never delete a record that was never present in our local
-                        // STATE: a snapshot that arrived before its apply must not be
-                        // mistaken for a local deletion (deleted fresh check-ins).
-                        if (!(self.seenKeys[col] && self.seenKeys[col].has(key))) return;
-                        ops.push({ col, key, type: 'delete' });
-                        mirrorUpdates.push({ col, key, action: 'delete' });
-                        // A delete intent is a real local change the moment it is
-                        // emitted; it stays until a snapshot confirms the doc is gone.
-                        if (!self.unconfirmed[col]) self.unconfirmed[col] = new Map();
-                        self.unconfirmed[col].set(key, { deleted: true, at: Date.now() });
-                    });
-                });
-
-                // Publish pending renames to the cloud ledger so every client can
-                // reconcile stale local copies instead of resurrecting the old doc.
-                // Only emit ledger ops if the rename hasn't been written yet (avoid
-                // rewriting with a fresh timestamp on every flush, which causes
-                // continuous memberRenames snapshots on all admin clients).
-                if (self.renames.length) {
-                    self.renames.forEach(r => {
-                        const ledgerKey = `rename_${r.oldId}_${r.newId}`;
-                        if (!self._ledgerWritten) self._ledgerWritten = new Set();
-                        if (self._ledgerWritten.has(ledgerKey)) return;
-                        ops.push({ col: 'memberRenames', key: r.oldId, type: 'set', data: { oldId: r.oldId, newId: r.newId, at: new Date().toISOString(), by: isAdmin ? 'admin' : 'kiosk' } });
-                        self._ledgerWritten.add(ledgerKey);
-                    });
-                }
-
-                Object.keys(ARRAY_DOCS).forEach(col => {
-                    if (!self.ready[col]) return;
-                    if (!isAdmin) return;
-                    if (!self.applied.has(col)) return; // data-wipe guard (same as above)
-                    const cfg = ARRAY_DOCS[col];
-                    const json = JSON.stringify(STATE[cfg.state] || []);
-                    if (json !== self.arrayMirrors[col]) {
-                        ops.push({ col, key: cfg.doc, type: 'set', data: { items: STATE[cfg.state] || [] } });
-                        mirrorUpdates.push({ col: col + ':array', key: cfg.doc, action: 'arraySet', json });
-                    }
-                });
-
-                if (this.settingsReady && isAdmin) {
-                    const json = JSON.stringify(settingsPayload());
-                    if (json !== this.settingsMirror) {
-                        ops.push({ col: 'settings', key: 'global', type: 'set', data: settingsPayload() });
-                        mirrorUpdates.push({ col: 'settings:doc', key: 'global', action: 'settingsSet', json });
-                    }
-                }
-
-                const allowed = ops.filter(op => isAdmin || self.kioskCanWrite(op));
-                allowed.forEach(op => flushedCols.add(op.col));
-
-                if (allowed.length === 0) { recomputeDirty(); return; }
-
-                for (let i = 0; i < allowed.length; i += 450) {
-                    try {
-                        await this.commitOps(allowed.slice(i, i + 450));
-                    } catch (err) {
-                        // Mirrors are untouched on failure so the retry re-generates
-                        // the same diffs instead of seeing a "no change" state.
-                        // Retries are capped: a persistent failure (e.g. quota
-                        // exhaustion or a permission error) must NOT loop forever —
-                        // an endless 5s retry loop burns through the entire Firestore
-                        // daily quota and makes the app unusable. After MAX_RETRIES
-                        // consecutive failures, back off and let the next save or
-                        // snapshot re-attempt the flush.
-                        console.error('Firestore batch write failed (will retry):', err);
-                        fallbackToLocal();
-                        self.retryCount = (self.retryCount || 0) + 1;
-                        if (self.retryCount >= 10) {
-                            console.error('Firestore batch write: giving up after ' + self.retryCount + ' consecutive failures. Will retry on next save/snapshot.');
-                            self.retryCount = 0;
-                            self.retryTimer = null;
-                            return;
-                        }
-                        if (!self.retryTimer) self.retryTimer = setTimeout(() => { self.retryTimer = null; self.flush(); }, 5000);
-                        return;
-                    }
-                }
-
-                // A successful commit means we can clear any retry backoff.
-                self.retryCount = 0;
-                if (self.retryTimer) { clearTimeout(self.retryTimer); self.retryTimer = null; }
-
-                // Now that the writes landed, update the local mirrors.
-                mirrorUpdates.forEach(u => {
-                    if (u.action === 'delete') {
-                        const m = self.mirrors[u.col];
-                        if (m) m.delete(u.key);
-                    } else if (u.action === 'arraySet') {
-                        self.arrayMirrors[u.col.replace(':array', '')] = u.json;
-                    } else if (u.action === 'settingsSet') {
-                        self.settingsMirror = u.json;
-                    } else {
-                        const m = self.mirrors[u.col] || new Map();
-                        if (u.action === 'set') m.set(u.key, u.json);
-                        self.mirrors[u.col] = m;
-                    }
-                });
-
-                // Mark the committed writes as awaiting snapshot confirmation, so a
-                // stale snapshot cannot drop or revert them (applyCollectionSnapshotData
-                // consults this set). Deletes are tracked at emission time and cleared
-                // only once a snapshot confirms the doc is gone.
-                mirrorUpdates.forEach(u => {
-                    if (u.action !== 'set') return;
-                    if (!self.unconfirmed[u.col]) self.unconfirmed[u.col] = new Map();
-                    self.unconfirmed[u.col].set(u.key, { json: u.json, at: Date.now() });
-                });
-                pruneUnconfirmed();
-                persistIntents();
-
-                // A snapshot can arrive while the batch is committing. Rebuild
-                // flushed baselines from the state that exists after that merge,
-                // rather than diffing the next flush against an older snapshot.
-                flushedCols.forEach(col => {
-                    if (!CLOUD_COLLECTIONS[col] || !FSEngine.ready[col]) return;
-                    const current = new Map();
-                    (STATE[CLOUD_COLLECTIONS[col].state] || []).forEach(rec => {
-                        const key = cloudRecordKey(col, rec);
-                        if (key) current.set(key, JSON.stringify(col === 'members'
-                            ? Object.keys(rec).reduce((out, field) => {
-                                if (!MEMBER_PRIVATE_FIELDS.includes(field)) out[field] = rec[field];
-                                return out;
-                            }, {})
-                            : rec));
-                    });
-                    self.mirrors[col] = current;
-                });
-
-                // Member renames: delete the old doc only after its id field has
-                // been updated (the sequential awaits guarantee ordering).
-                // Admin-only: rules deny member deletes for kiosk clients, so a
-                // kiosk never has deferred member deletes to clear.
-                if (self.deferredDeletes.length && isAdmin) {
-                    const next = self.deferredDeletes;
-                    self.deferredDeletes = [];
-                    try {
-                        await this.commitOps(next.map(d => ({ col: d.col, key: d.key, type: 'delete', kioskAllowed: true })));
-                        next.forEach(d => { const m = self.mirrors[d.col]; if (m) m.delete(d.key); });
-                    } catch (err) {
-                        console.error('Firestore deferred member delete failed:', err);
-                        self.deferredDeletes = next.concat(self.deferredDeletes);
-                    }
-                }
-                // The main batch landed (new doc, old-doc id update, ledger op).
-                // Keep pending renames only for stragglers still present in the
-                // mirror — the rest are done and can be dropped. If the members
-                // collection is not ready yet, the cloud ledger already carries
-                // the rename, so other clients (and this one after a reload)
-                // will reconcile via renameMap.
-                self.renames = self.renames.filter(r => self.mirrors.members && self.mirrors.members.has(r.oldId));
-                self.persistPending();
-
-                flushedCols.forEach(col => self.dirty.delete(col));
-                recomputeDirty();
-            },
-
-            // One-time migration from the legacy single document (gym/data).
-            // Only an authenticated admin can complete it (kiosk clients cannot
-            // write admin-only collections); kiosks keep serving from local state
-            // and poll meta/migration until the admin's migration lands.
-            migrate: async function () {
-                try {
-                    if (!this.db || !this.db.collection) return false;
-                    const metaRef = this.db.collection('meta').doc('migration');
-                    const meta = await metaRef.get();
-                    if (meta.exists && meta.data() && meta.data().done) { resolveMigrationState(); return true; }
-                    if (!this.isAdminClient()) return false;
-                    const legacy = await this.db.collection('gym').doc('data').get();
-                    if (!legacy.exists) {
-                        await metaRef.set({ done: true, migratedAt: new Date().toISOString(), note: 'no legacy document' });
-                        resolveMigrationState();
-                        return true;
-                    }
-                    const data = legacy.data() || {};
-                    const ops = [];
-                    Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                        const cfg = CLOUD_COLLECTIONS[col];
-                        (Array.isArray(data[cfg.state]) ? data[cfg.state] : []).forEach(rec => {
-                            const key = cloudRecordKey(col, rec);
-                            if (key) ops.push({ col, key, type: 'set', data: rec });
-                        });
-                    });
-                    Object.keys(ARRAY_DOCS).forEach(col => {
-                        const cfg = ARRAY_DOCS[col];
-                        if (Array.isArray(data[cfg.state])) ops.push({ col, key: cfg.doc, type: 'set', data: { items: data[cfg.state] } });
-                    });
-                    ops.push({ col: 'settings', key: 'global', type: 'set', data: settingsPayload() });
-                    for (let i = 0; i < ops.length; i += 450) {
-                        await this.commitOps(ops.slice(i, i + 450));
-                    }
-                    await metaRef.set({ done: true, migratedAt: new Date().toISOString(), records: ops.length });
-                    await legacy.ref.delete();
-                    resolveMigrationState();
-                    console.log('Migrated legacy gym/data to per-record collections (' + ops.length + ' ops).');
-                    return true;
-                } catch (err) {
-                    console.warn('Legacy migration deferred (will retry):', err && err.message ? err.message : err);
-                    return false;
-                }
+            notifications: {
+                table: 'notifications',
+                state: 'notifications',
+                to: (n) => ({
+                    id: n.id,
+                    title: n.title,
+                    msg: n.msg || null,
+                    type: n.type || 'info',
+                    date: n.date || new Date().toISOString(),
+                    read: !!n.read,
+                    member_id: n.memberId || null
+                }),
+                from: (r) => ({
+                    id: r.id,
+                    title: r.title,
+                    msg: r.msg,
+                    type: r.type,
+                    date: r.date,
+                    read: r.read,
+                    memberId: r.member_id
+                })
             }
         };
 
-        function markDirtyCollections() {
-            const upd = new Date().toISOString();
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                if (!FSEngine.ready[col] && col !== 'notifications') return;
-                const cfg = CLOUD_COLLECTIONS[col];
-                const arr = STATE[cfg.state] || [];
-                const mirror = FSEngine.mirrors[col] || new Map();
-                if (arr.length !== mirror.size) {
-                    FSEngine.dirty.add(col);
-                    arr.forEach(rec => {
-                        if (rec) rec.updatedAt = upd;
-                        const key = cloudRecordKey(col, rec);
-                        if (key && (!mirror.has(key) || mirror.get(key) !== JSON.stringify(rec))) {
-                            if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
-                            const existing = FSEngine.unconfirmed[col].get(key);
-                            if (!existing || !existing.deleted) {
-                                FSEngine.unconfirmed[col].set(key, { json: JSON.stringify(rec), at: Date.now() });
-                            }
+        const CHUNK = 500;
+        function chunkRows(rows) {
+            const out = [];
+            for (let i = 0; i < rows.length; i += CHUNK) out.push(rows.slice(i, i + CHUNK));
+            return out;
+        }
+
+        const Sync = {
+            loaded: false,
+            ready: {},
+            mirrors: {},          // col -> Map(id -> JSON string)
+            _waiters: {},         // col -> [resolve]
+            _subs: {},            // realtime channel per collection
+            _flushTimer: null,
+            _flushPromise: null,
+            _resolveFlush: null,
+
+            whenReady(col) {
+                if (this.ready[col]) return Promise.resolve();
+                if (!this._waiters[col]) this._waiters[col] = [];
+                return new Promise(res => this._waiters[col].push(res));
+            },
+            whenReadyAll(cols) {
+                return Promise.all((cols || []).map(c => this.whenReady(c)));
+            },
+
+            _markReady(col) {
+                this.ready[col] = true;
+                (this._waiters[col] || []).forEach(r => r());
+                this._waiters[col] = [];
+            },
+
+            async _fetch(table) {
+                const { data, error } = await sb.from(table).select('*');
+                if (error) throw error;
+                return data || [];
+            },
+
+            async load(col) {
+                const map = MAPS[col];
+                let q = sb.from(map.table).select('*');
+                if (col === 'members') q = q.is('deleted_at', null);
+                const { data, error } = await q;
+                if (error) throw error;
+                const arr = (data || []).map(map.from);
+                STATE[map.state] = arr;
+                this.mirrors[col] = new Map(arr.map(r => [String(r.id), JSON.stringify(r)]));
+                this._markReady(col);
+            },
+
+            async loadSchedules() {
+                const [scheds, slots] = await Promise.all([
+                    this._fetch('schedules'), this._fetch('schedule_slots')
+                ]);
+                const byId = {};
+                scheds.forEach(s => { byId[s.id] = MAPS_EXTRA.scheduleFrom(s); });
+                slots.forEach(sl => {
+                    if (byId[sl.schedule_id]) {
+                        byId[sl.schedule_id].slots = byId[sl.schedule_id].slots || [];
+                        byId[sl.schedule_id].slots.push(MAPS_EXTRA.slotFrom(sl));
+                    }
+                });
+                STATE.schedules = Object.values(byId);
+                this._markReady('schedules');
+            },
+
+            async loadClosedDates() {
+                const rows = await this._fetch('closed_dates');
+                STATE.closedDates = rows.map(MAPS_EXTRA.closedDateFrom);
+                this._markReady('closedDates');
+            },
+
+            async loadSettings() {
+                const rows = await this._fetch('settings');
+                const s = {};
+                rows.forEach(r => { s[r.key] = r.value; });
+                if (s.portal_name != null) STATE.portalName = s.portal_name;
+                if (Array.isArray(s.hidden_belts)) STATE.hiddenBelts = s.hidden_belts;
+                if (s.currency != null) STATE.currency = s.currency;
+                if (s.checkin_notice != null) STATE.checkinNotice = s.checkin_notice;
+                if (s.checkin_notice_color != null) STATE.checkinNoticeColor = s.checkin_notice_color;
+                if (s.show_class_checkins != null) STATE.showClassCheckins = !!s.show_class_checkins;
+                if (s.member_stats_visibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, s.member_stats_visibility);
+                this._markReady('settings');
+            },
+
+            async loadPrivate() {
+                const rows = await this._fetch('member_private');
+                const priv = {};
+                rows.forEach(r => { if (r.member_id) priv[r.member_id] = MAPS_EXTRA.privateFrom(r); });
+                STATE.memberPrivate = priv;
+            },
+
+            async loadBins() {
+                const rows = await this._fetch('bins');
+                STATE.bin = [];
+                STATE.planBin = [];
+                STATE.scheduleBin = [];
+                STATE.notificationBin = [];
+                rows.forEach(r => {
+                    const payload = r.payload || {};
+                    if (r.entity_type === 'member') STATE.bin.push(payload);
+                    else if (r.entity_type === 'plan') STATE.planBin.push(payload);
+                    else if (r.entity_type === 'schedule') STATE.scheduleBin.push(payload);
+                    else if (r.entity_type === 'notification') STATE.notificationBin.push(payload);
+                });
+            },
+
+            // Admin-only collections are denied for the anon kiosk (RLS),
+            // so they are loaded only when an admin is signed in.
+            async loadAdminOnly() {
+                await Promise.all([this.load('payments'), this.load('notifications'), this.loadPrivate(), this.loadBins()]);
+            },
+
+            async loadAll() {
+                const isAdmin = FSEngine.isAdminClient();
+                await Promise.all([
+                    this.load('members'), this.load('visits'), this.load('plans'),
+                    this.load('classCheckins'), this.loadSchedules(), this.loadClosedDates(), this.loadSettings()
+                ]);
+                if (isAdmin) {
+                    await this.loadAdminOnly();
+                } else {
+                    STATE.payments = [];
+                    STATE.notifications = [];
+                    STATE.memberPrivate = {};
+                    STATE.bin = [];
+                    STATE.planBin = [];
+                    STATE.scheduleBin = [];
+                    STATE.notificationBin = [];
+                    this._markReady('payments');
+                    this._markReady('notifications');
+                }
+                this.loaded = true;
+            },
+
+            // Full-replace persist for a per-record collection (upsert + delete).
+            // `members` is upsert-only: deletions/renames go through the bin /
+            // rename_member flows, never a hard cascade delete.
+            async persist(col, opts) {
+                if (!sb || !this.ready[col]) return;
+                const map = MAPS[col];
+                const arr = STATE[map.state] || [];
+                const rows = arr.map(map.to).filter(r => r && r.id);
+                const mirror = this.mirrors[col] || new Map();
+                const keys = new Set(rows.map(r => String(r.id)));
+                for (const c of chunkRows(rows)) {
+                    const { error } = await sb.from(map.table).upsert(c, { onConflict: 'id' });
+                    if (error) throw error;
+                }
+                const removed = [];
+                mirror.forEach((v, k) => { if (!keys.has(k)) removed.push(k); });
+                if (col === 'members') {
+                    // Members are soft-deleted (moved to bin), never hard-deleted, so a
+                    // cascade delete can never wipe their visits/check-ins/payments.
+                    for (const k of removed) {
+                        const { error } = await sb.from('members').update({ deleted_at: new Date().toISOString() }).eq('id', k);
+                        if (error) throw error;
+                    }
+                } else if (!(opts && opts.upsertOnly)) {
+                    for (const k of removed) {
+                        const { error } = await sb.from(map.table).delete().eq('id', k);
+                        if (error) throw error;
+                    }
+                }
+                this.mirrors[col] = new Map(rows.map(r => [String(r.id), JSON.stringify(r)]));
+            },
+
+            async persistSchedules() {
+                if (!sb || !this.ready.schedules) return;
+                const scheds = (STATE.schedules || []).map(MAPS_EXTRA.scheduleTo);
+                const slots = [];
+                (STATE.schedules || []).forEach((cls, i) => {
+                    const sid = cls.id || `SCHED-${i}`;
+                    (cls.slots || []).forEach((sl, j) => {
+                        slots.push({ id: sl.id || `${sid}-SLOT-${j}`, schedule_id: sid, day: sl.day, start: sl.start, end: sl.end });
+                    });
+                });
+                for (const c of chunkRows(scheds)) await sb.from('schedules').upsert(c, { onConflict: 'id' });
+                for (const c of chunkRows(slots)) await sb.from('schedule_slots').upsert(c, { onConflict: 'id' });
+                // Remove slots no longer present
+                const keep = new Set(slots.map(s => s.id));
+                const { data: existing } = await sb.from('schedule_slots').select('id');
+                (existing || []).forEach(e => { if (!keep.has(e.id)) sb.from('schedule_slots').delete().eq('id', e.id); });
+            },
+
+            async persistClosedDates() {
+                if (!sb || !this.ready.closedDates) return;
+                const rows = (STATE.closedDates || []).map((c, i) => ({ id: `CD-${i}`, date: c.date, date_end: c.dateEnd || null, repeat: !!c.repeat }));
+                for (const c of chunkRows(rows)) await sb.from('closed_dates').upsert(c, { onConflict: 'id' });
+                const keep = new Set(rows.map(r => r.id));
+                const { data: existing } = await sb.from('closed_dates').select('id');
+                (existing || []).forEach(e => { if (!keep.has(e.id)) sb.from('closed_dates').delete().eq('id', e.id); });
+            },
+
+            async persistSettings() {
+                if (!sb || !this.ready.settings) return;
+                const p = settingsPayload();
+                const rows = [
+                    { key: 'portal_name', value: p.portalName },
+                    { key: 'hidden_belts', value: p.hiddenBelts },
+                    { key: 'currency', value: p.currency },
+                    { key: 'checkin_notice', value: p.checkinNotice },
+                    { key: 'checkin_notice_color', value: p.checkinNoticeColor },
+                    { key: 'show_class_checkins', value: p.showClassCheckins },
+                    { key: 'member_stats_visibility', value: p.memberStatsVisibility }
+                ];
+                for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
+            },
+
+            async persistMemberPrivate() {
+                if (!sb) return;
+                const priv = STATE.memberPrivate || {};
+                const rows = Object.keys(priv).map(mid => Object.assign({ member_id: mid }, priv[mid]));
+                for (const c of chunkRows(rows)) await sb.from('member_private').upsert(c, { onConflict: 'member_id' });
+            },
+
+            async persistBins() {
+                if (!sb) return;
+                const BIN_TYPES = [
+                    ['bin', 'member'], ['planBin', 'plan'],
+                    ['scheduleBin', 'schedule'], ['notificationBin', 'notification']
+                ];
+                for (const [stateKey, entityType] of BIN_TYPES) {
+                    const arr = STATE[stateKey] || [];
+                    const rows = arr.map(r => ({
+                        entity_type: entityType,
+                        original_id: r.id,
+                        payload: r,
+                        deleted_at: r.deletedAt || new Date().toISOString()
+                    }));
+                    for (const c of chunkRows(rows)) {
+                        const { error } = await sb.from('bins').upsert(c, { onConflict: 'entity_type,original_id' });
+                        if (error) throw error;
+                    }
+                    const keep = new Set(rows.map(r => String(r.original_id)));
+                    const { data: existing } = await sb.from('bins').select('original_id').eq('entity_type', entityType);
+                    (existing || []).forEach(e => {
+                        if (!keep.has(String(e.original_id))) {
+                            sb.from('bins').delete().eq('entity_type', entityType).eq('original_id', e.original_id);
                         }
                     });
-                    return;
                 }
-                const seen = new Set();
-                for (let i = 0; i < arr.length; i++) {
-                    const key = cloudRecordKey(col, arr[i]);
-                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) {
-                        FSEngine.dirty.add(col);
-                        if (arr[i]) arr[i].updatedAt = upd;
-                        if (key && (!mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i]))) {
-                            if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
-                            if (!FSEngine.unconfirmed[col].has(key)) {
-                                FSEngine.unconfirmed[col].set(key, { json: JSON.stringify(arr[i]), at: Date.now() });
-                            }
-                        }
-                    }
-                    if (key) seen.add(key);
+            },
+
+            // Debounced full-save of everything dirty (mirrors the old saveToCloud).
+            scheduleFlush() {
+                if (!this._flushPromise) {
+                    this._flushPromise = new Promise(resolve => { this._resolveFlush = resolve; });
                 }
-                for (const k of mirror.keys()) if (!seen.has(k)) { FSEngine.dirty.add(col); return; }
-            });
-            Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.ready[col]) return;
-                if (JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) !== FSEngine.arrayMirrors[col]) FSEngine.dirty.add(col);
-            });
-            if (FSEngine.settingsReady && JSON.stringify(settingsPayload()) !== FSEngine.settingsMirror) FSEngine.dirty.add('settings');
-
-            // Persist locally-deleted keys as pending intents. The moment a record
-            // drops out of STATE while the cloud still has it, that delete is a real
-            // intent that must survive a reload — otherwise the first snapshot after
-            // a restart re-merges the doc back and the deletion is lost forever.
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                if (!FSEngine.applied.has(col)) return;
-                const cfg = CLOUD_COLLECTIONS[col];
-                const arr = STATE[cfg.state] || [];
-                const mirror = FSEngine.mirrors[col];
-                if (!mirror) return;
-                const stateKeys = new Set();
-                arr.forEach(r => { const k = cloudRecordKey(col, r); if (k) stateKeys.add(k); });
-                mirror.forEach((json, key) => {
-                    if (stateKeys.has(key)) return;
-                    // Only a record we actually had in STATE is a real local deletion.
-                    // A key in the mirror that was never applied to STATE is just a
-                    // snapshot the apply hasn't caught up with — never turn that into a
-                    // delete intent (this was deleting freshly-checked-in visits).
-                    if (!(FSEngine.seenKeys[col] && FSEngine.seenKeys[col].has(key))) return;
-                    if (!FSEngine.unconfirmed[col]) FSEngine.unconfirmed[col] = new Map();
-                    const existing = FSEngine.unconfirmed[col].get(key);
-                    if (!existing || !existing.deleted) {
-                        FSEngine.unconfirmed[col].set(key, { deleted: true, at: Date.now() });
-                    }
-                });
-            });
-            pruneUnconfirmed();
-            persistIntents();
-        }
-
-        // After a successful commit (or a no-op flush), drop the dirty flag for
-        // collections whose local state now matches the last-known cloud state,
-        // so the next snapshot can replace instead of stacking more merge passes.
-        function recomputeDirty() {
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                if (!FSEngine.dirty.has(col) || !FSEngine.ready[col]) return;
-                const cfg = CLOUD_COLLECTIONS[col];
-                const arr = STATE[cfg.state] || [];
-                const mirror = FSEngine.mirrors[col] || new Map();
-                if (arr.length !== mirror.size) return;
-                const seen = new Set();
-                for (let i = 0; i < arr.length; i++) {
-                    const key = cloudRecordKey(col, arr[i]);
-                    if (!key || seen.has(key) || !mirror.has(key) || mirror.get(key) !== JSON.stringify(arr[i])) return;
-                    seen.add(key);
+                if (this._flushTimer) return this._flushPromise;
+                this._flushTimer = setTimeout(() => { this._flushTimer = null; this.flush(); }, 600);
+                return this._flushPromise;
+            },
+            _resolveFlushNow() {
+                if (this._resolveFlush) { const r = this._resolveFlush; this._resolveFlush = null; this._flushPromise = null; r(); }
+            },
+            async flush() {
+                const isAdmin = FSEngine.isAdminClient();
+                const jobs = [];
+                const push = (p) => jobs.push(p.catch(err => console.warn('Supabase write skipped:', err && err.message ? err.message : err)));
+                ['members', 'visits', 'plans', 'classCheckins'].forEach(col => push(this.persist(col)));
+                push(this.persistSchedules());
+                push(this.persistClosedDates());
+                if (isAdmin) {
+                    push(this.persist('payments'));
+                    push(this.persist('notifications'));
+                    push(this.persistMemberPrivate());
+                    push(this.persistBins());
                 }
-                for (const k of mirror.keys()) if (!seen.has(k)) return;
-                FSEngine.dirty.delete(col);
-            });
-            Object.keys(ARRAY_DOCS).forEach(col => {
-                if (!FSEngine.dirty.has(col)) return;
-                if (FSEngine.ready[col] && JSON.stringify(STATE[ARRAY_DOCS[col].state] || []) === FSEngine.arrayMirrors[col]) FSEngine.dirty.delete(col);
-            });
-            if (FSEngine.dirty.has('settings') && FSEngine.settingsReady && JSON.stringify(settingsPayload()) === FSEngine.settingsMirror) FSEngine.dirty.delete('settings');
-        }
+                push(this.persistSettings());
+                await Promise.all(jobs);
+                this._resolveFlushNow();
+            },
 
-        function saveToCloud() {
-            // Always persist locally first — the app must work offline too.
-            markDirtyCollections();
-            fallbackToLocal();
-            if (!FSEngine.db || !FSEngine.db.collection) return Promise.resolve();
-            return FSEngine.scheduleFlush();
-        }
+            // ── server-side RPC wrappers (used by Phase 4 flows) ──
+            async checkIn(payload) {
+                const { data, error } = await sb.rpc('check_in_member', payload);
+                if (error) throw error;
+                return data;
+            },
+            async applyPayment(payment) {
+                const { error } = await sb.rpc('apply_payment', { p_payment: payment });
+                if (error) throw error;
+            },
+            async renameMember(oldId, newId) {
+                const { error } = await sb.rpc('rename_member', { p_old_id: oldId, p_new_id: newId });
+                if (error) throw error;
+            },
+            async createNotification(title, msg, type, memberId) {
+                const { error } = await sb.rpc('create_notification', { p_title: title, p_msg: msg, p_type: type, p_member_id: memberId });
+                if (error) throw error;
+            },
 
-        // Deep value equality that ignores object key order, so a record written
-        // locally (insertion order) can be matched against the same record read
-        // back from Firestore (alphabetical field order).
-        function normalizeJsonValue(v) {
-            if (Array.isArray(v)) return v.map(normalizeJsonValue);
-            if (v && typeof v === 'object') {
-                const out = {};
-                Object.keys(v).sort().forEach(k => { out[k] = normalizeJsonValue(v[k]); });
-                return out;
-            }
-            return v;
-        }
-        function jsonEqual(a, b) { return JSON.stringify(normalizeJsonValue(a)) === JSON.stringify(normalizeJsonValue(b)); }
-
-        // Millisecond epoch of a record's updatedAt, or 0 when missing. ISO strings
-        // parse directly; a Firestore Timestamp/Date object is also accepted. Records
-        // without a revision are treated as oldest, so the cloud wins for legacy data.
-        function toTime(v) {
-            if (typeof v === 'string') { const t = Date.parse(v); return isNaN(t) ? 0 : t; }
-            if (v && typeof v === 'object' && typeof v.getTime === 'function') return v.getTime();
-            return 0;
-        }
-
-        // A write is "confirmed" once a snapshot contains a record with the exact
-        // value we wrote; a delete is "confirmed" once a snapshot no longer contains
-        // the key. Expired entries are pruned so the map stays bounded.
-        function confirmSnapshotKeys(col, mirror) {
-            const pending = FSEngine.unconfirmed[col];
-            if (!pending || !pending.size) return;
-            const now = Date.now();
-            pending.forEach((rec, key) => {
-                if (now - rec.at > intentTtl(rec)) { pending.delete(key); return; }
-                if (rec.deleted) {
-                    if (!mirror.has(key)) pending.delete(key);
-                    return;
+            // ── realtime (visits = Currently Inside; notifications = admin) ──
+            subscribeRealtime() {
+                if (!sb) return;
+                if (!this._subs.visits) {
+                    this._subs.visits = sb.channel('visits-changes')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => this.refreshVisits())
+                        .subscribe();
                 }
-                const snap = mirror.get(key);
-                if (snap) {
-                    try { if (jsonEqual(JSON.parse(snap), JSON.parse(rec.json))) { pending.delete(key); return; } }
-                    catch (e) {}
+                if (FSEngine.isAdminClient() && !this._subs.notifications) {
+                    this._subs.notifications = sb.channel('notifications-changes')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => this.refreshNotifications())
+                        .subscribe();
                 }
-                // Presence with different content is NOT confirmation: the snapshot
-                // may still be a stale read-replica that predates our write.
-            });
-            persistIntents();
-        }
+            },
+            unsubscribeRealtime() {
+                Object.keys(this._subs).forEach(k => { try { sb.removeChannel(this._subs[k]); } catch (e) {} delete this._subs[k]; });
+            },
 
-        // Drop intents older than the confirmation window so the map cannot grow
-        // without bound (a permanently-failing write/delete eventually gives up).
-        function pruneUnconfirmed() {
-            const now = Date.now();
-            Object.keys(FSEngine.unconfirmed).forEach(col => {
-                const m = FSEngine.unconfirmed[col];
-                if (!m || !m.size) return;
-                m.forEach((rec, key) => { if (now - rec.at > intentTtl(rec)) m.delete(key); });
-            });
-        }
+            async refreshVisits() {
+                if (!this.loaded) return;
+                try {
+                    const rows = await this._fetch('visits');
+                    STATE.visits = rows.map(MAPS.visits.from);
+                    this.mirrors.visits = new Map(STATE.visits.map(r => [String(r.id), JSON.stringify(r)]));
+                    fallbackToLocal();
+                    scheduleAfterCloudSyncRender();
+                } catch (e) { console.warn('realtime visits refresh failed', e); }
+            },
+            async refreshNotifications() {
+                if (!this.loaded) return;
+                try {
+                    const rows = await this._fetch('notifications');
+                    STATE.notifications = rows.map(MAPS.notifications.from);
+                    this.mirrors.notifications = new Map(STATE.notifications.map(r => [String(r.id), JSON.stringify(r)]));
+                    fallbackToLocal();
+                    scheduleAfterCloudSyncRender();
+                } catch (e) { console.warn('realtime notifications refresh failed', e); }
+            },
 
-        function persistIntents() {
-            try {
-                const out = {};
-                Object.keys(FSEngine.unconfirmed).forEach(col => {
-                    const m = FSEngine.unconfirmed[col];
-                    if (!m || !m.size) return;
-                    out[col] = {};
-                    m.forEach((rec, key) => { out[col][key] = rec; });
-                });
-                localStorage.setItem('gym_fs_intents', JSON.stringify(out));
-            } catch (e) {}
-        }
-
-        // Re-apply pending local intents against the last snapshot (runs after every
-        // snapshot apply, including the boot-time first apply):
-        //  - a delete intent keeps the record out of STATE and re-issues the delete
-        //    until the cloud confirms the doc is gone;
-        //  - a write intent stays local and re-flushes until the cloud reflects it.
-        function reconcilePendingIntents(col) {
-            const cfg = CLOUD_COLLECTIONS[col];
-            if (!cfg) return;
-            const pending = FSEngine.unconfirmed[col];
-            if (!pending || !pending.size) return;
-            const mirror = FSEngine.mirrors[col];
-            const now = Date.now();
-            let stateTouched = false;
-            let needsFlush = false;
-            pending.forEach((rec, key) => {
-                if (now - rec.at > intentTtl(rec)) { pending.delete(key); return; }
-                const arr = STATE[cfg.state];
-                if (rec.deleted) {
-                    // Never let a (stale) snapshot resurrect a record we deleted locally.
-                    if (Array.isArray(arr)) {
-                        const idx = arr.findIndex(r => cloudRecordKey(col, r) === key);
-                        if (idx > -1) { arr.splice(idx, 1); stateTouched = true; }
-                    }
-                    if (mirror && mirror.has(key)) needsFlush = true;
-                } else if (mirror) {
-                    const snap = mirror.get(key);
-                    let confirmed = false;
-                    if (snap) { try { confirmed = jsonEqual(JSON.parse(snap), JSON.parse(rec.json)); } catch (e) {} }
-                    if (!confirmed) needsFlush = true;
-                }
-            });
-            if (stateTouched) { fallbackToLocal(); scheduleAfterCloudSyncRender(); }
-            if (needsFlush) { FSEngine.dirty.add(col); FSEngine.scheduleFlush(); }
-            if (stateTouched) persistIntents();
-        }
-
-        function applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData) {
-            if (!FSEngine.snapSeen.has(col)) return;
-            const cfg = CLOUD_COLLECTIONS[col];
-            const docs = FSEngine.lastDocs[col] || [];
-            const cloudArr = [];
-            const seen = new Set();
-            docs.forEach(rec => {
-                const key = cloudRecordKey(col, rec);
-                if (!key || seen.has(key)) return;
-                if (rec.memberId && (col === 'payments' || col === 'visits' || col === 'classCheckins' || col === 'notifications')) {
-                    const t = resolveRenameTarget(rec.memberId);
-                    if (t && t !== rec.memberId) rec = Object.assign({}, rec, { memberId: t });
-                }
-                seen.add(key); cloudArr.push(rec);
-            });
-            if (!FSEngine.applied.has(col)) {
-                const local = STATE[cfg.state] || [];
-                const merged = local.slice();
-                const pending = FSEngine.unconfirmed[col];
-                const now = Date.now();
-                const isFresh = (key) => {
-                    const rec = pending ? pending.get(key) : null;
-                    return !!rec && (now - rec.at) < UNCONFIRMED_TTL;
-                };
-                cloudArr.forEach(rec => {
-                    const key = cloudRecordKey(col, rec);
-                    if (!key) return;
-                    const localIdx = merged.findIndex(lr => cloudRecordKey(col, lr) === key);
-                    if (localIdx > -1) {
-                        if (isFresh(key)) return;
-                        const cloudUpd = toTime(rec.updatedAt);
-                        const localUpd = toTime(merged[localIdx].updatedAt);
-                        if (cloudUpd > localUpd) {
-                            merged[localIdx] = rec;
-                        }
-                        return;
-                    }
-                    if (isFresh(key)) return;
-                    merged.push(rec);
-                });
-                STATE[cfg.state] = merged;
-            } else if (FSEngine.dirty.has(col)) {
-                const local = STATE[cfg.state] || [];
-                const mirror = FSEngine.mirrors[col] || new Map();
-                const merged = local.slice();
-                cloudArr.forEach(rec => {
-                    const key = cloudRecordKey(col, rec);
-                    if (!key) return;
-                    if (merged.some(lr => cloudRecordKey(col, lr) === key)) return;
-                    if (mirror.has(key)) return;
-                    merged.push(rec);
-                });
-                STATE[cfg.state] = merged;
-            } else {
-                const local = STATE[cfg.state] || [];
-                const cloudKeySet = new Set();
-                cloudArr.forEach(rec => {
-                    const key = cloudRecordKey(col, rec);
-                    if (key) cloudKeySet.add(key);
-                });
-                const pending = FSEngine.unconfirmed[col];
-                const now = Date.now();
-                const isFresh = (key) => {
-                    const rec = pending ? pending.get(key) : null;
-                    return !!rec && (now - rec.at) < UNCONFIRMED_TTL;
-                };
-                const merged = [];
-                const mergedKeys = new Set();
-                cloudArr.forEach(rec => {
-                    const key = cloudRecordKey(col, rec);
-                    if (!key || mergedKeys.has(key)) return;
-                    mergedKeys.add(key);
-                    const localRec = local.find(lr => cloudRecordKey(col, lr) === key);
-                    if (localRec) {
-                        // Revision-based resolution: the incoming cloud record may be a stale
-                        // read-replica that predates a write this client committed. Accept the
-                        // cloud record only when its updatedAt is >= ours (newer, or the same
-                        // write echoed back); otherwise keep the local (newer) version. Records
-                        // without a revision count as oldest, so the cloud wins for legacy data.
-                        const cloudUpd = toTime(rec.updatedAt);
-                        const localUpd = toTime(localRec.updatedAt);
-                        if (localUpd > cloudUpd) {
-                            merged.push(localRec);
-                        } else {
-                            merged.push(rec);
-                        }
-                    } else {
-                        merged.push(rec);
-                    }
-                });
-                const preserved = [];
-                let missedLocals = false;
-                const prevKeys = prevMirrorKeys || new Set();
-                local.forEach(rec => {
-                    const key = cloudRecordKey(col, rec);
-                    // Preserve a local record the snapshot lacks when it is either a
-                    // brand-new record the snapshot hasn't caught up with, or a
-                    // recently-committed write that a stale snapshot is missing
-                    // (previously this silently dropped the just-created check-in and
-                    // let a later flush delete it from the cloud).
-                    if (key && !cloudKeySet.has(key) && (!prevKeys.has(key) || isFresh(key))) {
-                        preserved.push(rec);
-                        missedLocals = true;
-                    }
-                });
-                STATE[cfg.state] = merged.concat(preserved);
-                if (missedLocals) {
-                    FSEngine.dirty.add(col);
-                    FSEngine.scheduleFlush();
-                }
-            }
-            FSEngine.applied.add(col);
-            // Track every record key ever applied to STATE, so a mirror<->STATE
-            // divergence is only treated as a deletion when the record was actually
-            // present locally (a transient "snapshot ahead of STATE" gap must never
-            // turn into a cloud delete).
-            const seenArr = STATE[cfg.state];
-            if (Array.isArray(seenArr)) {
-                if (!FSEngine.seenKeys[col]) FSEngine.seenKeys[col] = new Set();
-                seenArr.forEach(r => { const k = cloudRecordKey(col, r); if (k) FSEngine.seenKeys[col].add(k); });
-            }
-        }
-
-        // Reconcile stale local data after a member id rename that happened on
-        // another device (learned from the cloud memberRenames ledger). Without
-        // this, a client that was offline (or dirty) during the rename would
-        // flush its stale member record back to Firestore and resurrect the old
-        // doc — producing a duplicate member.
-        function applyRenameLedger() {
-            const map = FSEngine.renameMap;
-            if (!map || !map.size) return;
-            const changedCols = new Set();
-
-            // 1) Translate references to the renamed member in local visits,
-            //    class check-ins, payments and notifications.
-            [['visits', STATE.visits], ['classCheckins', STATE.classCheckins], ['payments', STATE.payments], ['notifications', STATE.notifications]].forEach(pair => {
-                const name = pair[0];
-                const arr = pair[1];
-                if (!Array.isArray(arr)) return;
-                arr.forEach(r => { if (r && r.memberId && map.has(r.memberId)) { r.memberId = map.get(r.memberId); changedCols.add(name); } });
-            });
-
-            // 2) Replace any locally-kept record of the renamed member with the
-            //    cloud successor doc, carrying forward a lower sessionsLeft (an
-            //    offline check-in decrement must not be lost).
-            const cloudById = new Map();
-            (FSEngine.lastDocs.members || []).forEach(d => { if (d && d.id) cloudById.set(d.id, d); });
-            const keep = [];
-            const seen = new Set();
-            let replaced = false;
-            (STATE.members || []).forEach(m => {
-                if (!m || !m.id) return;
-                if (map.has(m.id)) {
-                    const succ = cloudById.get(map.get(m.id));
-                    if (!succ) return; // successor not synced yet — drop the stale record
-                    const merged = Object.assign({}, succ);
-                    if (typeof m.sessionsLeft !== 'undefined' && parseInt(m.sessionsLeft) < parseInt(succ.sessionsLeft || 0)) merged.sessionsLeft = m.sessionsLeft;
-                    if (!seen.has(succ.id)) { seen.add(succ.id); keep.push(merged); }
-                    replaced = true;
-                    return;
-                }
-                if (!seen.has(m.id)) { seen.add(m.id); keep.push(m); }
-            });
-            if (replaced) { STATE.members = keep; changedCols.add('members'); }
-
-            if (changedCols.size) {
-                changedCols.forEach(c => FSEngine.dirty.add(c));
+            // Re-hydrate the check-in-affected collections after an RPC call.
+            async reloadCheckinData() {
+                await Promise.all([
+                    this.load('members'), this.load('visits'), this.load('classCheckins')
+                ]);
                 fallbackToLocal();
                 scheduleAfterCloudSyncRender();
             }
-        }
+        };
 
-        function handleCollectionSnapshot(col) {
-            return (snapshot) => {
-                const prevMirrorKeys = new Set();
-                const prevMirrorData = new Map();
-                const prevMirror = FSEngine.mirrors[col];
-                if (prevMirror) prevMirror.forEach((v, k) => { prevMirrorKeys.add(k); prevMirrorData.set(k, v); });
-                const mirror = new Map();
-                const docs = [];
-                snapshot.forEach(d => {
-                    const rec = d.data();
-                    if (!rec || typeof rec !== 'object') return;
-                    if (col === 'members') {
-                        MEMBER_PRIVATE_FIELDS.forEach(f => { delete rec[f]; });
-                    }
-                    mirror.set(d.id, JSON.stringify(rec));
-                    if (col === 'members' && rec.id != null && rec.id !== d.id) return;
-                    docs.push(rec);
-                });
-                const wasReady = FSEngine.ready[col];
-                FSEngine.lastDocs[col] = docs;
-                FSEngine.ready[col] = true;
-                FSEngine.snapSeen.add(col);
-                if (!FSEngine.dirty.has(col)) FSEngine.mirrors[col] = mirror;
+        // Schedule / closed-date / private extra maps (kept separate to avoid
+        // cluttering the per-record MAPS).
+        const MAPS_EXTRA = {
+            scheduleFrom: (r) => ({
+                id: r.id, name: r.name, description: r.description,
+                practitioners: r.practitioners, requirements: r.requirements,
+                color: r.color, capacity: r.capacity, isPublic: r.is_public,
+                slots: []
+            }),
+            slotFrom: (sl) => ({ id: sl.id, day: sl.day, start: sl.start, end: sl.end }),
+            scheduleTo: (cls) => ({
+                id: cls.id, name: cls.name, description: cls.description || null,
+                description_html: false, practitioners: cls.practitioners || null,
+                requirements: cls.requirements || null, color: cls.color || '#2563eb',
+                capacity: cls.capacity || null, is_public: cls.isPublic !== false
+            }),
+            closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat }),
+            privateFrom: (r) => {
+                const entry = {};
+                if (r.phone != null) entry.phone = r.phone;
+                if (r.dob != null) entry.dob = r.dob;
+                if (r.notes != null) entry.notes = r.notes;
+                if (r.email != null) entry.email = r.email;
+                return entry;
+            }
+        };
 
-                // Locally-committed writes are confirmed once this snapshot reflects
-                // the exact value we wrote (order-insensitive content match).
-                confirmSnapshotKeys(col, mirror);
+        // =====================================================================
+        // FSEngine — compatibility shim. The UI files reference a small set of
+        // FSEngine properties; this object keeps them working on top of Sync.
+        // =====================================================================
+        const FSEngine = {
+            db: sb,
+            ready: Sync.ready,
+            migrationResolved: false,
+            renameMap: new Map(),      // renames are server-side now — always empty
+            _subs: Sync._subs,
+            mirrors: Sync.mirrors,
 
-                // Byte-identical re-delivery (re-subscribe / eventual read replica)
-                // carries no new information: skip the apply + full re-render so a
-                // snapshot storm cannot re-enter the sync loop.
-                let unchanged = false;
-                if (wasReady && !FSEngine.dirty.has(col) && prevMirror && prevMirror.size === mirror.size) {
-                    unchanged = true;
-                    for (const k of prevMirror.keys()) {
-                        if (prevMirror.get(k) !== mirror.get(k)) { unchanged = false; break; }
-                    }
-                }
+            isAdminClient: () => { try { return !!App.isAdminAuthed && App.isAdminAuthed(); } catch (e) { return false; } },
 
-                if (FSEngine.migrationResolved) {
-                    if (!unchanged) {
-                        applyCollectionSnapshotData(col, prevMirrorKeys, prevMirrorData);
-                        fallbackToLocal();
-                        scheduleAfterCloudSyncRender();
-                    }
-                }
-                if (FSEngine.migrationResolved && col === 'members' && !unchanged) {
-                    // Reconcile renames only when the members snapshot actually
-                    // changed (not on every delivery). The rename ledger snapshot
-                    // itself also drives applyRenameLedger.
-                    applyRenameLedger();
-                }
-                if (FSEngine.migrationResolved && col === 'members' && FSEngine.isAdminClient()) {
-                    DB.fetchAllMemberPrivate().then(() => { fallbackToLocal(); scheduleAfterCloudSyncRender(); });
-                }
-                // Re-apply pending local intents (deletes must not be resurrected by a
-                // stale snapshot; unconfirmed writes must be re-flushed). Runs even when
-                // the snapshot is unchanged so boot-time reconciliation is not skipped.
-                if (FSEngine.migrationResolved) reconcilePendingIntents(col);
-                if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
-            };
-        }
+            whenReady: (col, timeoutMs) => {
+                const t = timeoutMs || 12000;
+                return Promise.race([
+                    Sync.whenReady(col),
+                    new Promise(res => setTimeout(res, t))
+                ]);
+            },
+            whenReadyAll: (cols, timeoutMs) => {
+                const t = timeoutMs || 12000;
+                return Promise.race([
+                    Sync.whenReadyAll(cols),
+                    new Promise(res => setTimeout(res, t))
+                ]);
+            },
 
-        function handleArrayDocSnapshot(col) {
-            return (doc) => {
-                const items = (doc.exists && doc.data() && Array.isArray(doc.data().items)) ? doc.data().items : [];
-                FSEngine.arrayMirrors[col] = JSON.stringify(items);
-                FSEngine.ready[col] = true;
-                FSEngine.snapSeen.add(col);
-                // Kiosk/member clients can never legitimately edit schedules/closedDates
-                // (they are admin-only writes), so a local "dirty" flag on these array
-                // docs is always spurious for them. Ignoring it here prevents a fresh
-                // client (empty localStorage / incognito) from getting the collection
-                // stuck empty: if the snapshot arrives before the migration state
-                // resolves and the flag gets set, the apply would be skipped forever
-                // (the doc never changes again, so no snapshot re-fires, and kiosk
-                // clients can't flush admin-only writes to clear it). Unlike per-record
-                // collections there is no dirty merge fallback, so we apply regardless.
-                const isAdmin = FSEngine.isAdminClient();
-                if (FSEngine.migrationResolved && (!FSEngine.dirty.has(col) || !isAdmin)) {
-                    STATE[ARRAY_DOCS[col].state] = items;
-                    FSEngine.applied.add(col);
-                    if (!isAdmin) FSEngine.dirty.delete(col);
-                    fallbackToLocal();
-                    scheduleAfterCloudSyncRender();
-                }
-                if (FSEngine.dirty.has(col)) FSEngine.scheduleFlush();
-            };
-        }
+            notifyRename: (oldId, newId) => {
+                return Sync.renameMember(oldId, newId).catch(err => console.warn('rename failed', err));
+            },
 
+            resubscribeMissing: () => { /* Supabase RLS does not kill listeners */ },
+            migrate: () => Promise.resolve(true),
+            scheduleFlush: () => Sync.scheduleFlush(),
+            flush: () => Sync.flush(),
+            checkIn: (payload) => Sync.checkIn(payload),
+            reloadCheckinData: () => Sync.reloadCheckinData(),
+            resyncAll: () => { Sync.loadAll().then(() => scheduleAfterCloudSyncRender()); }
+        };
+
+        // Mark every cloud collection loaded so resolution proceeds.
         function resolveMigrationState() {
             if (FSEngine.migrationResolved) return;
             FSEngine.migrationResolved = true;
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                applyCollectionSnapshotData(col, new Set(), new Map());
-                // Boot-time reconciliation of persisted local intents (e.g. a delete
-                // that didn't land before a reload): keep them deleted locally and
-                // re-issue the cloud write/delete.
-                reconcilePendingIntents(col);
-            });
-            Object.keys(ARRAY_DOCS).forEach(col => {
-                if (FSEngine.arrayMirrors[col] === undefined) return;
-                const isAdmin = FSEngine.isAdminClient();
-                if (!FSEngine.dirty.has(col) || !isAdmin) {
-                    STATE[ARRAY_DOCS[col].state] = JSON.parse(FSEngine.arrayMirrors[col]);
-                    FSEngine.applied.add(col);
-                    if (!isAdmin) FSEngine.dirty.delete(col);
-                }
-            });
+        }
+
+        function saveToCloud() {
             fallbackToLocal();
-            scheduleAfterCloudSyncRender();
-            applyRenameLedger();
-            FSEngine.scheduleFlush();
+            if (!sb) return Promise.resolve();
+            return Sync.scheduleFlush();
         }
 
         var renderDebounceTimer = null;
@@ -1171,123 +801,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             safe(() => App.updateUICurrency && App.updateUICurrency());
         }
 
-        function subscribePerRecord(col) {
-            if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} }
-            FSEngine._subs[col] = db.collection(col).onSnapshot(handleCollectionSnapshot(col), err => {
-                console.error('Firestore listener error (' + col + '):', err);
-                // Notifications are write-only for kiosk (rules allow create but not
-                // read). Mark the collection as ready with empty data so the kiosk
-                // can still create notifications without the sync engine blocking.
-                if (col === 'notifications' && !FSEngine.ready[col]) {
-                    FSEngine.mirrors[col] = new Map();
-                    FSEngine.lastDocs[col] = [];
-                    FSEngine.ready[col] = true;
-                    FSEngine.snapSeen.add(col);
-                }
-            });
-        }
-
-        function subscribeRenameLedger() {
-            if (FSEngine._subs['memberRenames']) { try { FSEngine._subs['memberRenames'](); } catch (e) {} }
-            FSEngine._subs['memberRenames'] = db.collection('memberRenames').onSnapshot(snapshot => {
-                const map = new Map();
-                snapshot.forEach(d => { const rec = d.data(); if (rec && rec.oldId && rec.newId) map.set(rec.oldId, rec.newId); });
-                FSEngine.renameMap = map;
-                if (FSEngine.migrationResolved) { applyRenameLedger(); scheduleAfterCloudSyncRender(); }
-            }, err => console.error('Firestore listener error (memberRenames):', err));
-        }
-
-        function subscribeArrayDoc(col) {
-            if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} }
-            FSEngine._subs[col] = db.collection(col).doc('global').onSnapshot(handleArrayDocSnapshot(col), err => console.error('Firestore listener error (' + col + '):', err));
-        }
-
-        function subscribeSettings() {
-            if (FSEngine._subs['settings']) { try { FSEngine._subs['settings'](); } catch (e) {} }
-            FSEngine._subs['settings'] = db.collection('settings').doc('global').onSnapshot(doc => {
-                if (doc.exists) {
-                    const d = doc.data() || {};
-                    if (d.portalName != null) STATE.portalName = d.portalName;
-                    if (Array.isArray(d.hiddenBelts)) STATE.hiddenBelts = d.hiddenBelts;
-                    if (d.currency != null) STATE.currency = d.currency;
-                    if (d.checkinNotice != null) STATE.checkinNotice = d.checkinNotice;
-                    if (d.checkinNoticeColor != null) STATE.checkinNoticeColor = d.checkinNoticeColor;
-                    if (d.showClassCheckins != null) STATE.showClassCheckins = d.showClassCheckins;
-                    if (d.memberStatsVisibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, d.memberStatsVisibility);
-                    FSEngine.settingsMirror = JSON.stringify(settingsPayload());
-                }
-                FSEngine.settingsReady = true;
-                if (!FSEngine.dirty.has('settings')) { fallbackToLocal(); scheduleAfterCloudSyncRender(); }
-                if (FSEngine.dirty.has('settings')) FSEngine.scheduleFlush();
-            }, err => console.error('Firestore settings listener error:', err));
-        }
-
-        // Re-attach listeners for any collection that never delivered a snapshot.
-        // A Firestore onSnapshot listener that errors (e.g. permission-denied while
-        // the kiosk was signed in anonymously) is terminal — it will not re-fire
-        // automatically once the admin's credentials become available. Without this,
-        // logging in as admin after a denied boot leaves every collection empty
-        // forever (Staff Check-in, member directory, schedules, etc. show nothing).
-        function resubscribeMissing() {
-            if (!db || !db.collection) return;
-            Object.keys(CLOUD_COLLECTIONS).forEach(col => {
-                if (col === 'notifications' || col === 'members') return;
-                if (!FSEngine.snapSeen.has(col)) subscribePerRecord(col);
-            });
-            Object.keys(ARRAY_DOCS).forEach(col => { if (!FSEngine.snapSeen.has(col)) subscribeArrayDoc(col); });
-            if (!FSEngine.settingsReady) subscribeSettings();
-            // Notifications are admin-read-only. On a kiosk boot the listener errors
-            // (rules allow create but not read) and the fallback marks it ready with
-            // empty data — so after an admin login it must be re-subscribed to get
-            // the real list; the snapSeen flag alone cannot distinguish the two.
-            // Members also need re-subscription on admin login so the snapshot
-            // re-fires and triggers the private subcollection fetch for PII data.
-            if (FSEngine.isAdminClient()) {
-                subscribePerRecord('notifications');
-                subscribePerRecord('members');
-                // Payments and the bins are admin-read-only: anonymous kiosk auth
-                // denies them, which kills a listener for good. After a logout these
-                // never reload unless every admin unlock forces a fresh subscription.
-                ['payments', 'planBin', 'scheduleBin', 'notificationBin', 'bin'].forEach(col => subscribePerRecord(col));
-            }
-            subscribeRenameLedger();
-        }
-
-        function initRealtimeSync() {
-            try {
-                if (!window.firebase || !firebase.firestore) {
-                    console.warn('Firebase compat not available yet — realtime sync disabled.');
-                    return;
-                }
-                db = firebase.firestore();
-                FSEngine.db = db;
-
-                Object.keys(CLOUD_COLLECTIONS).forEach(subscribePerRecord);
-                // Rename ledger: oldId -> newId for every self-service ID change.
-                // Kept separate from CLOUD_COLLECTIONS because it is a key-value
-                // map, not an array collection.
-                subscribeRenameLedger();
-                Object.keys(ARRAY_DOCS).forEach(subscribeArrayDoc);
-                subscribeSettings();
-
-                // One-time migration from the legacy single document (admin only).
-                FSEngine.migrate();
-                // Kiosk clients cannot migrate; poll for the admin-completed marker
-                // so they can switch from local state to the per-record collections.
-                if (FSEngine.migratePoll) clearInterval(FSEngine.migratePoll);
-                FSEngine.migratePoll = setInterval(async () => {
-                    if (FSEngine.migrationResolved) { clearInterval(FSEngine.migratePoll); return; }
-                    const done = await FSEngine.migrate();
-                    if (done) clearInterval(FSEngine.migratePoll);
-                }, 15000);
-
-            } catch (err) {
-                console.warn('Failed to initialize realtime sync', err);
-            }
-        }
-
-        FSEngine.resubscribeMissing = resubscribeMissing;
-
         const DB = {
             // getters
             getMembers: () => {
@@ -1295,9 +808,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (!FSEngine.isAdminClient()) return members;
                 const priv = STATE.memberPrivate || {};
                 members.forEach(m => {
-                    if (m.id && priv[m.id]) {
-                        Object.assign(m, priv[m.id]);
-                    }
+                    if (m.id && priv[m.id]) Object.assign(m, priv[m.id]);
                 });
                 return members;
             },
@@ -1323,7 +834,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             // setters (update state and persist)
             saveMembers: (data) => {
                 const members = data || [];
-                // Extract private fields into the separate cache, strip from members.
                 const priv = STATE.memberPrivate || {};
                 const updatedPrivate = new Set();
                 const memberIds = new Set();
@@ -1335,28 +845,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     MEMBER_PRIVATE_FIELDS.forEach(f => {
                         if (m[f] !== undefined) { entry[f] = m[f]; hasPrivate = true; delete m[f]; }
                     });
+                    if (m.email !== undefined) { entry.email = m.email; hasPrivate = true; delete m.email; }
                     if (hasPrivate) { priv[m.id] = entry; updatedPrivate.add(m.id); }
                 });
-                // Clean up private fields for members removed from the array
                 Object.keys(priv).forEach(mid => {
                     if (!memberIds.has(mid)) { delete priv[mid]; updatedPrivate.add(mid); }
                 });
                 STATE.memberPrivate = priv;
                 STATE.members = members;
-                // Write private fields to Firestore subcollection (async, fire-and-forget)
-                if (updatedPrivate.size > 0 && db && db.collection) {
-                    updatedPrivate.forEach(mid => {
-                        if (priv[mid]) {
-                            db.collection('members').doc(mid).collection('private').doc('info')
-                                .set(priv[mid], { merge: true })
-                                .catch(err => console.warn('Failed to write member private fields for', mid, err));
-                        } else {
-                            db.collection('members').doc(mid).collection('private').doc('info')
-                                .delete()
-                                .catch(err => console.warn('Failed to delete member private fields for', mid, err));
-                        }
-                    });
-                }
                 return saveToCloud();
             },
             saveBin: (data) => { STATE.bin = data || []; return saveToCloud(); },
@@ -1379,59 +875,19 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 
             fetchAllMemberPrivate: async (force) => {
-                if (!db || !db.collection) return;
-                await FSEngine.whenReady('members');
-                const members = STATE.members || [];
-                if (!members.length) return;
-                // Fetch the private subcollection only for members whose PUBLIC doc
-                // changed since the last fetch (order-insensitive content signature).
-                // This was previously issuing N reads on EVERY members snapshot —
-                // the main driver of the Firestore read-quota blowup.
-                const sigs = DB._privateSignature || (DB._privateSignature = {});
-                const memberPrivate = Object.assign({}, STATE.memberPrivate || {});
-                const changedIds = [];
-                const currentIds = new Set();
-                members.forEach(m => {
-                    if (!m.id) return;
-                    currentIds.add(m.id);
-                    const sig = JSON.stringify(normalizeJsonValue(m));
-                    if (force || sigs[m.id] !== sig) {
-                        sigs[m.id] = sig;
-                        changedIds.push(m.id);
-                    }
-                });
-                // Drop signatures for removed members so they refetch if re-added.
-                Object.keys(sigs).forEach(id => { if (!currentIds.has(id)) delete sigs[id]; });
-                if (!changedIds.length) return;
-                const promises = changedIds.map(id => {
-                    return db.collection('members').doc(id).collection('private').doc('info').get()
-                        .then(doc => {
-                            if (doc.exists) {
-                                const data = doc.data() || {};
-                                const entry = {};
-                                MEMBER_PRIVATE_FIELDS.forEach(f => {
-                                    if (data[f] !== undefined) entry[f] = data[f];
-                                });
-                                if (Object.keys(entry).length > 0) memberPrivate[id] = entry;
-                                else delete memberPrivate[id];
-                            } else {
-                                delete memberPrivate[id];
-                            }
-                        })
-                        .catch(() => {});
-                });
-                await Promise.all(promises);
-                STATE.memberPrivate = memberPrivate;
-                fallbackToLocal();
+                if (!sb || !FSEngine.isAdminClient()) return;
+                await Sync.whenReady('members');
+                try {
+                    await Sync.loadPrivate();
+                    fallbackToLocal();
+                } catch (e) { console.warn('fetchAllMemberPrivate failed', e); }
             },
 
             exportData: () => {
                 if (!FSEngine.isAdminClient()) { alert('Admin access required.'); return; }
                 const members = (STATE.members || []).map(m => {
                     const entry = Object.assign({}, m);
-                    if (FSEngine.isAdminClient() && STATE.memberPrivate && STATE.memberPrivate[m.id]) {
-                        Object.assign(entry, STATE.memberPrivate[m.id]);
-                    }
+                    if (STATE.memberPrivate && STATE.memberPrivate[m.id]) Object.assign(entry, STATE.memberPrivate[m.id]);
                     return entry;
                 });
                 const data = {
@@ -1440,7 +896,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     portalName: STATE.portalName || '🥋 BJJ Kiosk Portal', hiddenBelts: STATE.hiddenBelts || [],
                     bin: STATE.bin || [], classCheckins: STATE.classCheckins || [], notifications: STATE.notifications || [],
                     notificationBin: STATE.notificationBin || [],
-                    adminPassword: null, // legacy field — never stored anymore
+                    adminPassword: null,
                     currency: STATE.currency || '€', checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
                     checkinNotice: STATE.checkinNotice || '', showClassCheckins: STATE.showClassCheckins !== false,
                     memberStatsVisibility: STATE.memberStatsVisibility || {}
@@ -1478,8 +934,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         if (data.showClassCheckins !== undefined) STATE.showClassCheckins = data.showClassCheckins;
                         if (data.memberStatsVisibility) STATE.memberStatsVisibility = data.memberStatsVisibility;
 
-                        // Extract private fields from imported member data and store
-                        // in the private subcollection cache, then stripe public-only.
                         const priv = STATE.memberPrivate || {};
                         (STATE.members || []).forEach(m => {
                             if (!m.id) return;
@@ -1488,6 +942,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                             MEMBER_PRIVATE_FIELDS.forEach(f => {
                                 if (m[f] !== undefined) { entry[f] = m[f]; hasPrivate = true; delete m[f]; }
                             });
+                            if (m.email !== undefined) { entry.email = m.email; hasPrivate = true; delete m.email; }
                             if (hasPrivate) priv[m.id] = entry;
                         });
                         STATE.memberPrivate = priv;
@@ -1496,7 +951,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                             alert('Backup restored successfully!');
                             location.reload();
                         }).catch(() => {
-                            // Even if cloud save fails, persist locally and reload
                             fallbackToLocal();
                             alert('Backup restored locally (cloud save failed).');
                             location.reload();
@@ -1507,13 +961,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 reader.readAsText(fileInput.files[0]);
             },
 
-            // Force-reload all Firestore listeners after a quota timeout or sync failure.
             resyncAll: () => {
                 if (!FSEngine.isAdminClient()) return alert('Admin access required.');
-                FSEngine.settingsReady = false;
-                FSEngine.snapSeen.clear();
-                FSEngine.resubscribeMissing();
-                alert('Firestore listeners reattached — data should reload within a few seconds.');
+                FSEngine.resyncAll();
+                alert('Supabase data reloading — the view should refresh within a few seconds.');
             }
         };
 
@@ -1527,10 +978,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const yyyy = d.getFullYear();
                 return `${dd}/${mm}/${yyyy}`;
             },
-            // Local-date helpers: "today" and date-to-YYYY-MM-DD conversions.
-            // toISOString() returns the UTC date, which shifts the day for users in
-            // positive/negative offsets (e.g. Greece is UTC+2/+3), so all date
-            // keys, comparisons and inputs must use the local calendar date.
             dateToLocalIso: (date) => {
                 if (!date) return '';
                 const d = date instanceof Date ? date : new Date(date);
@@ -1542,8 +989,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const d = new Date();
                 return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
             },
-            // Local 'YYYY-MM-DDTHH:MM' value for <input type="datetime-local">,
-            // which expects wall-clock time, not UTC.
             toLocalDatetimeInput: (iso) => {
                 if (!iso) return '';
                 const d = new Date(iso);
@@ -1562,7 +1007,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             formatTime: (dateStr) => { if (!dateStr) return '--:--'; return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); },
             getDaysRemaining: (expDateStr) => { 
                 if (!expDateStr) return -1;
-                // Parse date as local time so it expires at midnight local time
                 const expDate = new Date(expDateStr + 'T23:59:59'); 
                 const now = new Date();
                 return Math.floor((expDate - now) / (1000 * 60 * 60 * 24)); 
@@ -1578,19 +1022,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 return Utils.formatDurationMins(mins);
             },
             escapeHTML: (str) => { if (!str) return ''; const div = document.createElement('div'); div.innerText = str; return div.innerHTML; },
-            // Normalize a string into a locale-independent sort key so Greek names
-            // sort alphabetically in every browser. Strips combining accents (tonos),
-            // lowercases, and unifies final sigma. Greek letters' Unicode order
-            // matches the Greek alphabet, so code-point comparison is correct.
             sortKey: (str) => String(str == null ? '' : str)
                 .normalize('NFD')
                 .replace(/[\u0300-\u036f]/g, '')
                 .toLowerCase()
                 .replace(/ς/g, 'σ'),
-            // True when a string contains any Greek-script character. Used to sort
-            // Greek names ahead of Latin/English names in the member directory.
             isGreek: (str) => /[\u0370-\u03FF]/.test(String(str == null ? '' : str)),
-            // Accent-insensitive search normalization (e.g. "Σπύρος" == "Σπυρος").
             normalizeSearch: (str) => Utils.sortKey(str),
             renderRichText: (text) => {
                 if (!text) return '';
@@ -1666,26 +1103,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const beltClass = baseBelt.toLowerCase();
                 return `<span class="belt-badge belt-${beltClass}">${baseBelt}</span>`;
             },
-            // Textless, fixed-width belt indicator (same size for every belt).
-            // Used in compact kiosk lists (leaderboard, Currently Inside) so
-            // rows align and only the belt color communicates rank.
             getBeltBox: (rawBelt) => {
                 const b = rawBelt || 'White';
                 const baseBelt = b.split('/')[0].trim();
                 const beltClass = baseBelt.toLowerCase();
                 return `<span class="belt-box belt-${beltClass}" aria-label="${baseBelt}"></span>`;
             },
-            // Combined ID badge: the member ID inside the belt-colored box.
-            // All boxes keep the same fixed width so rows align uniformly.
             getMemberIdBadge: (m) => {
                 const beltBase = (m && m.belt) ? m.belt.split('/')[0].trim() : 'White';
                 const beltClass = beltBase.toLowerCase();
                 const id = (m && m.id) ? m.id : '—';
                 return `<span class="belt-badge belt-${beltClass}" style="width: 84px; text-align: center; overflow-wrap: anywhere;">${Utils.escapeHTML(id)}</span>`;
             },
-
-            // CALCULATE EXPIRATION DATE SKIPPING CLOSED ACADEMY DATES
-            // Builds a full set of closed date strings, expanding ranges and yearly-repeating entries.
             buildClosedSet: (forYear) => {
                 const closedList = DB.getClosedDates();
                 const closed = new Set();
@@ -1695,11 +1124,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     const endStr   = entry.dateEnd || entry.date;
                     const repeat   = !!entry.repeat;
 
-                    // Parse base start/end components
                     const [sy, sm, sd] = startStr.split('-').map(Number);
                     const [ey, em, ed] = endStr.split('-').map(Number);
 
-                    // For repeating entries, generate for every year from base year up to forYear
                     const maxYear = (repeat && forYear) ? Math.max(forYear, sy) : sy;
                     for (let yr = sy; yr <= maxYear; yr++) {
                         const yearOffset = yr - sy;
@@ -1713,7 +1140,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 });
                 return closed;
             },
-
             calculateExpirationDate: (startDateStr, durationDays) => {
                 if (!startDateStr || !durationDays) return '';
                 let current = new Date(startDateStr);
@@ -1721,7 +1147,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
                 let count = 0;
                 let ymd = current.toISOString().split('T')[0];
-                // Build set using current year and span years as needed
                 const closedSet = Utils.buildClosedSet(new Date(startDateStr).getUTCFullYear() + 5);
 
                 if (!closedSet.has(ymd)) count++;
@@ -1768,10 +1193,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 ];
             })(),
             draggedColIndex: null,
-            visitTimeoutHours: 1, // default timeout hours for non-class check-ins
-            // Compute expectedExitTime for a given entry timestamp (ISO string). If checking in during a scheduled class
-            // the expected exit is class end time + 15 minutes. Otherwise use the configurable timeout (default 1 hour).
-            // Pass forceDefault=true for explicit open-gym (no-class) check-ins so they always use the 1-hour default.
+            visitTimeoutHours: 1,
             computeExpectedExitTime: (entryIso, selectedClasses = [], forceDefault = false) => {
                 const now = entryIso ? new Date(entryIso) : new Date();
 
@@ -1801,23 +1223,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 for (const cls of schedules) {
                     for (const slot of (cls.slots || [])) {
                         if (slot.day !== todayName) continue;
-                        // slot.start / slot.end expected format: 'HH:MM'
                         const [sh, sm] = (slot.start || '00:00').split(':').map(Number);
                         const [eh, em] = (slot.end || '00:00').split(':').map(Number);
                         const startDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm);
                         const endDt = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eh, em);
                         if (now >= startDt && now <= endDt) {
-                            // Ongoing class — expected exit is class end + 15 minutes
                             return new Date(endDt.getTime() + (15 * 60 * 1000)).toISOString();
                         }
                     }
                 }
-                // Default: entry + timeout hours
                 const hours = App.visitTimeoutHours || 1;
                 return new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
             },
-
-            // Build a local Date for a class start from a check-in's slotDate/slotStart (YYYY-MM-DD, HH:MM).
             getClassStartTime: (checkin) => {
                 if (!checkin) return null;
                 let y = null, mo = null, d = null;
@@ -1833,12 +1250,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (y == null || isNaN(y) || isNaN(mo) || isNaN(d)) return null;
                 return new Date(y, mo - 1, d, hh, mm, 0, 0);
             },
-
-            // For a visit tied to scheduled class(es), returns an array of [from, until] Date pairs
-            // during which the member should be shown in "Currently Inside". Each class window runs
-            // from 30 minutes before the class start until 15 minutes after the class end.
-            // Returns an empty array when there is no class info (open gym / admin force check-in),
-            // meaning the member is always visible.
             getVisitVisibleWindows: (visit) => {
                 const windows = [];
                 if (!visit || !visit.id) return windows;
@@ -1852,7 +1263,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), t[0] || 0, t[1] || 0, 0, 0);
                     }
                     if (!end || isNaN(end.getTime())) {
-                        // Fallback: assume a 1-hour class duration
                         end = new Date(start.getTime() + 60 * 60 * 1000);
                     }
                     windows.push({
@@ -1862,20 +1272,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 });
                 return windows;
             },
-
-            // Whether a visit should be visible in "Currently Inside" at the given time.
             isVisitVisibleNow: (visit, now) => {
                 const windows = App.getVisitVisibleWindows(visit);
                 if (windows.length === 0) return true;
                 const t = now.getTime();
                 return windows.some(w => t >= w.from.getTime() && t <= w.until.getTime());
             },
-
-            // Duration to display for a closed visit. For visits tied to scheduled class(es)
-            // the displayed duration is the class window (earliest class start to latest class
-            // end), independent of the actual check-in/check-out times, so that late check-ins
-            // after a class has finished don't produce a negative duration. Open-gym and other
-            // visits fall back to the entry->exit duration.
             calcVisitDuration: (visit) => {
                 if (!visit || !visit.id) return Utils.calcDuration(visit && visit.entryTime, visit && visit.exitTime);
                 if (!visit.exitTime) return 'In Progress';
@@ -1893,7 +1295,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         end = new Date(start.getFullYear(), start.getMonth(), start.getDate(), t[0] || 0, t[1] || 0, 0, 0);
                     }
                     if (!end || isNaN(end.getTime())) {
-                        // Fallback: assume a 1-hour class duration
                         end = new Date(start.getTime() + 60 * 60 * 1000);
                     }
                     if (!maxEnd || end.getTime() > maxEnd.getTime()) maxEnd = end;
@@ -1903,26 +1304,6 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 return Utils.calcDuration(visit.entryTime, visit.exitTime);
             },
-
-            // Determine whether a visit created for this member should be marked unpaid by default
-            // Logic:
-            // - Frozen/Inactive accounts are treated as unpaid/needs-attention
-            // - An ACTIVE time-based membership (planDays set + unexpired expirationDate) always
-            //   covers the visit — even if a leftover session balance exists. This prevents an
-            //   unlimited monthly member from being flagged unpaid just because their session
-            //   count hit zero (mixed plan scenario).
-            // - Otherwise, if the member is session-based (sessionsTotal true): paid only while
-            //   sessions remain. A leftover session balance can still cover visits after a
-            //   time-based plan has expired.
-            // - A time-based plan (planDays) that is set but expired -> unpaid (no session fallback).
-            // - Legacy members without plan metadata stay paid while they hold an unexpired
-            //   expirationDate (manual expiration workflow).
-            // - An Active member with NO coverage at all (no plan, no expiration, no sessions)
-            //   is treated as unpaid — closes the free-rider loophole where an account activated
-            //   by a generic payment could check in as fully paid forever.
-            // NOTE: Because a session is consumed per CHECK-IN ACTION (not per class), a member who
-            // checks in separately for 2 back-to-back classes with only 1 session left will have the
-            // first check-in consume the session and the second check-in flagged as unpaid here.
             computeVisitUnpaid: (member) => {
                 if (!member) return true;
                 if (member.accountStatus === 'Frozen') return true;
@@ -1935,12 +1316,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) return false;
                 return true;
             },
-
             normalizeScheduleSlotId: (classId, slotDay, slotStart, slotEnd) => {
                 const rawId = `checkin-slot-${classId}-${slotDay}-${slotStart}-${slotEnd}`;
                 return rawId.replace(/[^a-zA-Z0-9_-]/g, '_');
             },
-
             getWeekdayDateForCurrentWeek: (dayName) => {
                 if (!dayName) return null;
                 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -1955,32 +1334,24 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
 
             // ---------- ADMIN AUTH & VIEW GATING ----------
-            // True only while a user with the `admin` custom claim is signed in.
-            // Every admin entry point (navigate, renders) checks this flag,
-            // and the admin view is CSS-hidden when locked (data protection is
-            // enforced at the Firestore rules level, not the UI).
             isAdminAuthed: () => !!App.adminAuthed,
 
             initAuth: () => {
                 const auth = getAuth();
                 if (!auth) {
-                    console.warn('Firebase Auth not available — admin login disabled.');
+                    console.warn('Supabase Auth not available — admin login disabled.');
                     return;
                 }
                 auth.onAuthStateChanged(async (user) => {
+                    App.authUser = user || null;
                     if (await isAdminUser(user)) {
-                        App.authUser = user;
                         App.unlockAdmin();
                     } else {
-                        App.authUser = user || null;
                         App.lockAdmin();
                     }
                 });
             },
 
-            // Rebind event listeners for elements inside #view-admin.
-            // Listeners are attached once at init and again after each unlock
-            // (adminListenersBound flag prevents duplicates).
             bindAdminListeners: () => {
                 if (App.adminListenersBound) return;
                 const bind = (id, evt, fn) => {
@@ -1995,24 +1366,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.adminListenersBound = true;
             },
 
-            // CSS-hide the admin view and force the kiosk (unless a member/mobile
-            // view is active). Also clears sensitive client-side data.
             lockAdmin: () => {
-                // Flush pending local writes to Firestore while the admin auth
-                // session is still active — once adminAuthed flips to false,
-                // admin-only collections (payments, bins, etc.) cannot write.
-                // The flush is async, so the sensitive-data wipe is deferred
-                // until the commit lands: a payment saved right before logout
-                // must not be destroyed locally before it reaches Firestore.
-                let lockFlush = Promise.resolve();
-                if (FSEngine.flushTimer) {
-                    clearTimeout(FSEngine.flushTimer);
-                    FSEngine.flushTimer = null;
-                    lockFlush = FSEngine.flushPromise || Promise.resolve();
-                    try { FSEngine.flush(); } catch (e) {}
-                }
                 App.adminAuthed = false;
                 App.adminListenersBound = false;
+                Sync.unsubscribeRealtime();
                 const adminView = document.getElementById('view-admin');
                 if (adminView) {
                     adminView.classList.add('hidden');
@@ -2027,13 +1384,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 App.closeModal('modal-login');
                 App.renderCheckinNotice && App.renderCheckinNotice();
-                lockFlush.then(() => App.clearSensitiveData());
+                App.clearSensitiveData();
             },
 
-            // Securely erase all sensitive data from the client when admin auth
-            // is lost or the user logs out. Prevents subsequent kiosk users on
-            // the same machine from reading payment ledgers, PII, or internal
-            // operation data via devtools / localStorage inspection.
             clearSensitiveData: () => {
                 STATE.memberPrivate = {};
                 DB._privateSignature = undefined;
@@ -2044,6 +1397,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (STATE.members) {
                     STATE.members.forEach(m => {
                         MEMBER_PRIVATE_FIELDS.forEach(f => { delete m[f]; });
+                        delete m.email;
                     });
                 }
                 localStorage.removeItem('gym_member_private');
@@ -2051,33 +1405,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.removeItem('gym_notifications');
                 localStorage.removeItem('gym_notification_bin');
                 localStorage.removeItem('gym_bin');
-                ['payments','notifications','notificationBin','bin'].forEach(col => {
-                    // Unsubscribe the still-live listeners: they were created under
-                    // admin auth and would keep delivering snapshots after logout,
-                    // re-populating wiped payment data into STATE/localStorage on a
-                    // shared device. The next admin unlock re-subscribes them.
-                    if (FSEngine._subs[col]) { try { FSEngine._subs[col](); } catch (e) {} delete FSEngine._subs[col]; }
-                    FSEngine.dirty.delete(col);
-                    // Forget this collection's cloud sync state along with the local
-                    // wipe: keeping ready/applied/snapSeen/mirror set would let the
-                    // next admin login's flush diff an empty local array against the
-                    // cloud mirror and DELETE every doc in the collection. Resetting
-                    // ready also makes resubscribeMissing re-attach the listener so
-                    // the data reloads instead of staying empty.
-                    FSEngine.ready[col] = false;
-                    FSEngine.applied.delete(col);
-                    FSEngine.snapSeen.delete(col);
-                    delete FSEngine.unconfirmed[col];
-                    delete FSEngine.seenKeys[col];
-                    delete FSEngine.mirrors[col];
-                    delete FSEngine.lastDocs[col];
-                });
-                persistIntents();
                 fallbackToLocal();
             },
 
-            // Reveal the admin view (already present in DOM, toggled via CSS)
-            // and fetch private member fields from the secure subcollection.
             unlockAdmin: () => {
                 App.adminAuthed = true;
                 const adminView = document.getElementById('view-admin');
@@ -2087,13 +1417,13 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     return;
                 }
                 App.bindAdminListeners();
-                // Flush any pending local writes under admin privileges and retry
-                // the legacy migration if it wasn't completable in kiosk mode.
-                try { FSEngine.scheduleFlush(); FSEngine.migrate(); } catch (e) { console.warn('Admin unlock sync error:', e); }
-                // Re-attach Firestore listeners that failed while the kiosk was
-                // signed in anonymously (permission-denied kills a listener for good).
-                // Without this the admin portal would stay empty after login.
-                try { FSEngine.resubscribeMissing && FSEngine.resubscribeMissing(); } catch (e) { console.warn('Admin unlock listener resubscribe error:', e); }
+                // Load admin-only collections and (re)subscribe realtime.
+                Sync.loadAdminOnly()
+                    .then(() => {
+                        Sync.subscribeRealtime();
+                        scheduleAfterCloudSyncRender();
+                    })
+                    .catch(err => console.warn('Admin unlock load failed:', err));
                 App.renderColorPaletteUI && App.renderColorPaletteUI();
                 App.renderColumnConfigurator && App.renderColumnConfigurator();
                 const monthInput = document.getElementById('export-month-picker');
@@ -2107,28 +1437,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     if (adminView) adminView.classList.remove('hidden');
                     App.navigate('admin-checkin');
                 }
-                Promise.all([
-                    Promise.all([
-                        FSEngine.whenReady('payments'),
-                        FSEngine.whenReady('visits'),
-                        FSEngine.whenReady('members')
-                    ]).then(() => {
-                        try { App.reconcileAllMemberPayments(); } catch (e) { console.warn('Admin unlock reconciliation failed:', e); }
-                    }),
-                    DB.fetchAllMemberPrivate().catch(() => {})
-                ]).then(() => {
-                    scheduleAfterCloudSyncRender();
-                });
             },
 
-            // One-time startup reconciliation: re-derives each member's session
-            // balance and visit paid/unpaid statuses from their payment records
-            // (the single source of truth). This self-heals data recorded before
-            // the session-accounting fixes — e.g. sessionsLeft was not decremented
-            // when a session bundle was added after unpaid trainings. Idempotent:
-            // reconcileMemberPaymentVisitStatus only persists when something
-            // actually changes, so this is a no-op on every load after the first.
-            // Members without any payment records are left untouched.
             reconcileAllMemberPayments: () => {
                 const memberIds = new Set(DB.getPayments().map(p => p.memberId));
                 memberIds.forEach(mid => {
@@ -2140,15 +1450,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.cleanBin(); 
                 App.updateUICurrency();
  
-                // Member login Enter is handled by the inline onkeyup on #member-login-id in index.html.
-                // (A second listener here caused loginAsMember to run twice per Enter press.)
-                // Admin-view listeners (forms/search inside #view-admin) are bound here
-                // and re-bound after each unlock (see bindAdminListeners).
                 App.bindAdminListeners();
                  
                 document.getElementById('kiosk-title-display').innerText = DB.getPortalName();
  
-                // Setup export month default picker — restore persisted month, fallback to current
                 const persistedMonth = localStorage.getItem('gym_analytical_month');
                 const nowYm = Utils.currentMonthLocal();
                 document.getElementById('export-month-picker').value = persistedMonth || nowYm;
@@ -2163,65 +1468,32 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 document.getElementById('kiosk-id-input').focus();
                 App.cleanupClassCheckins();
  
-                // Apply kiosk language (persisted or default)
                 if (typeof App.setKioskLanguage === 'function') App.setKioskLanguage(localStorage.getItem('kiosk_lang') || 'en');
                  
                 App.renderColumnConfigurator();
                 window.addEventListener('resize', App.updateKioskInputMode);
                 window.addEventListener('orientationchange', App.updateKioskInputMode);
 
-                // Start Firestore real-time sync with auth. Kiosk clients sign in
-                // anonymously so all requests carry a valid token — this prevents
-                // REST API scraping because rules require request.auth != null.
-                // The promise resolution ensures onSnapshot listeners are set up
-                // AFTER the auth token is available, avoiding transient denials.
-                (function bootstrapSync() {
-                    const auth = getAuth();
-                    if (!auth) {
-                        try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
-                        return;
-                    }
-                    // Wait for the initial persisted session to be restored before
-                    // deciding whether to sign in anonymously. Calling signInAnonymously()
-                    // immediately races the async session restore and REPLACES a cached
-                    // admin/member session with an anonymous one — the admin portal
-                    // flashes for a split second, then the client drops back to the kiosk
-                    // and forces a re-login on every page load.
-                    let authSettled = false;
-                    let offAuth = null;
-                    offAuth = auth.onAuthStateChanged((user) => {
-                        if (authSettled) return;
-                        authSettled = true;
-                        // The listener may fire synchronously (before onAuthStateChanged
-                        // returns), in which case offAuth is still null — the flag above
-                        // makes any later fire a no-op, so a missed unsubscribe is harmless.
-                        if (offAuth) { try { offAuth(); } catch (e) {} }
-                        if (user) {
-                            try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
-                            return;
-                        }
-                        auth.signInAnonymously()
-                            .then(() => { try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); } })
-                            .catch(err => {
-                                console.warn('Anonymous auth failed, kiosk reads may be denied:', err);
-                                try { initRealtimeSync(); } catch(e) { console.warn('initRealtimeSync error', e); }
-                            });
-                    });
-                })();
-
-                // Admin auth: hide the admin view initially, then let onAuthStateChanged
-                // reveal it if a valid admin session exists.
-                // DO NOT call lockAdmin() here — it wipes sensitive data (payments,
-                // member PII, bins) from STATE and localStorage via clearSensitiveData()
-                // before the Firestore listener that reloads them is even set up.
-                // On the next page load those arrays are empty, and on the first
-                // page load after a hard-refresh the wipe happens before initAuth()
-                // has a chance to restore the admin session and repopulate from
-                // Firestore — losing every payment, notification, and bin entry.
+                // Boot: restore any persisted auth session, then hydrate STATE from
+                // Supabase and start realtime. No anonymous sign-in is required —
+                // the anon key is implicit and RLS enforces permissions.
                 App.adminAuthed = false;
                 const adminView = document.getElementById('view-admin');
                 if (adminView) adminView.classList.add('hidden');
                 App.initAuth();
+
+                if (!sb) {
+                    console.warn('Supabase client not available — running from localStorage only.');
+                    return;
+                }
+                Sync.loadAll()
+                    .then(() => {
+                        resolveMigrationState();
+                        Sync.subscribeRealtime();
+                        fallbackToLocal();
+                        scheduleAfterCloudSyncRender();
+                    })
+                    .catch(err => console.warn('Initial data load failed:', err));
 
                 App.autoCheckoutStaleVisits();
                 setInterval(() => {
@@ -2248,16 +1520,14 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 let updated = false;
                 const now = new Date();
                 visits.forEach(v => {
-                    // Ensure we have an expectedExitTime for legacy visits
                     if (!v.expectedExitTime) {
                         v.expectedExitTime = App.computeExpectedExitTime(v.entryTime);
                         updated = true;
                     }
-                    // If there is no explicit exitTime and expectedExitTime is reached, auto-close at expectedExitTime
                     if (!v.exitTime) {
                         const expected = v.expectedExitTime ? new Date(v.expectedExitTime) : null;
                         if (expected && expected <= now) {
-                            v.exitTime = v.expectedExitTime; // set exitTime to the expectedExitTime
+                            v.exitTime = v.expectedExitTime;
                             updated = true;
                         }
                     }

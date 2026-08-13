@@ -1,0 +1,10 @@
+{
+  "name": "ssg-supabase-migration",
+  "private": true,
+  "description": "Firestore -> Supabase export/transform/load scripts (Phase 2). Service-account and service-role keys must never be committed.",
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "pg": "^8.12.0"
+  }
+}
