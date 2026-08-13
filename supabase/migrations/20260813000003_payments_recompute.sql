@@ -28,19 +28,29 @@ begin
       and applied_expiration is not null
       and coalesce(sessions_granted, 0) = 0;
 
-  -- consume the session quota chronologically over unpaid, not-time-covered visits
+  -- Full recompute: manual 'paid' overrides stay paid; everything else starts
+  -- unpaid and is re-derived from the ledger below (so deleting a payment
+  -- correctly re-marks its previously-covered visits as unpaid).
+  update visits set is_unpaid = (paid_override is distinct from 'paid')
+  where member_id = p_member_id;
+
+  -- 1) Historical time windows: any time-based payment's [start, expiration].
+  update visits set is_unpaid = false
+  where member_id = p_member_id and paid_override is null
+    and exists (
+      select 1 from payments p
+      where p.member_id = p_member_id
+        and p.applied_expiration is not null
+        and coalesce(p.sessions_granted, 0) = 0
+        and p.applied_start_date is not null
+        and visits.entry_time::date >= p.applied_start_date
+        and visits.entry_time::date <= p.applied_expiration
+    );
+
+  -- 2) Session quota, consumed chronologically.
   for v_visit in
     select v.* from visits v
-    where v.member_id = p_member_id and v.is_unpaid
-      and not exists (
-        select 1 from payments p
-        where p.member_id = p_member_id
-          and p.applied_expiration is not null
-          and coalesce(p.sessions_granted, 0) = 0
-          and p.applied_start_date is not null
-          and v.entry_time::date >= p.applied_start_date
-          and v.entry_time::date <= p.applied_expiration
-      )
+    where v.member_id = p_member_id and v.is_unpaid and v.paid_override is null
     order by v.entry_time asc
   loop
     if v_sessions_used < v_total_sessions then
@@ -51,18 +61,14 @@ begin
     end if;
   end loop;
 
-  -- clear-and-flip: unpaid visits inside a time-based window become paid
-  update visits set is_unpaid = false
-  where member_id = p_member_id and is_unpaid
-    and exists (
-      select 1 from payments p
-      where p.member_id = p_member_id
-        and p.applied_expiration is not null
-        and coalesce(p.sessions_granted, 0) = 0
-        and p.applied_start_date is not null
-        and visits.entry_time::date >= p.applied_start_date
-        and visits.entry_time::date <= p.applied_expiration
-    );
+  -- 3) Active membership: retroactively cover the remaining unpaid visits
+  -- from the first unpaid day up to the expiration date (NOT from the
+  -- payment's start date, which would miss prior trainings).
+  if v_exp is not null and v_exp >= current_date then
+    update visits set is_unpaid = false
+    where member_id = p_member_id and is_unpaid and paid_override is null
+      and entry_time::date <= v_exp;
+  end if;
 
   update members set
     sessions_total = (v_total_sessions > 0),
