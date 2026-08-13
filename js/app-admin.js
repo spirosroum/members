@@ -58,11 +58,11 @@ Object.assign(App, {
             renderRetentionStats: () => {
                 const { since, until } = App.getRetentionWindow();
 
-                // Analyze active members only — expired/inactive/frozen rosters are not at risk.
-                const members = DB.getMembers().filter(m => (m.accountStatus || 'Active') === 'Active');
-
-                const rows = members.map(m => {
-                    const count = App.getMemberTrainingCount(m.id, since, until);
+                // Analyze every member who trained at least once in the window
+                // (any account status) — attendance frequency is the retention signal.
+                const rows = DB.getMembers().map(m => {
+                    const count = App.getMemberTrainingDays(m.id, since, until);
+                    if (count <= 0) return null;
                     // Effective window starts at the later of the period start or the member's
                     // first training date, so brand-new members aren't penalized for joining mid-period.
                     const firstTraining = App.getMemberFirstTrainingDate(m.id);
@@ -73,24 +73,10 @@ Object.assign(App, {
                     if (perWeek < 1) segment = 'high';
                     else if (perWeek < 3) segment = 'moderate';
                     return { member: m, count, perWeek, segment };
-                });
+                }).filter(Boolean);
                 rows.sort((a, b) => a.perWeek - b.perWeek || a.member.lastName.localeCompare(b.member.lastName));
                 App.retentionRows = rows;
-
-                // Frequency breakdown uses a separate list: EVERY member (any account
-                // status) who trained at least once in the window, sorted by frequency.
-                App.frequencyRows = DB.getMembers().map(m => {
-                    const count = App.getMemberTrainingCount(m.id, since, until);
-                    if (count <= 0) return null;
-                    const firstTraining = App.getMemberFirstTrainingDate(m.id);
-                    const windowStart = (firstTraining && firstTraining > since) ? firstTraining : since;
-                    const windowWeeks = Math.max(1, Math.round((until - windowStart) / (1000 * 60 * 60 * 24 * 7)));
-                    const perWeek = count / windowWeeks;
-                    let segment = 'active';
-                    if (perWeek < 1) segment = 'high';
-                    else if (perWeek < 3) segment = 'moderate';
-                    return { member: m, count, perWeek, segment };
-                }).filter(Boolean).sort((a, b) => a.perWeek - b.perWeek || a.member.lastName.localeCompare(b.member.lastName));
+                App.frequencyRows = rows;
 
                 const total = rows.length;
                 const segCount = { high: 0, moderate: 0, active: 0 };
@@ -99,8 +85,8 @@ Object.assign(App, {
                 const pct = k => total ? Math.round(segCount[k] / total * 100) : 0;
 
                 document.getElementById('retention-overview-grid').innerHTML = `
-                    <div class="stat-card"><h3>Active Members</h3><div class="value">${total}</div></div>
-                    <div class="stat-card"><h3>Avg Classes / Week</h3><div class="value">${avgPerWeek.toFixed(1)}</div></div>
+                    <div class="stat-card"><h3>Members Trained</h3><div class="value">${total}</div></div>
+                    <div class="stat-card"><h3>Avg Days / Week</h3><div class="value">${avgPerWeek.toFixed(1)}</div></div>
                     <div class="stat-card"><h3>High Risk</h3><div class="value" style="color:var(--danger)">${segCount.high}<span style="font-size:1rem;"> (${pct('high')}%)</span></div></div>
                     <div class="stat-card"><h3>Moderate Risk</h3><div class="value" style="color:var(--warning)">${segCount.moderate}<span style="font-size:1rem;"> (${pct('moderate')}%)</span></div></div>
                     <div class="stat-card"><h3>Active / Healthy</h3><div class="value" style="color:var(--success)">${segCount.active}<span style="font-size:1rem;"> (${pct('active')}%)</span></div></div>
@@ -115,9 +101,9 @@ Object.assign(App, {
                 }
 
                 const segCards = [
-                    { key: 'high', label: 'High Risk', desc: '< 1 class / week', count: segCount.high, pct: pct('high'), color: 'var(--danger)', bg: 'var(--bg-danger-soft)' },
-                    { key: 'moderate', label: 'Moderate Risk', desc: '1–2 classes / week', count: segCount.moderate, pct: pct('moderate'), color: 'var(--warning)', bg: 'var(--bg-warning-soft)' },
-                    { key: 'active', label: 'Active / Healthy', desc: '3+ classes / week', count: segCount.active, pct: pct('active'), color: 'var(--success)', bg: 'var(--bg-success-soft)' }
+                    { key: 'high', label: 'High Risk', desc: '< 1 day / week', count: segCount.high, pct: pct('high'), color: 'var(--danger)', bg: 'var(--bg-danger-soft)' },
+                    { key: 'moderate', label: 'Moderate Risk', desc: '1–2 days / week', count: segCount.moderate, pct: pct('moderate'), color: 'var(--warning)', bg: 'var(--bg-warning-soft)' },
+                    { key: 'active', label: 'Active / Healthy', desc: '3+ days / week', count: segCount.active, pct: pct('active'), color: 'var(--success)', bg: 'var(--bg-success-soft)' }
                 ];
                 document.getElementById('retention-segment-cards').innerHTML = segCards.map(s => `
                     <div class="retention-seg-card" style="--seg-color: ${s.color};">
@@ -131,7 +117,7 @@ Object.assign(App, {
                         <div class="retention-seg-bar">
                             <div class="retention-seg-bar-fill" style="width:${s.pct}%; background: ${s.color};"></div>
                         </div>
-                        <div class="retention-seg-foot">${s.count} of ${total} active members</div>
+                        <div class="retention-seg-foot">${s.count} of ${total} members trained</div>
                     </div>
                 `).join('');
 
@@ -154,7 +140,7 @@ Object.assign(App, {
                 const cols = [
                     { id: 'member', label: 'Member' },
                     { id: 'belt', label: 'Belt' },
-                    { id: 'classes', label: 'Classes' },
+                    { id: 'classes', label: 'Days' },
                     { id: 'perWeek', label: 'Avg / Week' },
                     { id: 'segment', label: 'Segment' }
                 ];
@@ -234,7 +220,7 @@ Object.assign(App, {
                 if (!rows.length) return alert('No data to export for the current segment filter.');
                 const segLabels = { high: 'High Risk', moderate: 'Moderate Risk', active: 'Active / Healthy' };
                 let csvContent = "data:text/csv;charset=utf-8,";
-                csvContent += "Member ID,First Name,Last Name,Belt,Classes,Avg / Week,Segment\n";
+                csvContent += "Member ID,First Name,Last Name,Belt,Days,Avg / Week,Segment\n";
                 const esc = (val) => {
                     let str = String(val == null ? '' : val);
                     if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
@@ -265,6 +251,23 @@ Object.assign(App, {
                 ].filter(d => !isNaN(d.getTime()));
                 if (!dates.length) return null;
                 return new Date(Math.min(...dates.map(d => d.getTime())));
+            },
+
+            // Distinct local calendar days a member trained in the window. A member who
+            // checks in for two classes in one visit counts as ONE training day, so the
+            // retention frequency reflects how often they actually show up.
+            getMemberTrainingDays: (memberId, sinceDate = null, untilDate = null) => {
+                const visits = DB.getVisits().filter(v => v.memberId === memberId && v.entryTime);
+                const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                const daySet = new Set();
+                [...visits, ...checkins].forEach(r => {
+                    const d = r.entryTime ? new Date(r.entryTime) : null;
+                    if (!d || isNaN(d.getTime())) return;
+                    if (sinceDate && d < sinceDate) return;
+                    if (untilDate && d >= untilDate) return;
+                    daySet.add(Utils.dateToLocalIso(d));
+                });
+                return daySet.size;
             },
 
             // Approximate a member's join date as the earliest of their first payment,
@@ -344,7 +347,7 @@ Object.assign(App, {
                     const d = new Date(p.date + 'T12:00:00');
                     return d >= winStart && d < winEnd;
                 }).reduce((s, p) => s + parseFloat(p.amount), 0);
-                const activeCount = members.filter(m => (m.accountStatus || 'Active') === 'Active').length;
+                const activeCount = members.filter(m => App.getMemberTrainingDays(m.id, winStart, winEnd) > 0).length;
                 // Normalize the window's revenue to a monthly equivalent so the KPI is
                 // comparable across 4/8/13-week (and custom) windows.
                 const windowDays = Math.max(1, (winEnd - winStart) / (24 * 60 * 60 * 1000));
@@ -430,8 +433,8 @@ Object.assign(App, {
                         'Goal: match market benchmark',
                         rpm != null ? `${currency}${rpm.toFixed(2)}` : '—',
                         'info',
-                        `Counted: ${currency}${monthlyRevenue.toFixed(2)} monthly revenue ÷ ${activeCount} active members (${currency}${revenueThisPeriod.toFixed(2)} in window).`,
-                        rpm != null ? `<div class="kpi-sub">${currency}${monthlyRevenue.toFixed(2)} monthly / ${activeCount} active</div>` : ''
+                        `Counted: ${currency}${monthlyRevenue.toFixed(2)} monthly revenue ÷ ${activeCount} members who trained (${currency}${revenueThisPeriod.toFixed(2)} in window).`,
+                        rpm != null ? `<div class="kpi-sub">${currency}${monthlyRevenue.toFixed(2)} monthly / ${activeCount} trained</div>` : ''
                     ) +
                     card(
                         'Class Attendance',
