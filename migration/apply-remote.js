@@ -37,30 +37,33 @@ async function enableExtension(name, schema) {
 }
 
 async function main() {
-  const init = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20260813000001_init.sql'), 'utf8');
-  console.log('Applying 20260813000001_init.sql …');
-  await query(init);
-  console.log('OK: init.sql applied');
+  const dir = path.join(__dirname, '..', 'supabase', 'migrations');
+  const files = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
 
-  // pg_cron is required by the cron jobs migration.
-  const ext = await query("select extname from pg_extension where extname = 'pg_cron'");
-  if (ext.indexOf('pg_cron') === -1) {
-    console.log('pg_cron not enabled — enabling via Management API…');
-    try {
-      await enableExtension('pg_cron', 'pg_cron');
-      console.log('OK: pg_cron enabled');
-    } catch (e) {
-      console.warn('Could not auto-enable pg_cron:', e.message);
-      console.warn('Enable it manually: Dashboard → Database → Extensions → pg_cron, then re-run.');
+  for (const f of files) {
+    console.log(`Applying ${f} …`);
+    const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+
+    // pg_cron must be enabled before any cron.schedule call.
+    if (sql.indexOf('cron.schedule') !== -1) {
+      const ext = await query("select extname from pg_extension where extname = 'pg_cron'");
+      if (ext.indexOf('pg_cron') === -1) {
+        console.log('pg_cron not enabled — enabling via Management API…');
+        try {
+          await enableExtension('pg_cron', 'pg_cron');
+          console.log('OK: pg_cron enabled');
+        } catch (e) {
+          console.warn('Could not auto-enable pg_cron:', e.message);
+          console.warn('Enable it manually: Dashboard → Database → Extensions → pg_cron, then re-run.');
+        }
+      }
     }
-  } else {
-    console.log('pg_cron already enabled.');
-  }
 
-  const cron = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '20260813000002_cron_jobs.sql'), 'utf8');
-  console.log('Applying 20260813000002_cron_jobs.sql …');
-  await query(cron);
-  console.log('OK: cron_jobs.sql applied');
+    await query(sql);
+    console.log(`OK: ${f} applied`);
+  }
 
   console.log('Migration complete.');
 }

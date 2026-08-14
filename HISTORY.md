@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.41 (09:30) — Expired members lapse to Inactive; fix UTC-date coverage bug
+- Root cause of "Expired member checked in and was marked OK / paid with no payment record": `check_in_member` decided coverage with the server's UTC `current_date`, but all client badges use the Athens (Europe/Athens, UTC+3) date. For up to 3 hours after Athens midnight, a lapsed membership was still "covered" server-side, so the visit was written `is_unpaid=false` even though the member had no sessions and no covering payment. `check_in_member` now compares `expiration_date >= (now() at time zone 'Europe/Athens')::date`, matching the client.
+- "Expired" was only a UI label derived from `expirationDate` — no stored status ever flipped to `inactive`, so the account stayed `active`/stale forever. Now: `check_in_member` sets `account_status='inactive'` on an uncovered (unpaid) check-in, and a new nightly cron job (`expire-members-inactive`) sweeps Active members whose time-based membership lapsed with no sessions left.
+- `recompute_member` now uses the Athens date for coverage/status decisions too, so recompute and live check-in agree with the client's badges.
+- New migration `20260813000006_expired_members_inactive.sql` (create-or-replace RPCs + cron + one-time ledger backfill for already-lapsed members with payment records). `migration/apply-remote.js` now applies every migration in `supabase/migrations/` in order instead of just the first two — run `SUPABASE_ACCESS_TOKEN=… node migration/apply-remote.js` to deploy.
+
+
 ## 2026-08-15 — v0.40 (01:15) — Fix Training Stats vertical spacing
 - Tightened the vertical rhythm of the member Training Stats attendance section: reduced the overview/progress-bar margins, set the big % to line-height 1 (emoji no longer inflates the line box), and added a 1rem gap before the stat-card grid so the subsections read as one cohesive card
 
