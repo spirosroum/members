@@ -9,7 +9,7 @@
 App.KIOSK_I18N = {
     en: {
         portalTitle: '🥋 BJJ Kiosk Portal',
-        viewPlans: 'View Plans',
+        viewPlans: 'Available Memberships',
         infoLogin: 'Member Login',
         memberCheckInTitle: 'Member Check-In',
         scanPrompt: 'Scan or enter your Member ID to Check-In.',
@@ -19,7 +19,7 @@ App.KIOSK_I18N = {
         noticeTitle: 'Notice',
         noticeGotIt: 'Got it!',
         publicPlansTitle: 'Available Memberships',
-        availableClasses: 'Available Classes',
+        availableClasses: 'Classes',
         classRequirements: 'Class Requirements',
         loginHeader: 'Information Access',
         memberDashboard: 'Member Dashboard',
@@ -105,7 +105,7 @@ App.KIOSK_I18N = {
         classDetailsScheduledFor: 'Scheduled For:',
         classDetailsNoDescription: 'No description available.',
         classDetailsUnknownMember: 'Unknown',
-        publicClassesTitle: 'Available Classes',
+        publicClassesTitle: 'Classes',
         classScheduleLabel: 'Schedule:',
         classExpandDetails: 'View schedule & details',
         classCollapseDetails: 'Hide details',
@@ -174,7 +174,7 @@ App.KIOSK_I18N = {
     },
     el: {
         portalTitle: '🥋 Πύλη Υποδοχής',
-        viewPlans: 'Προβολή Συνδρομών',
+        viewPlans: 'Διαθέσιμες Συνδρομές',
         infoLogin: 'Σύνδεση Μέλους',
         memberCheckInTitle: 'Check-in Μέλους',
         scanPrompt: 'Σαρώστε ή εισάγετε τον κωδικό μέλους για να κάνετε check-in.',
@@ -184,7 +184,7 @@ App.KIOSK_I18N = {
         noticeTitle: 'Ειδοποίηση',
         noticeGotIt: 'Εντάξει',
         publicPlansTitle: 'Διαθέσιμες Συνδρομές',
-        availableClasses: 'Διαθέσιμα Μαθήματα',
+        availableClasses: 'Τμήματα',
         classRequirements: 'Απαιτήσεις Μαθήματος',
         loginHeader: 'Πρόσβαση Πληροφοριών',
         memberDashboard: 'Πίνακας Μέλους',
@@ -270,7 +270,7 @@ App.KIOSK_I18N = {
         classDetailsScheduledFor: 'Προγραμματισμένο για:',
         classDetailsNoDescription: 'Δεν υπάρχει διαθέσιμη περιγραφή.',
         classDetailsUnknownMember: 'Άγνωστο',
-        publicClassesTitle: 'Διαθέσιμα Μαθήματα',
+        publicClassesTitle: 'Τμήματα',
         classScheduleLabel: 'Πρόγραμμα:',
         classExpandDetails: 'Προβολή προγράμματος & λεπτομερειών',
         classCollapseDetails: 'Απόκρυψη λεπτομερειών',
@@ -358,7 +358,7 @@ App.applyKioskTranslations = function() {
         const headerButtons = Array.from(document.querySelectorAll('#view-kiosk .kiosk-header .btn-primary, #view-kiosk .kiosk-header .btn-outline'));
         headerButtons.forEach(btn => {
             if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicPlans")) { btn.innerText = map.viewPlans; btn.title = map.viewPlans; }
-            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicClasses")) { btn.innerText = map.availableClasses || 'Available Classes'; btn.title = map.availableClasses || 'Available Classes'; }
+            if (btn.getAttribute && btn.getAttribute('onclick')?.includes("App.showPublicClasses")) { btn.innerText = map.availableClasses || 'Classes'; btn.title = map.availableClasses || 'Classes'; }
             if (btn.getAttribute && btn.getAttribute('onclick')?.includes("modal-login")) { btn.innerText = map.infoLogin; btn.title = map.infoLogin; }
         });
         // Member header action buttons (desktop layout shows them directly)
@@ -367,7 +367,7 @@ App.applyKioskTranslations = function() {
             const oc = btn.getAttribute && btn.getAttribute('onclick');
             if (!oc) return;
             if (oc.includes('App.showPublicPlans')) { btn.innerText = map.viewPlans; btn.title = map.viewPlans; }
-            else if (oc.includes('App.showPublicClasses')) { btn.innerText = map.availableClasses || 'Available Classes'; btn.title = map.availableClasses || 'Available Classes'; }
+            else if (oc.includes('App.showPublicClasses')) { btn.innerText = map.availableClasses || 'Classes'; btn.title = map.availableClasses || 'Classes'; }
             else if (oc.includes('App.logout')) { btn.innerText = map.memberPortalLogout || 'Logout'; btn.title = map.memberPortalLogout || 'Logout'; }
         });
 
@@ -379,7 +379,7 @@ App.applyKioskTranslations = function() {
         const drawerItemPlans = document.querySelectorAll('#kiosk-drawer-plans, #member-drawer-plans');
         drawerItemPlans.forEach(el => { if (el) el.innerText = map.viewPlans; });
         const drawerItemClasses = document.querySelectorAll('#kiosk-drawer-classes, #member-drawer-classes');
-        drawerItemClasses.forEach(el => { if (el) el.innerText = map.availableClasses || 'Available Classes'; });
+        drawerItemClasses.forEach(el => { if (el) el.innerText = map.availableClasses || 'Classes'; });
         const kioskDrawerLogin = document.getElementById('kiosk-drawer-login');
         if (kioskDrawerLogin) kioskDrawerLogin.innerText = map.infoLogin;
         const memberDrawerLogout = document.getElementById('member-drawer-logout');
@@ -426,7 +426,7 @@ App.applyKioskTranslations = function() {
         // Public plans modal
         const publicPlansTitle = document.querySelector('#modal-public-plans h2'); if (publicPlansTitle) publicPlansTitle.innerText = map.publicPlansTitle;
         // Public classes modal
-        const publicClassesTitle = document.querySelector('#modal-public-classes h2'); if (publicClassesTitle) publicClassesTitle.innerText = map.publicClassesTitle || map.availableClasses || 'Available Classes';
+        const publicClassesTitle = document.querySelector('#modal-public-classes h2'); if (publicClassesTitle) publicClassesTitle.innerText = map.publicClassesTitle || map.availableClasses || 'Classes';
         // Login modal - translate only the kiosk-related section (Member Dashboard and header), but NOT the Admin Portal labels or buttons
         const loginHeader = document.querySelector('#modal-login .modal-content h2'); if (loginHeader) loginHeader.innerText = map.loginHeader;
         // Find the H3 that refers to Member Dashboard section specifically and update it
