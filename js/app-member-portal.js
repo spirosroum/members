@@ -417,16 +417,25 @@ Object.assign(App, {
                     }
                 }
 
-                // Determine how to display expiration: hide for session-only packages with no validity date
-                let expDisplay = '';
-                if (member.expirationDate) expDisplay = Utils.formatDate(member.expirationDate);
-                else if (!member.sessionsTotal) expDisplay = 'N/A';
-                else expDisplay = '';
+                // Expiration shown with the same aesthetics as the Account Status line.
+                let expText;
+                if (member.expirationDate) {
+                    const days = Utils.getDaysRemaining(member.expirationDate);
+                    if (days >= 0) {
+                        expText = `<span style="color:var(--success)">${Utils.formatDate(member.expirationDate)} (${days} ${Utils.escapeHTML(map.memberStatusDaysLeft || 'days left')})</span>`;
+                    } else {
+                        expText = `<span style="color:var(--danger)">${Utils.formatDate(member.expirationDate)} (${Utils.escapeHTML(map.memberStatusExpired || 'expired')})</span>`;
+                    }
+                } else if (!member.sessionsTotal) {
+                    expText = `<span class="text-gray">N/A</span>`;
+                } else {
+                    expText = '<span class="text-gray">—</span>';
+                }
 
                 document.getElementById('member-dash-info').innerHTML = `
-                    <div style="font-size: 1.25rem;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
-                    <div class="mt-1" style="font-size: 1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>
-                    <div class="text-gray mt-1">${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')} ${expDisplay}</div>
+                    <div style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
+                    <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>
+                    <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')}</strong> ${expText}</div>
                 `;
 
                 let statsHTML = '';
@@ -439,8 +448,10 @@ Object.assign(App, {
                 const rankVisible = App.isAdminAuthed() || DB.getMemberStatsVisibility()['rank'] !== false;
                 if (rankCard) rankCard.classList.toggle('hidden', !rankVisible);
                 const rankTitle = document.getElementById('member-rank-title');
+                const rankSub = document.getElementById('member-rank-sub');
                 const rankValue = document.getElementById('member-rank-value');
-                if (rankTitle) rankTitle.innerText = (map.memberViewRankLabel || 'Leaderboard Rank') + (map.memberViewRank90d || ' (last 90 days)');
+                if (rankTitle) rankTitle.innerText = map.memberViewRankLabel || 'Leaderboard Rank';
+                if (rankSub) rankSub.innerText = map.memberViewRank90dDesc || 'last 90 days';
                 if (rankValue) rankValue.innerText = rank ? `#${rank}` : (map.memberViewRankUnranked || 'Unranked');
                 const statsTitle = document.getElementById('member-stats-title');
                 const weekBtn = document.getElementById('member-stats-mode-week');
