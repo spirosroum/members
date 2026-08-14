@@ -339,7 +339,9 @@ Object.assign(App, {
                 });
                 perClass.sort((a, b) => (b.pct || 0) - (a.pct || 0) || a.name.localeCompare(b.name));
                 // Member-facing view: show only classes that are public, or that the member
-                // has attended at least once in the recent lookback (default 90 days).
+                // has attended at least once in the recent lookback (default 90 days). The
+                // overall % is then computed over exactly those shown classes, so non-public
+                // classes the member has never attended don't lower their score.
                 if (opts.onlyPublicOrAttended) {
                     const lookback = opts.lookbackDays || 90;
                     const sinceLookback = new Date(until.getTime() - lookback * 24 * 3600 * 1000);
@@ -352,6 +354,9 @@ Object.assign(App, {
                     });
                     const publicIds = new Set(DB.getSchedules().filter(s => s.isPublic !== false).map(s => s.id));
                     perClass = perClass.filter(c => publicIds.has(c.classId) || attendedIds.has(c.classId));
+                    const shownAvailable = perClass.reduce((s, c) => s + c.available, 0);
+                    const shownAttended = perClass.reduce((s, c) => s + c.attended, 0);
+                    return { attended: shownAttended, available: shownAvailable, pct: shownAvailable > 0 ? Math.round(shownAttended / shownAvailable * 100) : null, perClass };
                 }
                 const pct = totalAvailable > 0 ? Math.round(totalMatched / totalAvailable * 100) : null;
                 return { attended: totalMatched, available: totalAvailable, pct, perClass };
