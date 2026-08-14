@@ -227,6 +227,28 @@ Object.assign(App, {
                 if (identify) identify.classList.add('hidden');
                 if (greeting) greeting.classList.add('hidden');
                 if (success) success.classList.remove('hidden');
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const statsBtn = document.getElementById('mobile-stats-btn');
+                if (statsBtn) statsBtn.innerText = map.mobileMemberStats || 'Member Stats';
+            },
+
+            // After a successful check-in, let the member jump straight into their
+            // member portal (they're already identified by the mobile session).
+            mobileOpenMemberStats: () => {
+                const member = App.getMobileSessionMember() || App.currentUser;
+                if (!member) return;
+                App.setMemberSession(member);
+                App.isMobileCheckinMode = false;
+                const mobileView = document.getElementById('view-mobile-checkin');
+                if (mobileView) mobileView.classList.add('hidden');
+                const kioskView = document.getElementById('view-kiosk');
+                if (kioskView) kioskView.classList.add('hidden');
+                const adminView = document.getElementById('view-admin');
+                if (adminView) adminView.classList.add('hidden');
+                const memberView = document.getElementById('view-member');
+                if (memberView) memberView.classList.remove('hidden');
+                App.renderMemberDashboard();
             },
 
             mobileCheckinAgain: () => {
