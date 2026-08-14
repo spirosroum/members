@@ -2,6 +2,9 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.40 (01:15) — Fix Training Stats vertical spacing
+- Tightened the vertical rhythm of the member Training Stats attendance section: reduced the overview/progress-bar margins, set the big % to line-height 1 (emoji no longer inflates the line box), and added a 1rem gap before the stat-card grid so the subsections read as one cohesive card
+
 ## 2026-08-15 — v0.39 (01:08) — Kiosk & member portal UI consistency + gamified member stats
 - Kiosk: renamed "Gym Schedule" card to "Training Schedule" (EN), added a subtitle and a `📅 N` weekly-session badge to its header, and unified the max-height of the Currently Inside / Training Schedule / Training Leaderboard scroll areas (330px) so all kiosk boxes look alike
 - Public modals: "Available Memberships" and "Classes" now share an identical card layout (colored name + meta badge, summary row + i18n'd expand label, expandable details) via `togglePublicPlanDetails` and the shared `.public-expand-label`/`.public-meta-badge` styles
