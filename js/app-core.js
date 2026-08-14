@@ -1069,6 +1069,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const now = new Date();
                 return Math.floor((expDate - now) / (1000 * 60 * 60 * 24)); 
             },
+            // Parse a date-only string (YYYY-MM-DD) as the local start/end of that day.
+            // new Date('YYYY-MM-DD') would parse as UTC midnight, shifting the boundary
+            // by the UTC offset (3h for Greece) and mis-classifying visits near midnight.
+            dayStart: (dateStr) => { if (!dateStr) return null; const d = new Date(dateStr + 'T00:00:00'); return isNaN(d.getTime()) ? null : d; },
+            dayEnd: (dateStr) => { if (!dateStr) return null; const d = new Date(dateStr + 'T23:59:59.999'); return isNaN(d.getTime()) ? null : d; },
             formatDurationMins: (mins) => {
                 if (mins == null || isNaN(mins)) return '';
                 if (mins < 0) mins = 0;

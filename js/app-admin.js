@@ -887,9 +887,9 @@ Object.assign(App, {
                     const datedPays = payments.filter(p => p.appliedExpiration
                         && !(p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)).sort((a, b) => new Date(b.date) - new Date(a.date));
                     const timePay = datedPays.find(p => {
-                        const start = new Date(p.appliedStartDate || p.date);
-                        const end = new Date(p.appliedExpiration);
-                        return !isNaN(start.getTime()) && !isNaN(end.getTime()) && entry >= start && entry <= end;
+                        const start = Utils.dayStart(p.appliedStartDate || p.date);
+                        const end = Utils.dayEnd(p.appliedExpiration);
+                        return start && end && !isNaN(start.getTime()) && !isNaN(end.getTime()) && entry >= start && entry <= end;
                     });
                     if (timePay) return timePay;
 
@@ -900,7 +900,7 @@ Object.assign(App, {
                     // sessions are never re-attributed to the membership.
                     const isTimeCoveredMember = member && (!member.sessionsTotal || member.planDays != null);
                     if (isTimeCoveredMember && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
-                        const end = new Date(member.expirationDate);
+                        const end = Utils.dayEnd(member.expirationDate);
                         if (!isNaN(end.getTime()) && entry <= end) {
                             const memberVisits = DB.getVisits().filter(x => x.memberId === member.id);
                             const firstUnpaidDay = App.computeMemberFirstUnpaidDay(member, payments, memberVisits);
@@ -936,9 +936,9 @@ Object.assign(App, {
                             if (!p.appliedExpiration) return false;
                             // Session-granting payments never create time windows.
                             if (p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0) return false;
-                            const start = new Date(p.appliedStartDate || p.date);
-                            const end = new Date(p.appliedExpiration);
-                            return !isNaN(start.getTime()) && !isNaN(end.getTime()) && xEntry >= start && xEntry <= end;
+                            const start = Utils.dayStart(p.appliedStartDate || p.date);
+                            const end = Utils.dayEnd(p.appliedExpiration);
+                            return start && end && !isNaN(start.getTime()) && !isNaN(end.getTime()) && xEntry >= start && xEntry <= end;
                         });
                         if (xExplicit || xTime || x.paidOverride) return;
                         while (payIdx < sessionPayments.length && remaining <= 0) {

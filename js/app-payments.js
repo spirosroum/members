@@ -66,6 +66,23 @@ Object.assign(App, {
                             document.getElementById('form-pay-exp').value = pay.appliedExpiration;
                             paymentExpManualOverride = true;
                         }
+                        // Show the granted session count so editing doesn't silently drop it.
+                        if (pay.sessionsGranted != null && parseInt(pay.sessionsGranted, 10) > 0) {
+                            const sessionsInput = document.getElementById('form-pay-sessions');
+                            if (sessionsInput) sessionsInput.value = pay.sessionsGranted;
+                        }
+                        // Editing a session-granting payment must restore its quantity, or
+                        // the qty reset to 1 above would silently halve the session bundle
+                        // (e.g. a 2x8-session purchase saved as 8) on the next save.
+                        if (pay.sessionsGranted && parseInt(pay.sessionsGranted, 10) > 0) {
+                            const plan = pay.planId ? DB.getPlans().find(p => p.id === pay.planId) : null;
+                            const planSessions = plan && plan.sessions != null && plan.sessions !== ''
+                                ? parseInt(plan.sessions, 10) : 0;
+                            if (planSessions > 0) {
+                                const restoredQty = Math.max(1, Math.round(parseInt(pay.sessionsGranted, 10) / planSessions));
+                                qtyInput.value = restoredQty;
+                            }
+                        }
                         document.getElementById('btn-delete-payment').classList.remove('hidden');
                     }
                 }
@@ -149,6 +166,13 @@ Object.assign(App, {
                     document.getElementById('form-pay-note').value = qty > 1
                         ? `Payment for Plan: ${planName} (x${qty})`
                         : `Payment for Plan: ${planName}`;
+                    // Auto-fill the sessions field from the plan bundle (x qty) so the admin
+                    // sees what will be granted; it can still be overridden manually.
+                    const sessions = selectedOption.getAttribute('data-sessions');
+                    const sessionsInput = document.getElementById('form-pay-sessions');
+                    if (sessionsInput && sessions != null && sessions !== '') {
+                        sessionsInput.value = (parseInt(sessions, 10) || 0) * qty;
+                    }
                 } else {
                     document.getElementById('form-pay-exp').value = '';
                 }
@@ -156,6 +180,14 @@ Object.assign(App, {
                 paymentExpManualOverride = false;
                 paymentStartManualOverride = false;
                 App.computePaymentDates();
+                App.renderPaymentUnpaidSummary();
+            },
+
+            // Manual override: the admin typed a custom session count (e.g. a custom
+            // drop-in bundle). It overrides whatever the selected plan would grant.
+            onPaymentSessionChange: () => {
+                const sessionsInput = document.getElementById('form-pay-sessions');
+                if (!sessionsInput) return;
                 App.renderPaymentUnpaidSummary();
             },
 
@@ -234,9 +266,13 @@ Object.assign(App, {
                 // Expiration date: auto-connect from starting date + plan duration,
                 // unless the admin manually overrode the expiration. The quantity
                 // selector lets the same membership be purchased multiple times, so
-                // the validity window is multiplied accordingly.
+                // the validity window is multiplied accordingly. Session-based plans
+                // have no validity window — clear a stale time-based expiration that
+                // may still be sitting in the field from a previously selected plan.
                 if (days && !paymentExpManualOverride) {
                     expInput.value = Utils.calculateExpirationDate(startVal, parseInt(days, 10) * qty);
+                } else if (!days && !paymentExpManualOverride) {
+                    expInput.value = '';
                 }
             },
  
@@ -302,9 +338,9 @@ Object.assign(App, {
                         // quota-based and never create time-coverage windows.
                         const grantsSessions = p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0;
                         if (grantsSessions) return;
-                        const start = new Date(p.appliedStartDate || p.date);
-                        const end = new Date(p.appliedExpiration);
-                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) timeWindows.push({ start, end });
+                        const start = Utils.dayStart(p.appliedStartDate || p.date);
+                        const end = Utils.dayEnd(p.appliedExpiration);
+                        if (start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())) timeWindows.push({ start, end });
                     }
                 });
                 const capacity = payments.reduce((s, p) => {
@@ -361,11 +397,9 @@ Object.assign(App, {
                     if (payment.appliedExpiration) {
                         const grantsSessions = payment.sessionsGranted && parseInt(payment.sessionsGranted, 10) > 0;
                         if (grantsSessions) return;
-                        const startStr = payment.appliedStartDate || payment.date;
-                        if (!startStr) return;
-                        const start = new Date(startStr);
-                        const end = new Date(payment.appliedExpiration);
-                        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                        const start = Utils.dayStart(payment.appliedStartDate || payment.date);
+                        const end = Utils.dayEnd(payment.appliedExpiration);
+                        if (start && end && !isNaN(start.getTime()) && !isNaN(end.getTime())) {
                             timeWindows.push({ start, end });
                         }
                     }
@@ -376,7 +410,7 @@ Object.assign(App, {
                 // epoch: visits already paid by drop-in sessions were purchased separately and
                 // must not be re-tagged as membership dates (that refunded consumed sessions).
                 const isTimeCoveredMember = member && (!member.sessionsTotal || member.planDays != null);
-                const memberExpires = (member && member.expirationDate) ? new Date(member.expirationDate) : null;
+                const memberExpires = (member && member.expirationDate) ? Utils.dayEnd(member.expirationDate) : null;
                 const memberWindowActive = isTimeCoveredMember && memberExpires
                     && !isNaN(memberExpires.getTime()) && Utils.getDaysRemaining(member.expirationDate) >= 0;
                 let memberWindowStart = null;
@@ -537,9 +571,18 @@ Object.assign(App, {
                     const planId = selectedOption && selectedOption.value ? selectedOption.value : null;
                     const qty = parseInt(document.getElementById('form-pay-qty').value, 10) || 1;
 
-                    // Session quota from the plan definition (multiplied by quantity).
-                    let sessionsGranted = null;
-                    if (planId) {
+                    // Session quota from the plan definition (multiplied by quantity), or
+                    // from the admin's explicit Sessions field. The field takes precedence:
+                    // it lets a custom drop-in bundle be granted without a matching plan.
+                    // When editing and neither derives a value, preserve the payment's
+                    // current grant instead of silently nulling it.
+                    const existingPay = id ? DB.getPayments().find(p => p.id === id) : null;
+                    let sessionsGranted = existingPay ? existingPay.sessionsGranted : null;
+                    const sessionsField = document.getElementById('form-pay-sessions');
+                    const explicitSessions = sessionsField && sessionsField.value !== '' ? parseInt(sessionsField.value, 10) : null;
+                    if (explicitSessions !== null && !isNaN(explicitSessions)) {
+                        sessionsGranted = explicitSessions;
+                    } else if (planId) {
                         const plan = DB.getPlans().find(p => p.id === planId);
                         if (plan && plan.sessions != null && plan.sessions !== '') {
                             sessionsGranted = (parseInt(plan.sessions, 10) || 0) * qty;
@@ -687,10 +730,11 @@ Object.assign(App, {
                     <tr>
                         <td data-label="Date">${Utils.formatDate(p.date)}</td>
                         <td data-label="Amount">${DB.getCurrency()}${parseFloat(p.amount).toFixed(2)}</td>
+                        <td data-label="Coverage">${p.appliedExpiration ? `until ${Utils.formatDate(p.appliedExpiration)}` : (p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0 ? `${p.sessionsGranted} sessions` : '—')}</td>
                         <td data-label="Note">${Utils.escapeHTML(p.note || '')}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openPaymentModal(null, '${p.id}')">Edit</button></td>
                     </tr>
-                `).join('') || '<tr><td colspan="4" class="text-center text-gray">No payment history found.</td></tr>';
+                `).join('') || '<tr><td colspan="5" class="text-center text-gray">No payment history found.</td></tr>';
             },
 
             renderAllPayments: () => {
@@ -725,7 +769,7 @@ Object.assign(App, {
                         <td data-label="Date">${Utils.formatDate(p.date)}</td>
                         <td data-label="Member Name"><strong>${mName}</strong></td>
                         <td data-label="Amount">${DB.getCurrency()}${parseFloat(p.amount).toFixed(2)}</td>
-                        <td data-label="New Exp. Date">${m ? Utils.formatDate(m.expirationDate) : 'N/A'}</td>
+                        <td data-label="New Exp. Date">${p.appliedExpiration ? Utils.formatDate(p.appliedExpiration) : 'N/A'}</td>
                         <td data-label="Note" style="max-width: 200px; white-space: normal;">${Utils.escapeHTML(p.note || '')}</td>
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openPaymentModal(null, '${p.id}')">Edit</button></td>
                     </tr>`;

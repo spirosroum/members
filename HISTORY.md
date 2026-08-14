@@ -2,6 +2,15 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.44 (10:45) — Payments & Payment Ledger fixes
+- Editing a payment no longer resets the Quantity to 1, which silently halved session bundles (a 2x8-session purchase was re-saved as 8) and wiped `sessionsGranted` on custom payments with no plan. The quantity is restored from the payment's `sessionsGranted`, and saving preserves the existing grant when the form derives none
+- New "Sessions" field in the payment modal: auto-fills from the selected plan × quantity, and overrides the derived grant when typed manually (custom drop-in bundles); pre-filled when editing an existing session payment
+- Payment modal: switching from a time-based plan to a session plan no longer leaves a stale expiration date in the field (which got saved and gave the member an expiration from a session purchase)
+- Payment Ledger "New Exp. Date" column now shows each payment's own `appliedExpiration` instead of the member's current expiration date (which repeated the same value across all rows and reflected the latest recompute, not that payment)
+- Member modal payment history gained a "Coverage" column showing each payment's expiration window or granted sessions
+- Fixed a timezone divergence between the client-side reconciliation/ledger attribution and the server recompute: date-only strings were parsed as UTC midnight, mis-classifying visits near midnight as unpaid/paid. New `Utils.dayStart`/`Utils.dayEnd` parse date-only strings as local day boundaries, applied across `reconcileMemberPaymentVisitStatus`, `computeMemberFirstUnpaidDay`, and `getVisitPaidByInfo`
+- Bumped `version.txt` and the `app-core.js`/`app-payments.js`/`app-admin.js` cache-busters
+
 ## 2026-08-15 — v0.43 (10:15) — Member Directory & Edit Profile bug fixes
 - Edit modal: the Expiration field no longer shows a red "expired" background for members who simply have no expiration date (session-based / never had a plan) — red only shows when an actual date is in the past
 - Edit modal: belt stripes (e.g. "Purple/2") are now preserved when saving an unchanged base belt instead of being silently truncated to the plain belt; changing the base belt still resets to the plain belt
