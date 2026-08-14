@@ -459,11 +459,11 @@ Object.assign(App, {
                     ${overallHtml}
                     <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
                     ${res.perClass.map(c => `
-                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0; flex-wrap:wrap;">
-                            <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
-                            <span style="width:80px; font-size:0.85rem;">${pctHtml(c.pct)}</span>
-                            <span class="text-gray" style="font-size:0.8rem; width:110px;">${c.attended}/${c.available}</span>
-                            ${App.attendanceEmoji(c.pct)}
+                        <div style="display:grid; grid-template-columns: 1fr 72px 110px auto; align-items:center; gap:0.5rem; padding:0.25rem 0;">
+                            <strong style="overflow-wrap:anywhere;">${Utils.escapeHTML(c.name)}</strong>
+                            <span style="text-align:right; font-size:0.85rem; font-weight:600;">${pctHtml(c.pct)}</span>
+                            <span class="text-gray" style="font-size:0.8rem; text-align:center;">${c.attended}/${c.available}</span>
+                            <span style="text-align:center; font-size:1.1rem;">${App.attendanceEmoji(c.pct)}</span>
                         </div>`).join('') || '<div class="text-gray" style="padding:0.5rem 0;">No class sessions available in this period.</div>'}
                     <div class="text-gray" style="font-size:0.8rem; margin-top:0.5rem;">Window: ${fmt(since)} – ${fmt(until)}. Only classes available by each date are counted.</div>`;
             },
