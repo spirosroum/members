@@ -429,7 +429,8 @@ Object.assign(App, {
                     <div class="text-gray mt-1">${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')} ${expDisplay}</div>
                 `;
 
-                const statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true });
+                let statsHTML = '';
+                try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true }); } catch (e) { console.warn('member stats render failed', e); }
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
                 App.updateMemberStatsCollapsedUI();
@@ -448,8 +449,8 @@ Object.assign(App, {
                 if (weekBtn) weekBtn.innerText = map.memberViewWeek || 'Week';
                 if (monthBtn) monthBtn.innerText = map.memberViewMonth || 'Month';
                 App.updateMemberLeaderboardToggleUI();
-                App.renderMemberHistory(member.id, 'member-personal-history');
-                App.renderMemberAttendancePortal();
+                try { App.renderMemberHistory(member.id, 'member-personal-history'); } catch (e) { console.warn('member history render failed', e); }
+                try { App.renderMemberAttendancePortal(); } catch (e) { console.warn('member attendance render failed', e); }
 
                 const unpaidVisits = DB.getVisits().filter(v => v.memberId === member.id && v.isUnpaid);
                 const listEl = document.getElementById('member-unpaid-visits-list');
@@ -489,7 +490,14 @@ Object.assign(App, {
                 until.setHours(23, 59, 59, 999);
                 const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
                 since.setHours(0, 0, 0, 0);
-                const res = App.getMemberAttendance(member.id, since, until, { onlyPublicOrAttended: true, lookbackDays: 90 });
+                let res;
+                try {
+                    res = App.getMemberAttendance(member.id, since, until, { onlyPublicOrAttended: true, lookbackDays: 90 });
+                } catch (e) {
+                    console.warn('member attendance compute failed', e);
+                    el.innerHTML = `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`;
+                    return;
+                }
 
                 if (res.pct == null) {
                     el.innerHTML = `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`;
