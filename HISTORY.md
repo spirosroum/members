@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.42 (09:45) — No red alert styling for Inactive/Cancelled members
+- Member directory row/card red alert styling only applied to members who were still `Active` with a lapsed expiration date. After v0.41 made lapsed members lapse to `Inactive`, Inactive (and Cancelled) members kept the red background purely because their `expirationDate` was in the past, even though the status badge already read Inactive/Cancelled. Red now only shows for genuinely expired-but-still-active members (`app-members.js`).
+- Bumped `version.txt` and the `app-members.js` cache-buster.
+
 ## 2026-08-15 — v0.41 (09:30) — Expired members lapse to Inactive; fix UTC-date coverage bug
 - Root cause of "Expired member checked in and was marked OK / paid with no payment record": `check_in_member` decided coverage with the server's UTC `current_date`, but all client badges use the Athens (Europe/Athens, UTC+3) date. For up to 3 hours after Athens midnight, a lapsed membership was still "covered" server-side, so the visit was written `is_unpaid=false` even though the member had no sessions and no covering payment. `check_in_member` now compares `expiration_date >= (now() at time zone 'Europe/Athens')::date`, matching the client.
 - "Expired" was only a UI label derived from `expirationDate` — no stored status ever flipped to `inactive`, so the account stayed `active`/stale forever. Now: `check_in_member` sets `account_status='inactive'` on an uncovered (unpaid) check-in, and a new nightly cron job (`expire-members-inactive`) sweeps Active members whose time-based membership lapsed with no sessions left.

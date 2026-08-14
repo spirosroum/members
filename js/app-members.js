@@ -252,7 +252,7 @@ Object.assign(App, {
                     });
 
                     return `
-                    <tr class="${isMemberExpired && m.accountStatus !== 'Frozen' ? 'bg-red-50' : ''}">
+                    <tr class="${isMemberExpired && m.accountStatus !== 'Frozen' && m.accountStatus !== 'Inactive' && m.accountStatus !== 'Cancelled' ? 'bg-red-50' : ''}">
                         ${rowHTML}
                         <td data-label="Action" class="cell-actions"><button class="btn-primary btn-small" onclick="App.openMemberModal('${m.id}')">Manage</button></td>
                     </tr>
@@ -309,7 +309,7 @@ Object.assign(App, {
                     });
 
                     return `
-                    <div class="member-card ${isMemberExpired && m.accountStatus !== 'Frozen' ? 'is-alert' : ''}">
+                    <div class="member-card ${isMemberExpired && m.accountStatus !== 'Frozen' && m.accountStatus !== 'Inactive' && m.accountStatus !== 'Cancelled' ? 'is-alert' : ''}">
                         <div class="member-card-head">
                             <div class="member-card-title">
                                 <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>
