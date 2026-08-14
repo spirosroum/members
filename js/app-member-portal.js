@@ -444,11 +444,11 @@ Object.assign(App, {
                 try { App.renderMemberAttendancePortal(); } catch (e) { console.warn('member attendance render failed', e); }
 
                 const unpaidVisits = DB.getVisits().filter(v => v.memberId === member.id && v.isUnpaid);
+                const unpaidCard = document.getElementById('member-unpaid-card');
+                if (unpaidCard) unpaidCard.classList.toggle('hidden', unpaidVisits.length === 0);
                 const listEl = document.getElementById('member-unpaid-visits-list');
-                
-                if (unpaidVisits.length === 0) {
-                    listEl.innerHTML = `<tr><td colspan="3" style="text-align:center; color: var(--success); font-weight: bold;">${Utils.escapeHTML(map.memberViewNoUnpaid || 'You have no unpaid trainings!')}</td></tr>`;
-                } else {
+
+                if (unpaidVisits.length > 0) {
                     const dateHeader = map.memberUnpaidDateHeader || 'Date';
                     const entryHeader = map.memberUnpaidEntryHeader || 'Entry Time';
                     const durationHeader = map.memberUnpaidDurationHeader || 'Duration';
@@ -502,12 +502,13 @@ Object.assign(App, {
                     <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${pctHtml(res.pct)} ${App.attendanceEmoji(res.pct)}</div>
                     <div class="text-gray" style="font-size:0.85rem; margin-bottom:0.5rem;">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     <div style="border-top:1px solid var(--gray-light); padding-top:0.5rem;">
-                        ${res.perClass.map(c => `
-                            <div style="display:grid; grid-template-columns: 1fr 72px 40px; align-items:center; gap:0.5rem; padding:0.25rem 0;">
-                                <strong style="overflow-wrap:anywhere;">${Utils.escapeHTML(c.name)}</strong>
-                                <span style="text-align:right; font-size:0.85rem; font-weight:600;">${pctHtml(c.pct)}</span>
-                                <span style="text-align:center; font-size:1.1rem;">${App.attendanceEmoji(c.pct)}</span>
-                            </div>`).join('') || `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
+                        ${res.perClass.length ? `
+                            <div style="display:grid; grid-template-columns: 1fr 72px auto; align-items:center; gap:0.25rem 0.5rem;">
+                                ${res.perClass.map(c => `
+                                    <strong style="overflow-wrap:anywhere; padding:0.25rem 0;">${Utils.escapeHTML(c.name)}</strong>
+                                    <span style="text-align:right; font-size:0.85rem; font-weight:600; padding:0.25rem 0;">${pctHtml(c.pct)}</span>
+                                    <span style="text-align:center; font-size:1.1rem; padding:0.25rem 0;">${App.attendanceEmoji(c.pct)}</span>`).join('')}
+                            </div>` : `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
                     </div>`;
             },
 
