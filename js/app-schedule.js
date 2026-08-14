@@ -102,7 +102,7 @@ Object.assign(App, {
                 const practitioners = document.getElementById('form-sched-practitioners').value.trim();
                 const requirements = document.getElementById('form-sched-requirements').value.trim();
                 const capacity = parseInt(document.getElementById('form-sched-capacity').value, 10) || null;
-                const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, slots: App.draftClassSlots };
+                const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, availableFrom: isNew ? Utils.todayLocalIso() : (schedules.find(c => c.id === id) || {}).availableFrom || null, slots: App.draftClassSlots };
 
                 if (isNew) schedules.push(newClass);
                 else { const idx = schedules.findIndex(c => c.id === id); if(idx > -1) schedules[idx] = newClass; }

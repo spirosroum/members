@@ -270,6 +270,143 @@ Object.assign(App, {
                 return daySet.size;
             },
 
+            // --- MEMBER ATTENDANCE % (admin) ---
+            // The denominator counts only class sessions that were actually available in
+            // the window: not on closed dates, not in the future, and only for classes
+            // whose available_from date had passed (so classes added later never penalize
+            // a member who couldn't have attended them).
+            buildAvailableTrainings: (since, until) => {
+                const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                const closedSet = Utils.buildClosedSet(until.getFullYear() + 1);
+                const today = Utils.todayLocalIso();
+                const sessions = [];
+                const cursor = new Date(since);
+                cursor.setHours(0, 0, 0, 0);
+                const end = new Date(until);
+                end.setHours(23, 59, 59, 999);
+                const schedules = DB.getSchedules();
+                while (cursor <= end) {
+                    const dayIso = Utils.dateToLocalIso(cursor);
+                    if (dayIso > today) break;
+                    if (!closedSet.has(dayIso)) {
+                        const dayName = dayNames[cursor.getDay()];
+                        schedules.forEach(cls => {
+                            if (cls.availableFrom && cls.availableFrom > dayIso) return;
+                            (cls.slots || []).forEach(slot => {
+                                if (slot.day === dayName) sessions.push({ date: dayIso, classId: cls.id, className: cls.name, slotStart: slot.start, slotEnd: slot.end });
+                            });
+                        });
+                    }
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+                return sessions;
+            },
+
+            getMemberAttendance: (memberId, since, until) => {
+                const availableCount = {};
+                const meta = {};
+                App.buildAvailableTrainings(since, until).forEach(s => {
+                    const key = `${s.date}|${s.classId}`;
+                    availableCount[key] = (availableCount[key] || 0) + 1;
+                    meta[s.classId] = meta[s.classId] || { name: s.className, available: 0 };
+                    meta[s.classId].available++;
+                });
+                const attendedCount = {};
+                DB.getClassCheckins().forEach(ci => {
+                    if (ci.memberId !== memberId || !ci.entryTime) return;
+                    const d = new Date(ci.entryTime);
+                    if (isNaN(d.getTime())) return;
+                    if (since && d < since) return;
+                    if (until && d >= until) return;
+                    const dateKey = ci.slotDate || Utils.dateToLocalIso(d);
+                    const key = `${dateKey}|${ci.classId}`;
+                    attendedCount[key] = (attendedCount[key] || 0) + 1;
+                });
+                let totalAvailable = 0, totalMatched = 0;
+                Object.keys(availableCount).forEach(key => {
+                    totalAvailable += availableCount[key];
+                    totalMatched += Math.min(attendedCount[key] || 0, availableCount[key]);
+                });
+                const perClass = Object.keys(meta).map(cid => {
+                    const cls = meta[cid];
+                    let att = 0;
+                    Object.keys(availableCount).forEach(key => {
+                        if (key.split('|')[1] === cid) att += Math.min(attendedCount[key] || 0, availableCount[key]);
+                    });
+                    cls.attended = att;
+                    cls.pct = cls.available > 0 ? Math.round(att / cls.available * 100) : null;
+                    return cls;
+                });
+                perClass.sort((a, b) => (b.pct || 0) - (a.pct || 0) || a.name.localeCompare(b.name));
+                const pct = totalAvailable > 0 ? Math.round(totalMatched / totalAvailable * 100) : null;
+                return { attended: totalMatched, available: totalAvailable, pct, perClass };
+            },
+
+            getAttendanceWindow: () => {
+                let until = new Date();
+                let since;
+                if (App.attendanceDays === 'custom') {
+                    const s = document.getElementById('attendance-custom-start').value;
+                    const e = document.getElementById('attendance-custom-end').value;
+                    since = s ? new Date(s + 'T00:00:00') : new Date(until.getTime() - 90 * 24 * 3600 * 1000);
+                    if (e) { until = new Date(e + 'T23:59:59'); }
+                } else {
+                    const days = App.attendanceDays || 90;
+                    until.setHours(23, 59, 59, 999);
+                    since = new Date(until.getTime() - (days - 1) * 24 * 3600 * 1000);
+                    since.setHours(0, 0, 0, 0);
+                }
+                return { since, until };
+            },
+
+            setMemberAttendancePeriod: (days) => {
+                App.attendanceDays = days;
+                const isCustom = days === 'custom';
+                document.querySelectorAll('.attendance-period-btn').forEach(b => {
+                    const matches = isCustom ? b.dataset.custom === '1' : parseInt(b.dataset.days, 10) === days;
+                    b.classList.toggle('active', !!matches);
+                });
+                const range = document.getElementById('attendance-custom-range');
+                if (range) range.classList.toggle('hidden', !isCustom);
+                App.renderMemberAttendance();
+            },
+
+            onMemberAttendanceCustomChange: () => {
+                App.attendanceDays = 'custom';
+                document.querySelectorAll('.attendance-period-btn').forEach(b => b.classList.toggle('active', b.dataset.custom === '1'));
+                const range = document.getElementById('attendance-custom-range');
+                if (range) range.classList.remove('hidden');
+                App.renderMemberAttendance();
+            },
+
+            renderMemberAttendance: () => {
+                const el = document.getElementById('admin-member-attendance');
+                if (!el) return;
+                const memberId = document.getElementById('form-original-id').value;
+                if (!memberId) { el.innerHTML = ''; return; }
+                const { since, until } = App.getAttendanceWindow();
+                const res = App.getMemberAttendance(memberId, since, until);
+                const fmt = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                const pctBadge = (p) => p == null
+                    ? '<span class="text-gray" style="font-size:0.85rem;">no sessions</span>'
+                    : (p >= 75 ? '<span class="badge badge-active">Good</span>' : p >= 40 ? '<span class="badge badge-warning">Fair</span>' : '<span class="badge badge-inactive">Low</span>');
+                const overallHtml = res.pct == null
+                    ? '<div class="text-gray">No class sessions were available in this period.</div>'
+                    : `<div class="text-gray" style="font-size:0.85rem;">${res.attended} attended of ${res.available} available sessions</div>`;
+                el.innerHTML = `
+                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${res.pct != null ? res.pct + '%' : '—'} ${pctBadge(res.pct)}</div>
+                    ${overallHtml}
+                    <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
+                    ${res.perClass.map(c => `
+                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0; flex-wrap:wrap;">
+                            <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
+                            <span style="width:80px; font-size:0.85rem;">${c.pct != null ? c.pct + '%' : '—'}</span>
+                            <span class="text-gray" style="font-size:0.8rem; width:110px;">${c.attended}/${c.available}</span>
+                            ${pctBadge(c.pct)}
+                        </div>`).join('') || '<div class="text-gray" style="padding:0.5rem 0;">No class sessions available in this period.</div>'}
+                    <div class="text-gray" style="font-size:0.8rem; margin-top:0.5rem;">Window: ${fmt(since)} – ${fmt(until)}. Only classes available by each date are counted.</div>`;
+            },
+
             // Approximate a member's join date as the earliest of their first payment,
             // first class check-in, or first visit. Used by the Membership Growth KPI.
             getMemberJoinDate: (memberId) => {

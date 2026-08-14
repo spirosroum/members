@@ -723,6 +723,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 id: r.id, name: r.name, description: r.description,
                 practitioners: r.practitioners, requirements: r.requirements,
                 color: r.color, capacity: r.capacity, isPublic: r.is_public,
+                availableFrom: r.available_from || null,
                 slots: []
             }),
             slotFrom: (sl) => ({ id: sl.id, day: sl.day, start: sl.start, end: sl.end }),
@@ -730,7 +731,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 id: cls.id, name: cls.name, description: cls.description || null,
                 description_html: false, practitioners: cls.practitioners || null,
                 requirements: cls.requirements || null, color: cls.color || '#2563eb',
-                capacity: cls.capacity || null, is_public: cls.isPublic !== false
+                capacity: cls.capacity || null, is_public: cls.isPublic !== false,
+                available_from: cls.availableFrom || null
             }),
             closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat, reason: r.reason || '' }),
             privateFrom: (r) => {
@@ -1200,6 +1202,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             kioskMsgTimer: null,
             draftClassSlots: [], 
             currentUser: null,
+            attendanceDays: 90,
             authUser: null,
             adminAuthed: false,
             adminListenersBound: false,

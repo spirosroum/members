@@ -513,6 +513,11 @@ Object.assign(App, {
                 document.getElementById('admin-member-payments-wrapper').classList.add('hidden');
                 document.getElementById('admin-member-stats-wrapper').classList.add('hidden');
                 document.getElementById('admin-member-stats').innerHTML = '';
+                document.getElementById('admin-member-attendance-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-attendance').innerHTML = '';
+                document.getElementById('attendance-custom-range').classList.add('hidden');
+                document.querySelectorAll('.attendance-period-btn').forEach(b => b.classList.toggle('active', b.dataset.days === '90'));
+                App.attendanceDays = 90;
                 App.updateBeltColor(document.getElementById('form-belt'));
                 
                 const planSelect = document.getElementById('form-plan-select');
@@ -539,6 +544,8 @@ Object.assign(App, {
                         document.getElementById('admin-member-calendar-wrapper').classList.remove('hidden');
                         document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
                         document.getElementById('admin-member-stats-wrapper').classList.remove('hidden');
+                        document.getElementById('admin-member-attendance-wrapper').classList.remove('hidden');
+                        App.renderMemberAttendance();
                         
                         const expInput = document.getElementById('form-expiration');
                         expInput.style.backgroundColor = (Utils.getDaysRemaining(m.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';

@@ -1230,6 +1230,23 @@
                 <div class="dashboard-grid" id="admin-member-stats" style="gap: 1rem; margin-top: 1rem;"></div>
             </details>
 
+            <details class="mt-1 mb-2 hidden" id="admin-member-attendance-wrapper" style="background: var(--light); padding: 1rem; border-radius: var(--border-radius); border: 1px solid var(--gray-light);">
+                <summary style="font-weight: 700; color: var(--dark); cursor: pointer;">Attendance %</summary>
+                <div class="flex gap-1 align-center mt-1" style="flex-wrap: wrap;">
+                    <button class="btn-outline btn-small attendance-period-btn active" data-days="90" onclick="App.setMemberAttendancePeriod(90)">90 days</button>
+                    <button class="btn-outline btn-small attendance-period-btn" data-days="30" onclick="App.setMemberAttendancePeriod(30)">30 days</button>
+                    <button class="btn-outline btn-small attendance-period-btn" data-days="180" onclick="App.setMemberAttendancePeriod(180)">6 mo</button>
+                    <button class="btn-outline btn-small attendance-period-btn" data-custom="1" onclick="App.setMemberAttendancePeriod('custom')">Custom</button>
+                    <span class="hidden" id="attendance-custom-range">
+                        <label class="text-gray" style="font-weight:600;">From</label>
+                        <input type="date" id="attendance-custom-start" onchange="App.onMemberAttendanceCustomChange()">
+                        <label class="text-gray" style="font-weight:600;">To</label>
+                        <input type="date" id="attendance-custom-end" onchange="App.onMemberAttendanceCustomChange()">
+                    </span>
+                </div>
+                <div id="admin-member-attendance" class="mt-1"></div>
+            </details>
+
             <form id="member-form" class="flex-col gap-1">
                 <input type="hidden" id="form-original-id">
                 
@@ -1545,17 +1562,17 @@
     <!-- Supabase JS client (UMD build exposes window.supabase) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="js/app-core.js?v=20260814-7"></script>
+    <script src="js/app-core.js?v=20260814-8"></script>
     <script src="js/app-ui.js?v=20260814-1"></script>
     <script src="js/app-kiosk.js?v=20260814-1"></script>
     <script src="js/app-member-portal.js?v=20260814-1"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-1"></script>
-    <script src="js/app-members.js?v=20260814-1"></script>
+    <script src="js/app-members.js?v=20260814-8"></script>
     <script src="js/app-plans.js?v=20260814-7"></script>
-    <script src="js/app-schedule.js?v=20260814-1"></script>
+    <script src="js/app-schedule.js?v=20260814-8"></script>
     <script src="js/app-payments.js?v=20260814-1"></script>
-    <script src="js/app-admin.js?v=20260814-6"></script>
+    <script src="js/app-admin.js?v=20260814-8"></script>
     <script src="js/app-i18n.js?v=20260814-1"></script>
 
 
