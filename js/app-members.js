@@ -889,18 +889,16 @@ Object.assign(App, {
                     }
                 }
 
-                // Process automatic payment log
+                // Process automatic payment log — server-side, atomic, via the same RPC the
+                // payment modal uses. recompute_member derives sessions/expiration/status from
+                // the ledger (single source of truth) instead of the legacy client-side
+                // reconciliation engine. The member row must be committed before the RPC runs.
                 if (paymentAmt > 0 && planId) {
                     const plan = DB.getPlans().find(p=>p.id === planId);
-                    const payments = DB.getPayments();
-                    const prevExp = '';
+                    const planSessions = plan && plan.sessions != null && plan.sessions !== '' ? (parseInt(plan.sessions, 10) || 0) : null;
                     const appliedExp = mData.expirationDate || null;
                     const appliedStartDate = document.getElementById('form-start-date') ? document.getElementById('form-start-date').value : null;
-                    // Record the plan's session quota on the log so the payment ledger is the
-                    // single source of truth for session balances (reconciliation restores
-                    // consumed sessions correctly when check-ins are edited/deleted).
-                    const planSessions = plan && plan.sessions != null && plan.sessions !== '' ? (parseInt(plan.sessions, 10) || 0) : null;
-                    payments.push({
+                    const autoLogPay = {
                         id: 'PAY-' + Date.now(),
                         memberId: id,
                         date: Utils.todayLocalIso(),
@@ -910,37 +908,32 @@ Object.assign(App, {
                         sessionsGranted: planSessions,
                         appliedExpiration: appliedExp,
                         appliedStartDate: appliedStartDate,
-                        prevExpiration: prevExp
-                    });
-                    DB.savePayments(payments);
+                        prevExpiration: prevTrialMember ? (prevTrialMember.expirationDate || null) : null
+                    };
+                    await DB.saveMembers(members);
+                    await FSEngine.flush();
+                    await Sync.applyPayment(autoLogPay);
+                    await Sync.reloadPaymentData();
+                } else {
+                    DB.saveMembers(members);
+
+                    // A member must not be Active without usable coverage (an edited member
+                    // whose expiration/sessions were cleared and who received no plan).
+                    const savedMember = members.find(x => x.id === id);
+                    if (savedMember && savedMember.accountStatus === 'Active'
+                        && !(savedMember.sessionsTotal && (parseInt(savedMember.sessionsLeft, 10) || 0) > 0)
+                        && !(savedMember.expirationDate && Utils.getDaysRemaining(savedMember.expirationDate) >= 0)) {
+                        savedMember.accountStatus = 'Inactive';
+                        DB.saveMembers(members);
+                    }
                 }
 
-                // Update visits if ID changed
+                // Update local visit references if the member's ID changed (the server-side
+                // rename cascades, but the local cache needs it for immediate UI consistency).
                 if (originalId && originalId !== id) {
                     const visits = DB.getVisits();
                     visits.forEach(v => { if(v.memberId === originalId) v.memberId = id; });
                     DB.saveVisits(visits);
-                }
-
-                DB.saveMembers(members);
-
-                // Let the reconciliation engine settle coverage for the applied plan:
-                // session bundles consume outstanding unpaid check-ins via their quota
-                // (a 1-session bundle after 2 unpaid check-ins pays for one visit and
-                // leaves 0 sessions), and time-based plans cover visits within their
-                // validity window. Keeps the member form consistent with the payment path.
-                if (paymentAmt > 0 && planId) {
-                    App.reconcileMemberPaymentVisitStatus(id);
-                }
-
-                // A member must not be Active without usable coverage once the applied
-                // plan has been consumed by outstanding debt.
-                const savedMember = members.find(x => x.id === id);
-                if (savedMember && savedMember.accountStatus === 'Active'
-                    && !(savedMember.sessionsTotal && (parseInt(savedMember.sessionsLeft, 10) || 0) > 0)
-                    && !(savedMember.expirationDate && Utils.getDaysRemaining(savedMember.expirationDate) >= 0)) {
-                    savedMember.accountStatus = 'Inactive';
-                    DB.saveMembers(members);
                 }
 
                 // Debug: log saved member status to console to verify Inactive enforcement

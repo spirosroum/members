@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.45 (11:05) — Member form auto-log payment now uses the server RPC
+- The member form's automatic payment log (`saveMember` with a plan + payment) previously wrote the payment through the client-side ledger and reconciled visits with the legacy client-side engine — a second source of truth that could drift from the server's `recompute_member`. It now calls the same server-side `apply_payment` RPC the payment modal uses, after flushing the member row so the FK/recompute see it, then reloads payments/members/visits.
+- `prevExpiration` on the auto-log now records the member's actual prior expiration instead of an empty string.
+- No-payment member saves keep their client-side Inactive enforcement (an edited member with no coverage and no new plan still lapses); the paid-plan path relies on the server recompute, which already sets `account_status`.
+- Bumped `version.txt` and the `app-members.js` cache-buster.
+
 ## 2026-08-15 — v0.44 (10:45) — Payments & Payment Ledger fixes
 - Editing a payment no longer resets the Quantity to 1, which silently halved session bundles (a 2x8-session purchase was re-saved as 8) and wiped `sessionsGranted` on custom payments with no plan. The quantity is restored from the payment's `sessionsGranted`, and saving preserves the existing grant when the form derives none
 - New "Sessions" field in the payment modal: auto-fills from the selected plan × quantity, and overrides the derived grant when typed manually (custom drop-in bundles); pre-filled when editing an existing session payment
