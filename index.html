@@ -1183,7 +1183,7 @@
                 <p id="mobile-checkin-subtitle" class="text-gray" style="margin: 0 0 1.25rem 0;">Scan the QR at the gym to check in.</p>
 
                 <div id="mobile-checkin-identify">
-                    <p id="mobile-checkin-enter-id" class="text-gray">Enter your Member ID</p>
+                    <p id="mobile-checkin-enter-id" class="text-gray" style="margin-bottom: 0.5rem;">Enter your Member ID</p>
                     <input type="text" id="mobile-checkin-id" class="search-bar" placeholder="Member ID" maxlength="8" pattern="\d*" inputmode="numeric" autocomplete="off" style="text-align: center; font-size: 1.5rem; letter-spacing: 3px;" onkeyup="if(event.key === 'Enter') App.mobileCheckinSubmit()">
                     <button id="mobile-checkin-submit-btn" class="btn-primary btn-large w-full mt-2" onclick="App.mobileCheckinSubmit()">Check In</button>
                     <div class="flex align-center" style="gap: 0.75rem; margin: 1.25rem 0;">
@@ -1202,7 +1202,7 @@
                     <p id="mobile-checkin-link-text" class="text-gray" style="margin-bottom: 1rem;">No member is linked to this Google account yet. Enter your member ID once to link it.</p>
                     <input type="text" id="mobile-link-id" class="search-bar" placeholder="Member ID" maxlength="8" pattern="\d*" inputmode="numeric" autocomplete="off" style="text-align: center; font-size: 1.5rem; letter-spacing: 3px;" onkeyup="if(event.key === 'Enter') App.mobileLinkSubmit()">
                     <button id="mobile-link-continue-btn" class="btn-primary btn-large w-full mt-2" onclick="App.mobileLinkSubmit()">Link & Continue</button>
-                    <button id="mobile-use-id-btn" class="btn-outline w-full mt-2" onclick="App.mobileCheckinSwitch()">Use member ID instead</button>
+                    <button id="mobile-use-id-btn" class="btn-outline btn-large w-full mt-2" onclick="App.mobileCheckinSwitch()">Use member ID instead</button>
                     <div id="mobile-link-msg" class="kiosk-msg hidden"></div>
                 </div>
 
@@ -1213,9 +1213,9 @@
                 </div>
 
                 <div id="mobile-checkin-success" class="hidden">
-                    <div style="font-size: 2.5rem;">✅</div>
+                    <div style="font-size: 2.5rem; line-height: 1;">✅</div>
                     <h2 id="mobile-checkin-success-title" style="margin: 0.5rem 0 0 0;">You're checked in!</h2>
-                    <p id="mobile-checkin-success-text" class="text-gray">Enjoy your training.</p>
+                    <p id="mobile-checkin-success-text" class="text-gray" style="margin: 0.25rem 0 0 0;">Enjoy your training.</p>
                     <button id="mobile-checkin-again-btn" class="btn-outline btn-large w-full mt-2" onclick="App.mobileCheckinAgain()">Check In Again</button>
                 </div>
             </div>
