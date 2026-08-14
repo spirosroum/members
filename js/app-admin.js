@@ -333,6 +333,7 @@ Object.assign(App, {
                     Object.keys(availableCount).forEach(key => {
                         if (key.split('|')[1] === cid) att += Math.min(attendedCount[key] || 0, availableCount[key]);
                     });
+                    cls.classId = cid;
                     cls.attended = att;
                     cls.pct = cls.available > 0 ? Math.round(att / cls.available * 100) : null;
                     return cls;
