@@ -302,7 +302,7 @@ Object.assign(App, {
                 return sessions;
             },
 
-            getMemberAttendance: (memberId, since, until) => {
+            getMemberAttendance: (memberId, since, until, opts = {}) => {
                 const availableCount = {};
                 const meta = {};
                 App.buildAvailableTrainings(since, until).forEach(s => {
@@ -327,7 +327,7 @@ Object.assign(App, {
                     totalAvailable += availableCount[key];
                     totalMatched += Math.min(attendedCount[key] || 0, availableCount[key]);
                 });
-                const perClass = Object.keys(meta).map(cid => {
+                let perClass = Object.keys(meta).map(cid => {
                     const cls = meta[cid];
                     let att = 0;
                     Object.keys(availableCount).forEach(key => {
@@ -338,6 +338,21 @@ Object.assign(App, {
                     return cls;
                 });
                 perClass.sort((a, b) => (b.pct || 0) - (a.pct || 0) || a.name.localeCompare(b.name));
+                // Member-facing view: show only classes that are public, or that the member
+                // has attended at least once in the recent lookback (default 90 days).
+                if (opts.onlyPublicOrAttended) {
+                    const lookback = opts.lookbackDays || 90;
+                    const sinceLookback = new Date(until.getTime() - lookback * 24 * 3600 * 1000);
+                    const attendedIds = new Set();
+                    DB.getClassCheckins().forEach(ci => {
+                        if (ci.memberId !== memberId || !ci.entryTime) return;
+                        const d = new Date(ci.entryTime);
+                        if (isNaN(d.getTime()) || d < sinceLookback || d >= until) return;
+                        attendedIds.add(ci.classId);
+                    });
+                    const publicIds = new Set(DB.getSchedules().filter(s => s.isPublic !== false).map(s => s.id));
+                    perClass = perClass.filter(c => publicIds.has(c.classId) || attendedIds.has(c.classId));
+                }
                 const pct = totalAvailable > 0 ? Math.round(totalMatched / totalAvailable * 100) : null;
                 return { attended: totalMatched, available: totalAvailable, pct, perClass };
             },

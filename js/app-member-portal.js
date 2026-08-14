@@ -449,6 +449,7 @@ Object.assign(App, {
                 if (monthBtn) monthBtn.innerText = map.memberViewMonth || 'Month';
                 App.updateMemberLeaderboardToggleUI();
                 App.renderMemberHistory(member.id, 'member-personal-history');
+                App.renderMemberAttendancePortal();
 
                 const unpaidVisits = DB.getVisits().filter(v => v.memberId === member.id && v.isUnpaid);
                 const listEl = document.getElementById('member-unpaid-visits-list');
@@ -467,6 +468,46 @@ Object.assign(App, {
                         </tr>
                     `).join('');
                 }
+            },
+
+            // Member-facing attendance: fixed 90-day window, showing only classes that are
+            // public or that the member has attended at least once in the last 90 days.
+            renderMemberAttendancePortal: () => {
+                const el = document.getElementById('member-dash-attendance');
+                if (!el) return;
+                const member = App.currentUser;
+                if (!member) return;
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+
+                const titleEl = document.getElementById('member-attendance-title');
+                if (titleEl) titleEl.innerText = map.memberViewAttendanceTitle || 'My Attendance';
+                const subEl = document.getElementById('member-attendance-sub');
+                if (subEl) subEl.innerText = map.memberViewAttendanceWindow || 'Last 90 days';
+
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
+                since.setHours(0, 0, 0, 0);
+                const res = App.getMemberAttendance(member.id, since, until, { onlyPublicOrAttended: true, lookbackDays: 90 });
+
+                if (res.pct == null) {
+                    el.innerHTML = `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`;
+                    return;
+                }
+                const pctBadge = (p) => p == null ? '' : (p >= 75 ? `<span class="badge badge-active">${Utils.escapeHTML(map.memberViewAttendanceGood || 'Good')}</span>` : p >= 40 ? `<span class="badge badge-warning">${Utils.escapeHTML(map.memberViewAttendanceFair || 'Fair')}</span>` : `<span class="badge badge-inactive">${Utils.escapeHTML(map.memberViewAttendanceLow || 'Low')}</span>`);
+                const overallLabel = map.memberViewAttendanceOverall || 'Overall';
+                el.innerHTML = `
+                    <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${res.pct}% ${pctBadge(res.pct)}</div>
+                    <div class="text-gray" style="font-size:0.85rem; margin-bottom:0.5rem;">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
+                    <div style="border-top:1px solid var(--gray-light); padding-top:0.5rem;">
+                        ${res.perClass.map(c => `
+                            <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0; flex-wrap:wrap;">
+                                <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
+                                <span style="width:80px; font-size:0.85rem;">${c.pct != null ? c.pct + '%' : '—'}</span>
+                                ${pctBadge(c.pct)}
+                            </div>`).join('') || `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
+                    </div>`;
             },
 
             logout: () => {
