@@ -514,7 +514,9 @@ Object.assign(App, {
                     el.innerHTML = `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`;
                     return;
                 }
-                const pctBadge = (p) => p == null ? '' : (p >= 75 ? `<span class="badge badge-active">${Utils.escapeHTML(map.memberViewAttendanceGood || 'Good')}</span>` : p >= 40 ? `<span class="badge badge-warning">${Utils.escapeHTML(map.memberViewAttendanceFair || 'Fair')}</span>` : `<span class="badge badge-inactive">${Utils.escapeHTML(map.memberViewAttendanceLow || 'Low')}</span>`);
+                // Positive-only feedback: encourage when attendance is good, otherwise
+                // show nothing (no "Fair"/"Low" labels that could discourage members).
+                const pctBadge = (p) => p == null ? '' : (p >= 75 ? `<span class="badge badge-active">${Utils.escapeHTML(map.memberViewAttendanceGood || 'Great job')}</span>` : '');
                 const overallLabel = map.memberViewAttendanceOverall || 'Overall';
                 el.innerHTML = `
                     <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${res.pct}% ${pctBadge(res.pct)}</div>
