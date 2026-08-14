@@ -2,6 +2,17 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.43 (10:15) — Member Directory & Edit Profile bug fixes
+- Edit modal: the Expiration field no longer shows a red "expired" background for members who simply have no expiration date (session-based / never had a plan) — red only shows when an actual date is in the past
+- Edit modal: belt stripes (e.g. "Purple/2") are now preserved when saving an unchanged base belt instead of being silently truncated to the plain belt; changing the base belt still resets to the plain belt
+- Mass Freeze now freezes every Active member with usable coverage — session-based members (previously skipped by the date-only check) are included, and members with no usable coverage are left alone
+- Mass Unfreeze no longer resurrects a stale "Active" status for members whose coverage lapsed while frozen — they lapse to Inactive
+- Mobile member cards now respect the column configurator: the status badge only renders when the status column is enabled (matching the desktop table), and the "Sessions" chip now shows just the remaining count (was rendering `X/0` because `sessionsTotal` is a boolean)
+- The Member Directory "Cancelled" tab now only lists members whose displayed status is actually Cancelled, mirroring the badge priority — an Expired/Inactive/No-Sessions member who is also 90-day-inactive no longer appears there
+- Renaming a member (ID change) now also rewrites the local payments and notifications `memberId`s, so the ledger/notifications render immediately instead of after a reload
+- Applying a plan in the member form now stacks purchased sessions onto the remaining balance (renewal of an 8-session bundle with 4 left shows 12) and restoring the plan dropdown to "Custom/No Plan" restores the member's original expiration and session balance instead of leaving the form half-cleared; switching to a session plan no longer silently wipes a time-based expiration
+- Bumped `version.txt` and the `app-members.js` cache-buster
+
 ## 2026-08-15 — v0.42 (09:45) — No red alert styling for Inactive/Cancelled members
 - Member directory row/card red alert styling only applied to members who were still `Active` with a lapsed expiration date. After v0.41 made lapsed members lapse to `Inactive`, Inactive (and Cancelled) members kept the red background purely because their `expirationDate` was in the past, even though the status badge already read Inactive/Cancelled. Red now only shows for genuinely expired-but-still-active members (`app-members.js`).
 - Bumped `version.txt` and the `app-members.js` cache-buster.

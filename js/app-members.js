@@ -1,6 +1,6 @@
 // =====================================================================
 // app-members.js
-// App methods: generateRandomId, setDirectorySort, switchDirStatus, renderMemberDirectory, renderColumnConfigurator, toggleColumn, dragStart, dragOver, drop, renderMemberBin, restoreMember, deleteBinMember, exportFields, openExportModal, toggleExportField, toggleAllExportFields, exportMembersToExcel, massFreeze, massUnfreeze, openMemberModal, applyPlan, updateBeltColor, saveMember, deleteMemberFromModal, clearMemberDebt
+// App methods: generateRandomId, setDirectorySort, switchDirStatus, renderMemberDirectory, renderColumnConfigurator, toggleColumn, dragStart, dragOver, drop, renderMemberBin, restoreMember, deleteBinMember, exportFields, openExportModal, toggleExportField, toggleAllExportFields, exportMembersToExcel, massFreeze, hasUsableCoverage, massUnfreeze, openMemberModal, applyPlan, updateBeltColor, memberBeltValue, saveMember, deleteMemberFromModal, clearMemberDebt
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -116,7 +116,17 @@ Object.assign(App, {
                 } else if (!query && dirStatus === 'frozen') {
                     filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Frozen');
                 } else if (!query && dirStatus === 'cancelled') {
-                    filtered = filtered.filter(m => m.accountStatus === 'Cancelled' || App.isMemberCancelled(m.id));
+                    // Only members whose displayed status is actually "Cancelled" — mirror
+                    // the badge priority so an Expired/Inactive/No-Sessions member who also
+                    // happens to be inactive for 90 days doesn't appear under Cancelled.
+                    filtered = filtered.filter(m => {
+                        if (m.accountStatus === 'Cancelled') return true;
+                        if (m.accountStatus !== 'Active') return false;
+                        const isExpired = m.expirationDate ? Utils.getDaysRemaining(m.expirationDate) < 0 : false;
+                        if (isExpired) return false;
+                        if (m.sessionsTotal && parseInt(m.sessionsLeft) <= 0) return false;
+                        return App.isMemberCancelled(m.id);
+                    });
                 }
 
                 // While a search is active the status sub-filter is ignored, so drop the
@@ -277,6 +287,10 @@ Object.assign(App, {
                         ? `<span class="badge badge-trial">Trial${m.trialConverted ? ' · converted' : ''}</span>`
                         : '';
 
+                    // Match the desktop table: the status badge only renders when the
+                    // "status" column is enabled in the column configurator.
+                    const statusColEnabled = activeCols.some(c => c.id === 'status');
+
                     const chips = [];
                     activeCols.forEach(c => {
                         switch(c.id) {
@@ -296,7 +310,7 @@ Object.assign(App, {
                                 if (m.expirationDate) {
                                     chips.push(`<span class="member-chip ${isMemberExpired ? 'is-danger' : ''}"><span class="chip-label">Expires</span>${Utils.formatDate(m.expirationDate)}</span>`);
                                 } else if (m.sessionsTotal) {
-                                    chips.push(`<span class="member-chip ${isOutOfSessions ? 'is-warn' : ''}"><span class="chip-label">Sessions</span>${parseInt(m.sessionsLeft) || 0}/${parseInt(m.sessionsTotal) || 0}</span>`);
+                                    chips.push(`<span class="member-chip ${isOutOfSessions ? 'is-warn' : ''}"><span class="chip-label">Sessions left</span>${parseInt(m.sessionsLeft) || 0}</span>`);
                                 }
                                 break;
                             }
@@ -315,7 +329,7 @@ Object.assign(App, {
                                 <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>
                                 <div class="member-card-id">${Utils.getMemberIdBadge(m)}</div>
                             </div>
-                            <div class="member-card-status">${statBadge}${trialBadge}</div>
+                            <div class="member-card-status">${statusColEnabled ? statBadge : ''}${trialBadge}</div>
                         </div>
                         <div class="member-card-meta">${chips.join('')}</div>
                         <button class="btn-primary member-card-btn" onclick="App.openMemberModal('${m.id}')">Manage</button>
@@ -476,8 +490,10 @@ Object.assign(App, {
                 const members = DB.getMembers();
                 let count = 0;
                 members.forEach(m => {
-                    const daysLeft = Utils.getDaysRemaining(m.expirationDate);
-                    if (daysLeft >= 0 && m.accountStatus === 'Active') {
+                    // Only freeze members who actually have usable coverage (unexpired
+                    // time or sessions left). Session-based members are included too —
+                    // the old date-only check silently skipped them.
+                    if (m.accountStatus === 'Active' && !App.computeVisitUnpaid(m)) {
                         m.accountStatus = 'Frozen';
                         count++;
                     }
@@ -487,13 +503,24 @@ Object.assign(App, {
                 alert(`Successfully froze ${count} active members.`);
             },
 
+            // Usable coverage independent of the stored account status — used before
+            // deciding a reactivation, because computeVisitUnpaid() short-circuits
+            // on Frozen/Cancelled/Inactive statuses.
+            hasUsableCoverage: (m) => {
+                if (!m) return false;
+                return (m.sessionsTotal && (parseInt(m.sessionsLeft, 10) || 0) > 0)
+                    || (m.expirationDate && Utils.getDaysRemaining(m.expirationDate) >= 0);
+            },
+
             massUnfreeze: () => {
                 if(!confirm('Are you sure you want to UNFREEZE ALL currently frozen members?')) return;
                 const members = DB.getMembers();
                 let count = 0;
                 members.forEach(m => {
                     if (m.accountStatus === 'Frozen') {
-                        m.accountStatus = 'Active';
+                        // Unfreezing must not resurrect a stale "Active" for a member whose
+                        // coverage lapsed while frozen — they lapse to Inactive instead.
+                        m.accountStatus = App.hasUsableCoverage(m) ? 'Active' : 'Inactive';
                         count++;
                     }
                 });
@@ -548,7 +575,9 @@ Object.assign(App, {
                         App.renderMemberAttendance();
                         
                         const expInput = document.getElementById('form-expiration');
-                        expInput.style.backgroundColor = (Utils.getDaysRemaining(m.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
+                        expInput.style.backgroundColor = m.expirationDate
+                            ? (Utils.getDaysRemaining(m.expirationDate) < 0 ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)')
+                            : 'var(--white)';
 
                         if(m.sessionsTotal) {
                             document.getElementById('member-sessions-wrapper').style.display = 'flex';
@@ -626,10 +655,28 @@ Object.assign(App, {
                 const payInput = document.getElementById('form-last-payment');
                 const expInput = document.getElementById('form-expiration');
                 const sessWrap = document.getElementById('member-sessions-wrapper');
-                
+                const sessInput = document.getElementById('form-sessions-left');
+                const mId = document.getElementById('form-original-id').value;
+                const member = mId ? DB.getMembers().find(x => x.id === mId) : null;
+
+                // Deselecting the plan must restore the member's original expiration and
+                // session balance instead of leaving the form half-cleared.
                 if (!planId) {
                     payInput.value = '0.00';
-                    sessWrap.style.display = 'none';
+                    if (member && member.expirationDate) {
+                        expInput.value = member.expirationDate;
+                        expInput.style.backgroundColor = (Utils.getDaysRemaining(member.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
+                    } else {
+                        expInput.value = '';
+                        expInput.style.backgroundColor = 'var(--white)';
+                    }
+                    if (member && member.sessionsTotal) {
+                        sessWrap.style.display = 'flex';
+                        sessInput.value = member.sessionsLeft;
+                    } else {
+                        sessWrap.style.display = 'none';
+                        sessInput.value = '';
+                    }
                     return;
                 }
                 const plan = DB.getPlans().find(p => p.id === planId);
@@ -640,8 +687,6 @@ Object.assign(App, {
                     // start. Without this, renewals get anchored to the prefilled "today" and
                     // silently shorten the total coverage window.
                     if (!memberStartOverridden) {
-                        const mId = document.getElementById('form-original-id').value;
-                        const member = mId ? DB.getMembers().find(x => x.id === mId) : null;
                         if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
                             const curExp = new Date(member.expirationDate);
                             const startObj = new Date(start);
@@ -651,16 +696,24 @@ Object.assign(App, {
                             }
                         }
                     }
-                    expInput.value = Utils.calculateExpirationDate(start, plan.days);
-                    expInput.style.backgroundColor = 'var(--bg-info-soft)';
+                    if (plan.days) {
+                        expInput.value = Utils.calculateExpirationDate(start, plan.days);
+                        expInput.style.backgroundColor = 'var(--bg-info-soft)';
+                    }
                     payInput.value = parseFloat(plan.price).toFixed(2);
 
                     if (plan.sessions) {
                         sessWrap.style.display = 'flex';
-                        document.getElementById('form-sessions-left').value = plan.sessions;
+                        // Stack the purchased sessions onto any remaining balance instead of
+                        // overwriting it — a renewal of an 8-session bundle with 4 left shows 12.
+                        const prevSessions = member && member.sessionsTotal
+                            ? (parseInt(member.sessionsLeft, 10) || 0) : 0;
+                        sessInput.value = memberStartOverridden
+                            ? plan.sessions
+                            : prevSessions + (parseInt(plan.sessions, 10) || 0);
                     } else {
                         sessWrap.style.display = 'none';
-                        document.getElementById('form-sessions-left').value = '';
+                        sessInput.value = '';
                     }
                 }
             },
@@ -680,6 +733,19 @@ Object.assign(App, {
                     selectEl.style.backgroundColor = colors[val].bg;
                     selectEl.style.color = colors[val].text;
                 }
+            },
+
+            // The belt dropdown only offers plain belts, but members can carry a
+            // stripe suffix (e.g. "Purple/2"). When the admin saves without changing
+            // the base belt, preserve the full original value so stripes are not
+            // silently erased. Changing the base belt resets to the plain belt.
+            memberBeltValue: (originalId, members, beltBase) => {
+                if (!originalId) return beltBase;
+                const prev = members.find(m => m.id === originalId);
+                if (!prev || !prev.belt) return beltBase;
+                const prevBase = prev.belt.split('/')[0].trim();
+                if (prevBase.toLowerCase() === (beltBase || '').trim().toLowerCase()) return prev.belt;
+                return beltBase;
             },
 
             saveMember: async (e) => {
@@ -719,7 +785,7 @@ Object.assign(App, {
                     lastName: document.getElementById('form-last-name').value,
                     dob: document.getElementById('form-dob').value,
                     gender: document.getElementById('form-gender').value,
-                    belt: beltBase,
+                    belt: App.memberBeltValue(originalId, members, beltBase),
                     phone: document.getElementById('form-phone').value,
                     email: document.getElementById('form-email').value,
                     expirationDate: document.getElementById('form-expiration').value,
@@ -797,6 +863,18 @@ Object.assign(App, {
                     let ccChanged = false;
                     checkins.forEach(c => { if (c.memberId === originalId) { c.memberId = id; ccChanged = true; } });
                     if (ccChanged) DB.saveClassCheckins(checkins);
+
+                    // Payments and notifications reference the old id too — rewrite them so
+                    // the payment ledger / notifications render without waiting for a reload.
+                    const payments = DB.getPayments();
+                    let payChanged = false;
+                    payments.forEach(p => { if (p.memberId === originalId) { p.memberId = id; payChanged = true; } });
+                    if (payChanged) DB.savePayments(payments);
+
+                    const notifications = DB.getNotifications();
+                    let notifChanged = false;
+                    notifications.forEach(n => { if (n.memberId === originalId) { n.memberId = id; notifChanged = true; } });
+                    if (notifChanged) DB.saveNotifications(notifications);
                 }
 
                 // Ensure new registration accountStatus is enforced based on payment+plan
