@@ -1200,10 +1200,11 @@ Object.assign(App, {
                 const emojis = STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS;
                 const colors = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
                 el.innerHTML = [50, 60, 70, 80, 90, 95, 98].map(t => `
-                    <div style="display:flex; align-items:center; gap:0.75rem; padding:0.4rem 0; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
                         <span class="text-gray" style="width:64px; font-weight:600;">${t}%+</span>
                         <input type="text" class="search-bar" data-tier="${t}" data-type="emoji" value="${Utils.escapeHTML(emojis[t] || '')}" maxlength="8" style="width:84px; text-align:center;">
                         <input type="color" data-tier="${t}" data-type="color" value="${colors[t] || '#000000'}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
+                        <input type="text" class="search-bar" data-tier="${t}" data-type="hex" value="${Utils.escapeHTML(colors[t] || '')}" placeholder="#RRGGBB" maxlength="7" style="width:96px; text-align:center; font-family:monospace;">
                         <span style="width:70px; text-align:center; font-size:1.25rem; color:${colors[t] || 'inherit'};">${Utils.escapeHTML(emojis[t] || '')}</span>
                     </div>`).join('');
             },
@@ -1211,11 +1212,20 @@ Object.assign(App, {
             saveAttendanceFeedback: () => {
                 const emojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS);
                 const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
-                document.querySelectorAll('#attendance-feedback-config input').forEach(inp => {
+                const hexSet = new Set();
+                document.querySelectorAll('#attendance-feedback-config input[type="text"]').forEach(inp => {
                     const tier = parseInt(inp.dataset.tier, 10);
                     if (!tier) return;
                     if (inp.dataset.type === 'emoji') { if (inp.value.trim()) emojis[tier] = inp.value.trim(); }
-                    else { if (inp.value) colors[tier] = inp.value; }
+                    else if (inp.dataset.type === 'hex') {
+                        const hex = (inp.value || '').trim();
+                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) { colors[tier] = hex; hexSet.add(tier); }
+                    }
+                });
+                // A valid hex code wins; otherwise fall back to the color picker value.
+                document.querySelectorAll('#attendance-feedback-config input[type="color"]').forEach(inp => {
+                    const tier = parseInt(inp.dataset.tier, 10);
+                    if (tier && !hexSet.has(tier) && inp.value) colors[tier] = inp.value;
                 });
                 STATE.attendanceEmojis = emojis;
                 STATE.attendanceColors = colors;
