@@ -1109,6 +1109,12 @@
             <div class="card mb-2" id="member-dash-info"></div>
 
             <div class="card mb-2">
+                <h3 style="margin:0;" id="member-attendance-title">My Attendance</h3>
+                <p class="text-gray" style="margin:0.25rem 0 0 0;" id="member-attendance-sub">Last 90 days</p>
+                <div id="member-dash-attendance" class="mt-1"></div>
+            </div>
+
+            <div class="card mb-2">
                 <div class="flex justify-between align-center mb-1" style="gap: 1rem; cursor: pointer; user-select: none;" onclick="App.toggleMemberStatsCollapsed()">
                     <h3 id="member-stats-title" style="margin:0;">Statistics</h3>
                     <span id="member-stats-arrow" class="member-stats-arrow">▾</span>
@@ -1128,15 +1134,9 @@
             </div>
 
             <div class="card mb-2">
-                <h3 style="margin:0;" id="member-attendance-title">My Attendance</h3>
-                <p class="text-gray" style="margin:0.25rem 0 0 0;" id="member-attendance-sub">Last 90 days</p>
-                <div id="member-dash-attendance" class="mt-1"></div>
-            </div>
-
-            <div class="card mb-2">
-                <h3 id="member-change-id-title">Change Member ID</h3>
-                <p id="member-change-id-desc" class="text-gray mb-1">Update your login ID code.</p>
-                <div class="flex gap-2 align-center">
+                <h3 id="member-change-id-title" style="margin:0;">Change Member ID</h3>
+                <p id="member-change-id-desc" class="text-gray" style="margin:0.25rem 0 0 0;">Update your login ID code.</p>
+                <div class="flex gap-2 align-center mt-1">
                     <input type="text" id="member-new-id" placeholder="New ID (max 8 digits)" maxlength="8" pattern="\d{1,8}" style="max-width: 250px;">
                     <button id="member-change-id-save" class="btn-primary" onclick="App.changeMemberId()">Save ID</button>
                 </div>
@@ -1145,8 +1145,8 @@
             <div class="card mb-2" style="border-left: 4px solid var(--primary);">
                 <div class="flex justify-between align-center" style="gap: 1rem;">
                     <div>
-                        <h3 id="member-hide-lb-title">Hide From Leaderboard</h3>
-                        <p id="member-hide-lb-desc" class="text-gray mb-1">Hide your name and rank from the Training Leaderboard.</p>
+                        <h3 id="member-hide-lb-title" style="margin:0;">Hide From Leaderboard</h3>
+                        <p id="member-hide-lb-desc" class="text-gray" style="margin:0.25rem 0 0 0;">Hide your name and rank from the Training Leaderboard.</p>
                     </div>
                     <label class="closed-date-toggle">
                         <input type="checkbox" id="member-hide-lb-toggle" onchange="App.toggleHideFromLeaderboard(this.checked)">
@@ -1162,8 +1162,8 @@
             </details>
 
             <div class="card" style="border-left: 4px solid var(--danger);">
-                <h3 id="member-unpaid-title" style="color: var(--danger);">Unpaid Check-ins / Expired Trainings</h3>
-                <p id="member-unpaid-desc" class="text-gray mb-1">The following past visits were recorded while your account was expired or frozen.</p>
+                <h3 id="member-unpaid-title" style="color: var(--danger); margin:0;">Unpaid Check-ins / Expired Trainings</h3>
+                <p id="member-unpaid-desc" class="text-gray" style="margin:0.25rem 0 0 0;">The following past visits were recorded while your account was expired or frozen.</p>
                 <div class="table-responsive mobile-cards">
                     <table>
                         <thead><tr><th id="member-unpaid-date-header">Date</th><th id="member-unpaid-entry-header">Entry Time</th><th id="member-unpaid-duration-header">Duration</th></tr></thead>
