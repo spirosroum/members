@@ -416,6 +416,19 @@ Object.assign(App, {
                 App.renderMemberAttendance();
             },
 
+            // Positive-only emoji feedback for attendance %. Nothing below 50% so it
+            // never discourages; escalates up to the sloth mascot at 98%+.
+            attendanceEmoji: (p) => {
+                if (p == null || p < 50) return '';
+                if (p >= 98) return '🦥';
+                if (p >= 95) return '👑';
+                if (p >= 90) return '🔥';
+                if (p >= 80) return '🏆';
+                if (p >= 70) return '⭐';
+                if (p >= 60) return '💪';
+                return '👍';
+            },
+
             renderMemberAttendance: () => {
                 const el = document.getElementById('admin-member-attendance');
                 if (!el) return;
@@ -424,14 +437,11 @@ Object.assign(App, {
                 const { since, until } = App.getAttendanceWindow();
                 const res = App.getMemberAttendance(memberId, since, until);
                 const fmt = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-                const pctBadge = (p) => p == null
-                    ? '<span class="text-gray" style="font-size:0.85rem;">no sessions</span>'
-                    : (p >= 75 ? '<span class="badge badge-active">Good</span>' : p >= 40 ? '<span class="badge badge-warning">Fair</span>' : '<span class="badge badge-inactive">Low</span>');
                 const overallHtml = res.pct == null
                     ? '<div class="text-gray">No class sessions were available in this period.</div>'
                     : `<div class="text-gray" style="font-size:0.85rem;">${res.attended} attended of ${res.available} available sessions</div>`;
                 el.innerHTML = `
-                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${res.pct != null ? res.pct + '%' : '—'} ${pctBadge(res.pct)}</div>
+                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${res.pct != null ? res.pct + '%' : '—'} ${App.attendanceEmoji(res.pct)}</div>
                     ${overallHtml}
                     <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
                     ${res.perClass.map(c => `
@@ -439,7 +449,7 @@ Object.assign(App, {
                             <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
                             <span style="width:80px; font-size:0.85rem;">${c.pct != null ? c.pct + '%' : '—'}</span>
                             <span class="text-gray" style="font-size:0.8rem; width:110px;">${c.attended}/${c.available}</span>
-                            ${pctBadge(c.pct)}
+                            ${App.attendanceEmoji(c.pct)}
                         </div>`).join('') || '<div class="text-gray" style="padding:0.5rem 0;">No class sessions available in this period.</div>'}
                     <div class="text-gray" style="font-size:0.8rem; margin-top:0.5rem;">Window: ${fmt(since)} – ${fmt(until)}. Only classes available by each date are counted.</div>`;
             },
