@@ -1121,20 +1121,12 @@
                 <h3 style="margin:0;" id="member-attendance-title">My Attendance</h3>
                 <p class="text-gray" style="margin:0.25rem 0 0 0;" id="member-attendance-sub">Last 90 days</p>
                 <div id="member-dash-attendance" class="mt-1"></div>
-            </div>
-
-            <div class="card mb-2">
-                <div class="flex justify-between align-center mb-1" style="gap: 1rem; cursor: pointer; user-select: none;" onclick="App.toggleMemberStatsCollapsed()">
-                    <h3 id="member-stats-title" style="margin:0;">Statistics</h3>
-                    <span id="member-stats-arrow" class="member-stats-arrow">▾</span>
+                <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
+                <div class="flex gap-1 mb-1" style="justify-content: flex-end;">
+                    <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-week" onclick="App.setMemberStatsMode('week')">Week</button>
+                    <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-month" onclick="App.setMemberStatsMode('month')">Month</button>
                 </div>
-                <div id="member-stats-body">
-                    <div class="flex gap-1 mb-1" style="justify-content: flex-end;">
-                        <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-week" onclick="App.setMemberStatsMode('week')">Week</button>
-                        <button class="btn-outline btn-small member-stats-mode-btn" id="member-stats-mode-month" onclick="App.setMemberStatsMode('month')">Month</button>
-                    </div>
-                    <div class="dashboard-grid" id="member-dash-stats"></div>
-                </div>
+                <div class="dashboard-grid" id="member-dash-stats"></div>
             </div>
 
             <div class="card mb-2 hidden" id="member-rank-card">
@@ -1581,7 +1573,7 @@
     <script src="js/app-core.js?v=20260814-22"></script>
     <script src="js/app-ui.js?v=20260814-1"></script>
     <script src="js/app-kiosk.js?v=20260814-1"></script>
-    <script src="js/app-member-portal.js?v=20260814-2532109871"></script>
+    <script src="js/app-member-portal.js?v=20260814-26532109871"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-1"></script>
     <script src="js/app-members.js?v=20260814-8"></script>

@@ -334,19 +334,6 @@ Object.assign(App, {
                 if (App.currentUser) App.renderMemberDashboard();
             },
 
-            toggleMemberStatsCollapsed: () => {
-                App.memberStatsCollapsed = !App.memberStatsCollapsed;
-                localStorage.setItem('gym_member_stats_collapsed', App.memberStatsCollapsed ? '1' : '0');
-                App.updateMemberStatsCollapsedUI();
-            },
-
-            updateMemberStatsCollapsedUI: () => {
-                const body = document.getElementById('member-stats-body');
-                const arrow = document.getElementById('member-stats-arrow');
-                if (body) body.classList.toggle('hidden', App.memberStatsCollapsed);
-                if (arrow) arrow.innerText = App.memberStatsCollapsed ? '▸' : '▾';
-            },
-
             updateMemberStatsModeUI: () => {
                 const weekBtn = document.getElementById('member-stats-mode-week');
                 const monthBtn = document.getElementById('member-stats-mode-month');
@@ -405,12 +392,8 @@ Object.assign(App, {
                 } else if (hasValidity && Utils.getDaysRemaining(member.expirationDate) < 0) {
                     statusText = `<span style="color:var(--danger)">${Utils.escapeHTML(map.memberStatusExpired || 'Expired')}</span>`;
                 } else {
-                    // Active: if validity-based show days remaining, otherwise just show Active
-                    if (hasValidity) {
-                        statusText = `<span style="color:var(--success)">${Utils.escapeHTML(map.memberStatusActive || 'Active')} (${daysRemaining} ${Utils.escapeHTML(map.memberStatusDaysLeft || 'days left')})</span>`;
-                    } else {
-                        statusText = `<span style="color:var(--success)">${Utils.escapeHTML(map.memberStatusActive || 'Active')}</span>`;
-                    }
+                    // Active — days remaining shown on the Expiration Date line instead.
+                    statusText = `<span style="color:var(--success)">${Utils.escapeHTML(map.memberStatusActive || 'Active')}</span>`;
                     if (member.sessionsTotal) {
                         const sLeft = parseInt(member.sessionsLeft) || 0;
                         statusText += ` | ${Utils.escapeHTML(map.memberSessionsLeft || 'Sessions Left')}: <strong style="color:var(--primary);">${sLeft}</strong>`;
@@ -442,7 +425,6 @@ Object.assign(App, {
                 try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true }); } catch (e) { console.warn('member stats render failed', e); }
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
-                App.updateMemberStatsCollapsedUI();
                 const rank = App.getMemberLeaderboardRank(member.id);
                 const rankCard = document.getElementById('member-rank-card');
                 const rankVisible = App.isAdminAuthed() || DB.getMemberStatsVisibility()['rank'] !== false;
@@ -453,10 +435,8 @@ Object.assign(App, {
                 if (rankTitle) rankTitle.innerText = map.memberViewRankLabel || 'Leaderboard Rank';
                 if (rankSub) rankSub.innerText = map.memberViewRank90dDesc || 'last 90 days';
                 if (rankValue) rankValue.innerText = rank ? `#${rank}` : (map.memberViewRankUnranked || 'Unranked');
-                const statsTitle = document.getElementById('member-stats-title');
                 const weekBtn = document.getElementById('member-stats-mode-week');
                 const monthBtn = document.getElementById('member-stats-mode-month');
-                if (statsTitle) statsTitle.innerText = map.memberViewStatsTitle || 'Statistics';
                 if (weekBtn) weekBtn.innerText = map.memberViewWeek || 'Week';
                 if (monthBtn) monthBtn.innerText = map.memberViewMonth || 'Month';
                 App.updateMemberLeaderboardToggleUI();
