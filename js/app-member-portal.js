@@ -277,8 +277,13 @@ Object.assign(App, {
                 // Admins (member modal) always see every stat; the member portal
                 // respects the visibility toggles AND the Week/Month mode switcher
                 // (which decides whether the averages are shown per week or per month).
-                const show = (key) => App.isAdminAuthed() || DB.getMemberStatsVisibility()[key] !== false;
-                const mode = App.isAdminAuthed() ? 'both' : (App.memberStatsMode === 'month' ? 'month' : 'week');
+                // memberView forces member-facing behavior even if an admin is signed in
+                // on the same browser.
+                const show = (key) => {
+                    if (opts.memberView) return DB.getMemberStatsVisibility()[key] !== false;
+                    return App.isAdminAuthed() || DB.getMemberStatsVisibility()[key] !== false;
+                };
+                const mode = (opts.memberView || !App.isAdminAuthed()) ? (App.memberStatsMode === 'month' ? 'month' : 'week') : 'both';
                 const cards = [];
                 if (show('totalTrainings')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
@@ -422,12 +427,12 @@ Object.assign(App, {
                 `;
 
                 let statsHTML = '';
-                try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true }); } catch (e) { console.warn('member stats render failed', e); }
+                try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true, memberView: true }); } catch (e) { console.warn('member stats render failed', e); }
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
                 const rank = App.getMemberLeaderboardRank(member.id);
                 const rankCard = document.getElementById('member-rank-card');
-                const rankVisible = App.isAdminAuthed() || DB.getMemberStatsVisibility()['rank'] !== false;
+                const rankVisible = DB.getMemberStatsVisibility()['rank'] !== false;
                 if (rankCard) rankCard.classList.toggle('hidden', !rankVisible);
                 const rankTitle = document.getElementById('member-rank-title');
                 const rankSub = document.getElementById('member-rank-sub');
