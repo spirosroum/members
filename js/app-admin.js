@@ -1192,6 +1192,44 @@ Object.assign(App, {
                     </div>
                 `).join('');
                 App.renderAttendanceFeedbackConfig();
+                App.renderLeaderboardMedalConfig();
+            },
+
+            // Admin editor for the leaderboard top-3 medal emojis.
+            renderLeaderboardMedalConfig: () => {
+                const el = document.getElementById('leaderboard-medal-config');
+                if (!el) return;
+                const medals = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
+                const suffix = { 1: 'st', 2: 'nd', 3: 'rd' };
+                el.innerHTML = [1, 2, 3].map(p => `
+                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
+                        <span class="text-gray" style="width:64px; font-weight:600;">${p}${suffix[p]}</span>
+                        <input type="text" class="search-bar" data-place="${p}" value="${Utils.escapeHTML(medals[p] || '')}" maxlength="8" style="width:84px; text-align:center;">
+                        <span style="width:70px; text-align:center; font-size:1.25rem;">${Utils.escapeHTML(medals[p] || '')}</span>
+                    </div>`).join('');
+            },
+
+            saveLeaderboardMedals: () => {
+                const medals = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS);
+                document.querySelectorAll('#leaderboard-medal-config input').forEach(inp => {
+                    const place = parseInt(inp.dataset.place, 10);
+                    if (place && inp.value.trim()) medals[place] = inp.value.trim();
+                });
+                STATE.leaderboardEmojis = medals;
+                fallbackToLocal();
+                saveToCloud();
+                App.renderLeaderboardMedalConfig();
+                App.renderKioskLeaderboard && App.renderKioskLeaderboard();
+                alert('Leaderboard medals saved.');
+            },
+
+            resetLeaderboardMedals: () => {
+                STATE.leaderboardEmojis = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS);
+                fallbackToLocal();
+                saveToCloud();
+                App.renderLeaderboardMedalConfig();
+                App.renderKioskLeaderboard && App.renderKioskLeaderboard();
+                alert('Leaderboard medals reset to defaults.');
             },
 
             // Admin editor for the attendance feedback emojis + percentage colors.

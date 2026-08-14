@@ -531,8 +531,12 @@ Object.assign(App, {
             },
 
             leaderboardRankCell: (rank) => {
-                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
-                return `<span class="kiosk-lb-rank-num">${medal}<span>${rank}</span></span>`;
+                // Top 3 show only their (admin-configurable) medal emoji — no rank number.
+                if (rank <= 3) {
+                    const m = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
+                    return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m[rank] || '')}</span>`;
+                }
+                return `<span class="kiosk-lb-rank-num">${rank}</span>`;
             },
 
             renderKioskLeaderboard: () => {
