@@ -10,6 +10,8 @@ Object.assign(App, {
             showPublicPlans: () => {
                 const plans = DB.getPlans().filter(p => p.isPublic !== false);
                 const list = document.getElementById('public-plans-list');
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
 
                 if (plans.length === 0) {
                     list.innerHTML = '<p class="text-gray text-center" style="padding: 2rem 0;">No plans are currently available. Please see staff for details.</p>';
@@ -19,7 +21,7 @@ Object.assign(App, {
                         const featuredHtml = p.starred ? `<span class="plan-featured-star-inline" style="margin-right:8px; vertical-align:middle;">★</span>` : '';
                         const descriptionContent = p.description ? Utils.renderPlanDescription(p.description, p.descriptionHtml === true) : null;
                         return `
-                        <div class="card plan-card cursor-pointer" onclick="this.querySelector('.plan-details').classList.toggle('hidden')" style="margin-bottom: 1rem; border: 1px solid var(--gray-light); border-left: 6px solid ${color}; transition: 0.2s ease;">
+                        <div class="card plan-card cursor-pointer" onclick="App.togglePublicPlanDetails(this)" style="margin-bottom: 1rem; border: 1px solid var(--gray-light); border-left: 6px solid ${color}; transition: 0.2s ease;">
                             <div class="public-card-head flex justify-between align-center">
                                 <div style="min-width: 0;">
                                     <h3 style="margin: 0; color: ${color};">${featuredHtml}${Utils.escapeHTML(p.name)}</h3>
@@ -27,8 +29,8 @@ Object.assign(App, {
                                 <strong style="font-size: 1.1rem; color: var(--dark); flex-shrink: 0;">${DB.getCurrency()}${parseFloat(p.price).toFixed(2)}</strong>
                             </div>
                             <div class="public-card-head flex justify-between align-center mt-1">
-                                <div class="text-gray" style="font-size: 0.85rem; min-width: 0;">Valid for: <strong>${Utils.escapeHTML(Utils.formatPlanValidity(p))}</strong></div>
-                                <div class="text-gray" style="font-size: 0.8rem; flex-shrink: 0;">Click to expand ▼</div>
+                                <div class="text-gray" style="font-size: 0.85rem; min-width: 0;">${Utils.escapeHTML(map.planValidityLabel || 'Valid for:')} <strong>${Utils.escapeHTML(Utils.formatPlanValidity(p))}</strong></div>
+                                <span class="public-expand-label plan-expand-label">${Utils.escapeHTML(map.planExpandDetails || 'View details')} ▸</span>
                             </div>
                             <div class="plan-details hidden mt-1" style="border-top: 1px solid var(--gray-light); padding-top: 0.75rem;">
                                 ${descriptionContent ? `<div style="font-size: 0.95rem; overflow-wrap: anywhere; word-break: break-word;">${descriptionContent}</div>` : '<p class="text-gray" style="font-size: 0.95rem;">No additional description provided.</p>'}
@@ -37,6 +39,19 @@ Object.assign(App, {
                     }).join('');
                 }
                 App.openModal('modal-public-plans');
+            },
+
+            togglePublicPlanDetails: (card) => {
+                if (!card) return;
+                const details = card.querySelector('.plan-details');
+                const label = card.querySelector('.plan-expand-label');
+                if (!details) return;
+                const willExpand = details.classList.contains('hidden');
+                details.classList.toggle('hidden', !willExpand);
+                const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
+                if (label) label.innerText = willExpand
+                    ? (map.planCollapseDetails || 'Hide details') + ' ▾'
+                    : (map.planExpandDetails || 'View details') + ' ▸';
             },
 
             showPublicClasses: () => {
@@ -53,7 +68,8 @@ Object.assign(App, {
                         const descriptionContent = cls.description
                             ? Utils.escapeHTML(cls.description)
                             : `<span class="text-gray" style="font-style: italic;">${Utils.escapeHTML(map.classDetailsNoDescription || 'No description available.')}</span>`;
-                        const scheduleSlots = (cls.slots || []).map(slot => {
+                        const slots = cls.slots || [];
+                        const scheduleSlots = slots.map(slot => {
                             const slotDayLabel = App.currentKioskLang && App.KIOSK_I18N[App.currentKioskLang]
                                 ? App.KIOSK_I18N[App.currentKioskLang].days[slot.day] || slot.day
                                 : slot.day;
@@ -63,11 +79,23 @@ Object.assign(App, {
                                 <span class="slot-time">${Utils.convertTo12Hour(slot.start)} - ${Utils.convertTo12Hour(slot.end)}</span>
                             </div>`;
                         }).join('');
+                        const firstSlot = slots[0];
+                        let summaryText = map.checkinScheduleUnavailable || 'Schedule details not available.';
+                        if (firstSlot) {
+                            const slotDayLabel = App.currentKioskLang && App.KIOSK_I18N[App.currentKioskLang]
+                                ? App.KIOSK_I18N[App.currentKioskLang].days[firstSlot.day] || firstSlot.day
+                                : firstSlot.day;
+                            summaryText = `${slotDayLabel} ${Utils.convertTo12Hour(firstSlot.start)} - ${Utils.convertTo12Hour(firstSlot.end)}`;
+                        }
                         return `
                         <div class="card plan-card public-class-card cursor-pointer" onclick="App.togglePublicClassDetails(this)" style="margin-bottom: 1rem; border: 1px solid var(--gray-light); border-left: 6px solid ${color}; transition: 0.2s ease;">
                             <div class="public-card-head flex justify-between align-center" style="gap: 0.75rem;">
                                 <h3 style="margin: 0; color: ${color};">${Utils.escapeHTML(cls.name)}</h3>
-                                <span class="text-gray public-class-expand-label" style="font-size: 0.8rem; flex-shrink: 0;">${Utils.escapeHTML(map.classExpandDetails || 'View schedule & details')} ▸</span>
+                                <span class="public-meta-badge">${slots.length} ${Utils.escapeHTML(map.classSessionsPerWeek || 'sessions/week')}</span>
+                            </div>
+                            <div class="public-card-head flex justify-between align-center mt-1" style="gap: 0.75rem;">
+                                <div class="text-gray" style="font-size: 0.85rem; min-width: 0;">${Utils.escapeHTML(summaryText)}</div>
+                                <span class="public-expand-label public-class-expand-label">${Utils.escapeHTML(map.classExpandDetails || 'View schedule & details')} ▸</span>
                             </div>
                             <div class="public-class-details hidden mt-1" style="border-top: 1px solid var(--gray-light); padding-top: 0.75rem;">
                                 <p class="text-gray" style="margin-top: 0; font-size: 0.95rem; overflow-wrap: anywhere; word-break: break-word;">${descriptionContent}</p>

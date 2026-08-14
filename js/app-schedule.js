@@ -343,5 +343,13 @@ Object.assign(App, {
                 const daysCount = Math.max(1, renderedDayColumns.length);
                 const gridHtml = `<div class="calendar-grid" style="--days-count: ${daysCount};">${renderedDayColumns.join('')}</div>`;
                 container.innerHTML = gridHtml;
+
+                if (containerId === 'kiosk-schedule-container') {
+                    const badge = document.getElementById('kiosk-schedule-badge');
+                    if (badge) {
+                        const count = schedules.reduce((sum, cls) => sum + (cls.slots || []).length, 0);
+                        badge.innerText = `📅 ${count}`;
+                    }
+                }
             }
 });

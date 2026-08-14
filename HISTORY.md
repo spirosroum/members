@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.39 (01:08) — Kiosk & member portal UI consistency + gamified member stats
+- Kiosk: renamed "Gym Schedule" card to "Training Schedule" (EN), added a subtitle and a `📅 N` weekly-session badge to its header, and unified the max-height of the Currently Inside / Training Schedule / Training Leaderboard scroll areas (330px) so all kiosk boxes look alike
+- Public modals: "Available Memberships" and "Classes" now share an identical card layout (colored name + meta badge, summary row + i18n'd expand label, expandable details) via `togglePublicPlanDetails` and the shared `.public-expand-label`/`.public-meta-badge` styles
+- Member portal: removed the Week/Month stats switcher; the Training Stats attendance section is now gamified with a big overall % + progress bar and per-class progress bars with color-coded % and emoji
+- Member portal: Leaderboard Rank moved inside the Training Stats stat grid (separate rank card removed); stat cards gained emoji icons and top-3 medal emoji, with a gold-accent gradient rank card
+- Member portal: fixed "Current Belt" badge alignment with its label via a flex row
+- i18n: new keys `scheduleSubtitle`, `classSessionsPerWeek`, `planExpandDetails`, `planCollapseDetails`, `planValidityLabel` (EN+EL); bumped cache-busters and `version.txt`
+
 ## 2026-08-12 — v0.38 (16:03) — Fix sync engine losing local modifications on hard refresh
 - `markDirtyCollections` now sets `updatedAt` on modified records and tracks unconfirmed write intents (persisted to localStorage via `persistIntents`). Previously only dirty flags were set — local modifications had no protection against cloud snapshots overwriting them on reload.
 - First-apply merge (`applyCollectionSnapshotData`) now uses revision-based resolution (same as the clean path): local records with fresh unconfirmed intents are always preserved, and records with a newer `updatedAt` win over cloud records with an older one.

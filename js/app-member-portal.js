@@ -285,24 +285,29 @@ Object.assign(App, {
                 };
                 const mode = (opts.memberView || !App.isAdminAuthed()) ? (App.memberStatsMode === 'month' ? 'month' : 'week') : 'both';
                 const cards = [];
+                const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏆';
                 if (show('totalTrainings')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
+                        <div class="stat-icon">🥋</div>
                         <h3>${Utils.escapeHTML(map.memberViewTotalTrainings || 'Total Trainings')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${total}</div>
                     </div>`);
                 if (show('totalHours')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
+                        <div class="stat-icon">⏱️</div>
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.formatDurationMins(App.getMemberTotalHours(memberId))}</div>
                     </div>`);
                 if (mode === 'week' || mode === 'both') {
                     if (show('avgWeek')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
+                            <div class="stat-icon">📈</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
                         </div>`);
                     if (show('avgDays')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
+                            <div class="stat-icon">🗓️</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgDays || 'Avg Days / Week')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perWeekDays}</div>
                         </div>`);
@@ -310,22 +315,26 @@ Object.assign(App, {
                 if (mode === 'month' || mode === 'both') {
                     if (show('avgMonth')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
+                            <div class="stat-icon">📆</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
                         </div>`);
                 }
                 if (show('avgDay')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
+                        <div class="stat-icon">⚡</div>
                         <h3>${Utils.escapeHTML(map.memberViewAvgDay || 'Avg Trainings / Day')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perDay}</div>
                     </div>`);
                 if (show('avgDaysMonth')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
+                        <div class="stat-icon">📊</div>
                         <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
                     </div>`);
                 if (!opts.separateRank && show('rank')) cards.push(`
-                    <div class="stat-card" style="padding: 1rem;">
+                    <div class="stat-card stat-card-rank" style="padding: 1rem;">
+                        <div class="stat-icon">${rankIcon}</div>
                         <h3>${Utils.escapeHTML((map.memberViewRankLabel || 'Leaderboard Rank') + (map.memberViewRank90d || ' (last 90 days)'))}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.escapeHTML(rankDisplay)}</div>
                     </div>`);
@@ -421,29 +430,15 @@ Object.assign(App, {
                 }
 
                 document.getElementById('member-dash-info').innerHTML = `
-                    <div style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
+                    <div style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')}</strong> ${expText}</div>
                 `;
 
                 let statsHTML = '';
-                try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: true, memberView: true }); } catch (e) { console.warn('member stats render failed', e); }
+                try { statsHTML = App.getMemberStatsHTML(member.id, { separateRank: false, memberView: true }); } catch (e) { console.warn('member stats render failed', e); }
                 document.getElementById('member-dash-stats').innerHTML = statsHTML || `<div class="text-gray" style="text-align:center; font-size:0.95rem; padding: 0.75rem;">${Utils.escapeHTML(map.memberViewNoStats || 'No statistics to show.')}</div>`;
                 App.updateMemberStatsModeUI();
-                const rank = App.getMemberLeaderboardRank(member.id);
-                const rankCard = document.getElementById('member-rank-card');
-                const rankVisible = DB.getMemberStatsVisibility()['rank'] !== false;
-                if (rankCard) rankCard.classList.toggle('hidden', !rankVisible);
-                const rankTitle = document.getElementById('member-rank-title');
-                const rankSub = document.getElementById('member-rank-sub');
-                const rankValue = document.getElementById('member-rank-value');
-                if (rankTitle) rankTitle.innerText = map.memberViewRankLabel || 'Leaderboard Rank';
-                if (rankSub) rankSub.innerText = map.memberViewRank90dDesc || 'last 90 days';
-                if (rankValue) rankValue.innerText = rank ? `#${rank}` : (map.memberViewRankUnranked || 'Unranked');
-                const weekBtn = document.getElementById('member-stats-mode-week');
-                const monthBtn = document.getElementById('member-stats-mode-month');
-                if (weekBtn) weekBtn.innerText = map.memberViewWeek || 'Week';
-                if (monthBtn) monthBtn.innerText = map.memberViewMonth || 'Month';
                 App.updateMemberLeaderboardToggleUI();
                 try { App.renderMemberHistory(member.id, 'member-personal-history'); } catch (e) { console.warn('member history render failed', e); }
                 try { App.renderMemberAttendancePortal(); } catch (e) { console.warn('member attendance render failed', e); }
@@ -502,19 +497,28 @@ Object.assign(App, {
                 // Positive-only feedback: an emoji + colored percentage per tier (nothing
                 // below 50% so it never discourages), up to the sloth mascot at 98%+.
                 const overallLabel = map.memberViewAttendanceOverall || 'Overall';
-                const pctHtml = (p) => `<span style="color:${App.attendanceColor(p) || 'inherit'}; font-weight:700;">${p}%</span>`;
+                const overallColor = App.attendanceColor(res.pct) || 'var(--primary)';
                 el.innerHTML = `
-                    <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${pctHtml(res.pct)} ${App.attendanceEmoji(res.pct)}</div>
-                    <div class="text-gray" style="font-size:0.85rem; margin-bottom:0.5rem;">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
-                    <div style="border-top:1px solid var(--gray-light); padding-top:0.5rem;">
-                        ${res.perClass.length ? `
-                            <div style="display:grid; grid-template-columns: 1fr 72px auto; align-items:center; gap:0.25rem 0.5rem;">
-                                ${res.perClass.map(c => `
-                                    <strong style="overflow-wrap:anywhere; padding:0.25rem 0;">${Utils.escapeHTML(c.name)}</strong>
-                                    <span style="text-align:right; font-size:0.85rem; font-weight:600; padding:0.25rem 0;">${pctHtml(c.pct)}</span>
-                                    <span style="text-align:center; font-size:1.1rem; padding:0.25rem 0;">${App.attendanceEmoji(c.pct)}</span>`).join('')}
-                            </div>` : `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
-                    </div>`;
+                    <div class="member-attendance-overview">
+                        <div class="text-gray" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}</div>
+                        <div class="member-attendance-big">${res.pct}% <span class="att-emoji">${App.attendanceEmoji(res.pct)}</span></div>
+                        <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; background:${overallColor};"></div></div>
+                        <div class="member-attendance-sessions">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
+                    </div>
+                    ${res.perClass.length ? `
+                        <div class="member-attendance-classes">
+                            ${res.perClass.map(c => {
+                                const cc = App.attendanceColor(c.pct) || 'var(--primary)';
+                                return `
+                                <div class="att-class-row">
+                                    <strong class="att-class-name">${Utils.escapeHTML(c.name)}</strong>
+                                    <div class="att-class-bar">${c.pct != null ? `<div class="att-class-fill" style="width:${c.pct}%; background:${cc};"></div>` : ''}</div>
+                                    <span class="att-class-pct" style="color:${c.pct != null ? cc : 'inherit'};">${c.pct == null ? '—' : c.pct + '%'}</span>
+                                    <span class="att-class-emoji">${App.attendanceEmoji(c.pct)}</span>
+                                </div>`;
+                            }).join('')}
+                        </div>` : `<div class="text-gray" style="text-align:center; padding:1rem 0;">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
+                `;
             },
 
             logout: () => {
