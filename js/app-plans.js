@@ -371,7 +371,13 @@ Object.assign(App, {
                 if (dEnd && dEnd < d) return alert('End date must be on or after the start date.');
 
                 const dates = DB.getClosedDates();
-                dates.push({ date: d, dateEnd: dEnd || d, reason: reason || 'Academy Closed', repeat });
+                const rangeEnd = dEnd || d;
+                const isDuplicate = dates.some(c => {
+                    const entry = typeof c === 'string' ? { date: c } : c;
+                    return entry.date === d && (entry.dateEnd || entry.date) === rangeEnd && !!entry.repeat === repeat;
+                });
+                if (isDuplicate) return alert('This closed date range already exists.');
+                dates.push({ date: d, dateEnd: rangeEnd, reason: reason || 'Academy Closed', repeat });
                 DB.saveClosedDates(dates);
 
                 document.getElementById('form-closed-date').value = '';

@@ -538,7 +538,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
 
             async persistClosedDates() {
                 if (!sb || !this.ready.closedDates) return;
-                const rows = (STATE.closedDates || []).map((c, i) => ({ id: `CD-${i}`, date: c.date, date_end: c.dateEnd || null, repeat: !!c.repeat }));
+                const rows = (STATE.closedDates || []).map((c, i) => ({ id: `CD-${i}`, date: c.date, date_end: c.dateEnd || null, repeat: !!c.repeat, reason: c.reason || null }));
                 for (const c of chunkRows(rows)) await sb.from('closed_dates').upsert(c, { onConflict: 'id' });
                 const keep = new Set(rows.map(r => r.id));
                 const { data: existing } = await sb.from('closed_dates').select('id');
@@ -732,7 +732,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 requirements: cls.requirements || null, color: cls.color || '#2563eb',
                 capacity: cls.capacity || null, is_public: cls.isPublic !== false
             }),
-            closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat }),
+            closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat, reason: r.reason || '' }),
             privateFrom: (r) => {
                 const entry = {};
                 if (r.phone != null) entry.phone = r.phone;
