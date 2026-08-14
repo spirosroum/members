@@ -514,17 +514,18 @@ Object.assign(App, {
                     el.innerHTML = `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`;
                     return;
                 }
-                // Positive-only feedback: an emoji per tier (nothing below 50% so it
-                // never discourages), up to the sloth mascot at 98%+.
+                // Positive-only feedback: an emoji + colored percentage per tier (nothing
+                // below 50% so it never discourages), up to the sloth mascot at 98%+.
                 const overallLabel = map.memberViewAttendanceOverall || 'Overall';
+                const pctHtml = (p) => `<span style="color:${App.attendanceColor(p) || 'inherit'}; font-weight:700;">${p}%</span>`;
                 el.innerHTML = `
-                    <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${res.pct}% ${App.attendanceEmoji(res.pct)}</div>
+                    <div style="font-size:1.15rem; font-weight:700; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}: ${pctHtml(res.pct)} ${App.attendanceEmoji(res.pct)}</div>
                     <div class="text-gray" style="font-size:0.85rem; margin-bottom:0.5rem;">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     <div style="border-top:1px solid var(--gray-light); padding-top:0.5rem;">
                         ${res.perClass.map(c => `
                             <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0; flex-wrap:wrap;">
                                 <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
-                                <span style="width:80px; font-size:0.85rem;">${c.pct != null ? c.pct + '%' : '—'}</span>
+                                <span style="width:80px; font-size:0.85rem;">${pctHtml(c.pct)}</span>
                                 ${App.attendanceEmoji(c.pct)}
                             </div>`).join('') || `<div class="text-gray">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
                     </div>`;

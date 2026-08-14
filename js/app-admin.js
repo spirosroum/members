@@ -417,16 +417,29 @@ Object.assign(App, {
             },
 
             // Positive-only emoji feedback for attendance %. Nothing below 50% so it
-            // never discourages; escalates up to the sloth mascot at 98%+.
+            // never discourages; escalates up to the sloth mascot at 98%+. Emojis and
+            // colors are admin-editable (stored in settings).
             attendanceEmoji: (p) => {
                 if (p == null || p < 50) return '';
-                if (p >= 98) return '🦥';
-                if (p >= 95) return '👑';
-                if (p >= 90) return '🔥';
-                if (p >= 80) return '🏆';
-                if (p >= 70) return '⭐';
-                if (p >= 60) return '💪';
-                return '👍';
+                const e = STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS;
+                if (p >= 98) return e[98];
+                if (p >= 95) return e[95];
+                if (p >= 90) return e[90];
+                if (p >= 80) return e[80];
+                if (p >= 70) return e[70];
+                if (p >= 60) return e[60];
+                return e[50];
+            },
+            attendanceColor: (p) => {
+                if (p == null || p < 50) return '';
+                const c = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
+                if (p >= 98) return c[98];
+                if (p >= 95) return c[95];
+                if (p >= 90) return c[90];
+                if (p >= 80) return c[80];
+                if (p >= 70) return c[70];
+                if (p >= 60) return c[60];
+                return c[50];
             },
 
             renderMemberAttendance: () => {
@@ -440,14 +453,15 @@ Object.assign(App, {
                 const overallHtml = res.pct == null
                     ? '<div class="text-gray">No class sessions were available in this period.</div>'
                     : `<div class="text-gray" style="font-size:0.85rem;">${res.attended} attended of ${res.available} available sessions</div>`;
+                const pctHtml = (p) => p == null ? '—' : `<span style="color:${App.attendanceColor(p) || 'inherit'}; font-weight:700;">${p}%</span>`;
                 el.innerHTML = `
-                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${res.pct != null ? res.pct + '%' : '—'} ${App.attendanceEmoji(res.pct)}</div>
+                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${pctHtml(res.pct)} ${App.attendanceEmoji(res.pct)}</div>
                     ${overallHtml}
                     <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
                     ${res.perClass.map(c => `
                         <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0; flex-wrap:wrap;">
                             <strong style="flex:1; min-width:120px;">${Utils.escapeHTML(c.name)}</strong>
-                            <span style="width:80px; font-size:0.85rem;">${c.pct != null ? c.pct + '%' : '—'}</span>
+                            <span style="width:80px; font-size:0.85rem;">${pctHtml(c.pct)}</span>
                             <span class="text-gray" style="font-size:0.8rem; width:110px;">${c.attended}/${c.available}</span>
                             ${App.attendanceEmoji(c.pct)}
                         </div>`).join('') || '<div class="text-gray" style="padding:0.5rem 0;">No class sessions available in this period.</div>'}
@@ -1176,6 +1190,48 @@ Object.assign(App, {
                         </div>
                     </div>
                 `).join('');
+                App.renderAttendanceFeedbackConfig();
+            },
+
+            // Admin editor for the attendance feedback emojis + percentage colors.
+            renderAttendanceFeedbackConfig: () => {
+                const el = document.getElementById('attendance-feedback-config');
+                if (!el) return;
+                const emojis = STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS;
+                const colors = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
+                el.innerHTML = [50, 60, 70, 80, 90, 95, 98].map(t => `
+                    <div style="display:flex; align-items:center; gap:0.75rem; padding:0.4rem 0; flex-wrap:wrap;">
+                        <span class="text-gray" style="width:64px; font-weight:600;">${t}%+</span>
+                        <input type="text" class="search-bar" data-tier="${t}" data-type="emoji" value="${Utils.escapeHTML(emojis[t] || '')}" maxlength="8" style="width:84px; text-align:center;">
+                        <input type="color" data-tier="${t}" data-type="color" value="${colors[t] || '#000000'}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
+                        <span style="width:70px; text-align:center; font-size:1.25rem; color:${colors[t] || 'inherit'};">${Utils.escapeHTML(emojis[t] || '')}</span>
+                    </div>`).join('');
+            },
+
+            saveAttendanceFeedback: () => {
+                const emojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS);
+                const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
+                document.querySelectorAll('#attendance-feedback-config input').forEach(inp => {
+                    const tier = parseInt(inp.dataset.tier, 10);
+                    if (!tier) return;
+                    if (inp.dataset.type === 'emoji') { if (inp.value.trim()) emojis[tier] = inp.value.trim(); }
+                    else { if (inp.value) colors[tier] = inp.value; }
+                });
+                STATE.attendanceEmojis = emojis;
+                STATE.attendanceColors = colors;
+                fallbackToLocal();
+                saveToCloud();
+                App.renderAttendanceFeedbackConfig();
+                alert('Attendance feedback saved.');
+            },
+
+            resetAttendanceFeedback: () => {
+                STATE.attendanceEmojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS);
+                STATE.attendanceColors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
+                fallbackToLocal();
+                saveToCloud();
+                App.renderAttendanceFeedbackConfig();
+                alert('Attendance feedback reset to defaults.');
             },
 
             saveMemberStatsVisibility: () => {

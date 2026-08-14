@@ -97,6 +97,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         // to member_private in the relational schema.
         const MEMBER_PRIVATE_FIELDS = ['phone', 'dob', 'notes'];
 
+        // Attendance feedback defaults (admin-editable via Member Settings).
+        const DEFAULT_ATTENDANCE_EMOJIS = { 50: '👍', 60: '💪', 70: '⭐', 80: '🏆', 90: '🔥', 95: '👑', 98: '🦥' };
+        const DEFAULT_ATTENDANCE_COLORS = { 50: '#10b981', 60: '#22c55e', 70: '#84cc16', 80: '#eab308', 90: '#f59e0b', 95: '#f97316', 98: '#d4af37' };
+
         // CLOUD-SYNCED DATA LAYER (Supabase)
         const STATE = {
             members: JSON.parse(localStorage.getItem('gym_members') || '[]'),
@@ -118,7 +122,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             checkinNoticeColor: localStorage.getItem('gym_checkin_notice_color') || '#fde68a',
             memberPrivate: JSON.parse(localStorage.getItem('gym_member_private') || '{}'),
             showClassCheckins: JSON.parse(localStorage.getItem('gym_show_class_checkins') ?? 'true'),
-            memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}')
+            memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}'),
+            attendanceEmojis: Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, JSON.parse(localStorage.getItem('gym_attendance_emojis') || '{}')),
+            attendanceColors: Object.assign({}, DEFAULT_ATTENDANCE_COLORS, JSON.parse(localStorage.getItem('gym_attendance_colors') || '{}'))
         };
 
         function fallbackToLocal() {
@@ -143,6 +149,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_member_private', JSON.stringify(STATE.memberPrivate || {}));
                 localStorage.setItem('gym_show_class_checkins', JSON.stringify(STATE.showClassCheckins !== false));
                 localStorage.setItem('gym_member_stats_visibility', JSON.stringify(STATE.memberStatsVisibility || {}));
+                localStorage.setItem('gym_attendance_emojis', JSON.stringify(STATE.attendanceEmojis || {}));
+                localStorage.setItem('gym_attendance_colors', JSON.stringify(STATE.attendanceColors || {}));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -156,7 +164,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 checkinNotice: STATE.checkinNotice || '',
                 checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
                 showClassCheckins: STATE.showClassCheckins !== false,
-                memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }
+                memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true },
+                attendanceEmojis: STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS,
+                attendanceColors: STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS
             };
         }
 
@@ -422,6 +432,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (s.checkin_notice_color != null) STATE.checkinNoticeColor = s.checkin_notice_color;
                 if (s.show_class_checkins != null) STATE.showClassCheckins = !!s.show_class_checkins;
                 if (s.member_stats_visibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, s.member_stats_visibility);
+                if (s.attendance_emojis) STATE.attendanceEmojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, s.attendance_emojis);
+                if (s.attendance_colors) STATE.attendanceColors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS, s.attendance_colors);
                 this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
             },
@@ -557,7 +569,9 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'checkin_notice', value: p.checkinNotice },
                     { key: 'checkin_notice_color', value: p.checkinNoticeColor },
                     { key: 'show_class_checkins', value: p.showClassCheckins },
-                    { key: 'member_stats_visibility', value: p.memberStatsVisibility }
+                    { key: 'member_stats_visibility', value: p.memberStatsVisibility },
+                    { key: 'attendance_emojis', value: p.attendanceEmojis },
+                    { key: 'attendance_colors', value: p.attendanceColors }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
                 this.settingsMirror = json;
