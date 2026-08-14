@@ -499,7 +499,7 @@ Object.assign(App, {
 
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
-                const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
+                const since = new Date(until.getTime() - 29 * 24 * 3600 * 1000);
                 since.setHours(0, 0, 0, 0);
                 let res;
                 try {

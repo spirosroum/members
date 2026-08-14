@@ -303,9 +303,25 @@ Object.assign(App, {
             },
 
             getMemberAttendance: (memberId, since, until, opts = {}) => {
+                // Effective start: the member's first check-in in the window, so new or
+                // occasional members aren't measured against sessions that predate their
+                // first training (avoids discouragingly low percentages).
+                let effectiveSince = since;
+                if (opts.skipEffectiveStart !== true) {
+                    const firstCheckin = DB.getClassCheckins()
+                        .filter(ci => ci.memberId === memberId && ci.entryTime)
+                        .map(ci => new Date(ci.entryTime))
+                        .filter(d => !isNaN(d.getTime()) && d >= since && d < until)
+                        .sort((a, b) => a - b)[0];
+                    if (firstCheckin) {
+                        const firstDay = new Date(firstCheckin);
+                        firstDay.setHours(0, 0, 0, 0);
+                        if (firstDay > since) effectiveSince = firstDay;
+                    }
+                }
                 const availableCount = {};
                 const meta = {};
-                App.buildAvailableTrainings(since, until).forEach(s => {
+                App.buildAvailableTrainings(effectiveSince, until).forEach(s => {
                     const key = `${s.date}|${s.classId}`;
                     availableCount[key] = (availableCount[key] || 0) + 1;
                     meta[s.classId] = meta[s.classId] || { name: s.className, available: 0 };
