@@ -459,7 +459,7 @@ Object.assign(App, {
                     ${overallHtml}
                     <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
                     ${res.perClass.map(c => `
-                        <div style="display:grid; grid-template-columns: 1fr 72px 110px auto; align-items:center; gap:0.5rem; padding:0.25rem 0;">
+                        <div style="display:grid; grid-template-columns: 1fr 72px 110px 40px; align-items:center; gap:0.5rem; padding:0.25rem 0;">
                             <strong style="overflow-wrap:anywhere;">${Utils.escapeHTML(c.name)}</strong>
                             <span style="text-align:right; font-size:0.85rem; font-weight:600;">${pctHtml(c.pct)}</span>
                             <span class="text-gray" style="font-size:0.8rem; text-align:center;">${c.attended}/${c.available}</span>

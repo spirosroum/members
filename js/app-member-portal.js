@@ -523,7 +523,7 @@ Object.assign(App, {
                     <div class="text-gray" style="font-size:0.85rem; margin-bottom:0.5rem;">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     <div style="border-top:1px solid var(--gray-light); padding-top:0.5rem;">
                         ${res.perClass.map(c => `
-                            <div style="display:grid; grid-template-columns: 1fr 72px auto; align-items:center; gap:0.5rem; padding:0.25rem 0;">
+                            <div style="display:grid; grid-template-columns: 1fr 72px 40px; align-items:center; gap:0.5rem; padding:0.25rem 0;">
                                 <strong style="overflow-wrap:anywhere;">${Utils.escapeHTML(c.name)}</strong>
                                 <span style="text-align:right; font-size:0.85rem; font-weight:600;">${pctHtml(c.pct)}</span>
                                 <span style="text-align:center; font-size:1.1rem;">${App.attendanceEmoji(c.pct)}</span>
