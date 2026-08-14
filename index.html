@@ -304,6 +304,27 @@
                         <input type="text" id="checkin-search" class="search-bar w-full" placeholder="Search ID, Name, or Phone..." autocomplete="off">
                         <div id="checkin-member-card" class="member-card-display hidden"></div>
                     </div>
+                    <div class="card" style="padding: 0;">
+                        <div class="flex justify-between align-center" style="padding: 1.25rem 1.25rem 0.5rem 1.25rem;">
+                            <h3>Currently Present</h3>
+                            <span class="badge badge-inside" id="live-present-count">0</span>
+                        </div>
+                        <div class="table-responsive mobile-cards" style="max-height: 400px; overflow-y: auto; border:none; border-top: 1px solid var(--gray-light); border-radius: 0;">
+                            <table style="width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>ID</th>
+                                        <th>Belt</th>
+                                        <th>Entry & Duration</th>
+                                        <th>Status</th>
+                                        <th style="width: 100px;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="live-present-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
                     <div class="card">
                         <h3>Broadcast Check-in Notice</h3>
                         <p class="text-gray">Create a message that members will see in the portal above the check-in form and currently inside list.</p>
@@ -338,27 +359,6 @@
                         <button class="btn-outline w-full" style="font-weight:600;" onclick="App.printCheckinQR()">🖨 Print QR</button>
                     </div>
                     <div id="admin-checkin-notice" class="kiosk-msg warning hidden"></div>
-                    <div class="card" style="padding: 0;">
-                        <div class="flex justify-between align-center" style="padding: 1.25rem 1.25rem 0.5rem 1.25rem;">
-                            <h3>Currently Present</h3>
-                            <span class="badge badge-inside" id="live-present-count">0</span>
-                        </div>
-                        <div class="table-responsive mobile-cards" style="max-height: 400px; overflow-y: auto; border:none; border-top: 1px solid var(--gray-light); border-radius: 0;">
-                            <table style="width:100%;">
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>ID</th>
-                                        <th>Belt</th>
-                                        <th>Entry & Duration</th>
-                                        <th>Status</th>
-                                        <th style="width: 100px;">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="live-present-list"></tbody>
-                            </table>
-                        </div>
-                    </div>
                 </div>
             </div>
 
