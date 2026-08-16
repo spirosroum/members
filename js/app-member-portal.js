@@ -306,24 +306,6 @@ Object.assign(App, {
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.formatDurationMins(App.getMemberTotalHours(memberId))}</div>
                     </div>`);
-                // Session-based members: show the remaining bundle as a progress bar
-                // instead of a bare number, using the ledger's granted total.
-                const sMember = DB.getMembers().find(x => x.id === memberId);
-                if (sMember && sMember.sessionsTotal) {
-                    const left = parseInt(sMember.sessionsLeft, 10) || 0;
-                    const total = DB.getPayments()
-                        .filter(p => p.memberId === memberId && p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)
-                        .reduce((s, p) => s + parseInt(p.sessionsGranted, 10), 0);
-                    const pct = total > 0 ? Math.round(left / total * 100) : (left > 0 ? 100 : 0);
-                    const barColor = pct > 50 ? 'var(--success)' : pct > 20 ? 'var(--warning)' : 'var(--danger)';
-                    cards.push(`
-                        <div class="stat-card" style="padding: 1rem;">
-                            <div class="stat-icon">🎟️</div>
-                            <h3>${Utils.escapeHTML(map.memberSessionsLeft || 'Sessions Left')}</h3>
-                            <div class="value" style="font-size: 1.5rem;">${left}${total > 0 ? `<span style="font-size:0.9rem; color:var(--gray);"> / ${total}</span>` : ''}</div>
-                            <div class="attendance-bar" style="margin:0.6rem 0 0 0;"><div class="attendance-bar-fill" style="width:${pct}%; background:${barColor};"></div></div>
-                        </div>`);
-                }
                 if (mode === 'week' || mode === 'both') {
                     if (show('avgWeek')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
@@ -446,10 +428,6 @@ Object.assign(App, {
                 } else {
                     // Active — days remaining shown on the Expiration Date line instead.
                     statusText = `<span style="color:var(--success)">${Utils.escapeHTML(map.memberStatusActive || 'Active')}</span>`;
-                    if (member.sessionsTotal) {
-                        const sLeft = parseInt(member.sessionsLeft) || 0;
-                        statusText += ` | ${Utils.escapeHTML(map.memberSessionsLeft || 'Sessions Left')}: <strong style="color:var(--primary);">${sLeft}</strong>`;
-                    }
                 }
 
                 // Expiration shown with the same aesthetics as the Account Status line.
@@ -467,11 +445,31 @@ Object.assign(App, {
                     expText = '<span class="text-gray">—</span>';
                 }
 
+                // Session-based members: their remaining bundle as its own info line with a
+                // progress bar (ledger-granted total), matching the other info lines instead
+                // of living inside the Training Stats stat grid.
+                let sessionsLine = '';
+                if (member.sessionsTotal) {
+                    const sLeft = parseInt(member.sessionsLeft, 10) || 0;
+                    const sTotal = DB.getPayments()
+                        .filter(p => p.memberId === member.id && p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)
+                        .reduce((s, p) => s + parseInt(p.sessionsGranted, 10), 0);
+                    const sPct = sTotal > 0 ? Math.round(sLeft / sTotal * 100) : (sLeft > 0 ? 100 : 0);
+                    const sColor = sPct > 50 ? 'var(--success)' : sPct > 20 ? 'var(--warning)' : 'var(--danger)';
+                    sessionsLine = `
+                        <div class="mt-1" style="font-size:1.1rem;">
+                            <strong>${Utils.escapeHTML(map.memberSessionsLeft || 'Sessions Left')}:</strong>
+                            <span style="font-weight:800; color:var(--dark);">${sLeft}</span>${sTotal > 0 ? `<span class="text-gray" style="font-size:0.9rem;"> / ${sTotal}</span>` : ''}
+                            <div class="attendance-bar" style="max-width:280px;"><div class="attendance-bar-fill" style="width:${sPct}%; background:${sColor};"></div></div>
+                        </div>`;
+                }
+
                 document.getElementById('member-dash-info').innerHTML = `
                     <div style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewMemberId || 'Member ID:')}</strong> <span class="text-gray" style="font-size:0.95rem;">${Utils.escapeHTML(member.id)}</span></div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')}</strong> ${expText}</div>
+                    ${sessionsLine}
                 `;
 
                 let statsHTML = '';

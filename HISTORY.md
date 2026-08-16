@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.49 (12:20) — Move Sessions Left out of Training Stats into the info card
+- The "Sessions Left" progress bar no longer renders as a stat card inside the Training Stats grid. Session-based members now see it as a dedicated info line (with a progress bar) right below Expiration Date in the top info card, matching the Current Belt / Member ID / Account Status / Expiration Date layout
+- Removed the redundant "Sessions Left: N" text appended to the Account Status line (the dedicated line replaces it)
+- Bumped `version.txt` and the `app-member-portal.js` cache-buster
+
 ## 2026-08-15 — v0.48 (12:05) — Member attendance: skip 0% "best class"; neutral color below 50%
 - The "Best Class" highlight no longer appears when the top class is 0% (or any score below the 50% feedback threshold) — a 0% "best class" was misleading
 - Attendance percentages below 50% now render in the default (black) text color instead of the primary blue that the `attendanceColor()` fallback injected; the overall and per-class progress bars use a neutral gray fill below 50% instead of blue
