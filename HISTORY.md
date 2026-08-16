@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.48 (12:05) — Member attendance: skip 0% "best class"; neutral color below 50%
+- The "Best Class" highlight no longer appears when the top class is 0% (or any score below the 50% feedback threshold) — a 0% "best class" was misleading
+- Attendance percentages below 50% now render in the default (black) text color instead of the primary blue that the `attendanceColor()` fallback injected; the overall and per-class progress bars use a neutral gray fill below 50% instead of blue
+- Bumped `version.txt` and the `app-member-portal.js` cache-buster
+
 ## 2026-08-15 — v0.47 (11:50) — Member portal: session progress, attendance highlights, expiry banner
 - Session-based members now get a "Sessions Left" stat card with a progress bar showing the remaining bundle (granted total from the payment ledger), color-coded green/amber/red by how many are left — instead of just a bare number in the status line
 - Member attendance now surfaces a "Best Class" highlight (the member's highest-%. class) and a consecutive-week training streak (🔥 N-week streak) above the per-class list; both EN+EL, hidden when there's no data

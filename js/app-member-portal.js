@@ -536,11 +536,13 @@ Object.assign(App, {
                 // Positive-only feedback: an emoji + colored percentage per tier (nothing
                 // below 50% so it never discourages), up to the sloth mascot at 98%+.
                 const overallLabel = map.memberViewAttendanceOverall || 'Overall';
-                const overallColor = App.attendanceColor(res.pct) || 'var(--primary)';
+                const overallColor = App.attendanceColor(res.pct);
 
-                // Best class = the highest-%. class with data; streak = consecutive weeks
-                // (Mon-based) with at least one training inside the window.
-                const bestClass = res.perClass.find(c => c.pct != null) || null;
+                // Best class = the highest-%. class with a real positive score (>= 50%);
+                // a 0% "best class" is meaningless, so below the feedback threshold the
+                // highlight is skipped entirely. Streak = consecutive weeks (Mon-based)
+                // with at least one training inside the window.
+                const bestClass = res.perClass.find(c => c.pct != null && c.pct >= 50) || null;
                 const weekSet = new Set();
                 DB.getClassCheckins().forEach(ci => {
                     if (ci.memberId !== member.id || !ci.entryTime) return;
@@ -589,19 +591,19 @@ Object.assign(App, {
                     <div class="member-attendance-overview">
                         <div class="text-gray" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}</div>
                         <div class="member-attendance-big">${res.pct}% <span class="att-emoji">${App.attendanceEmoji(res.pct)}</span></div>
-                        <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; background:${overallColor};"></div></div>
+                        <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; ${overallColor ? `background:${overallColor};` : 'background:var(--gray);'}"></div></div>
                         <div class="member-attendance-sessions">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     </div>
                     ${highlightsHTML ? `<div class="member-attendance-highlights">${highlightsHTML}</div>` : ''}
                     ${res.perClass.length ? `
                         <div class="member-attendance-classes">
                             ${res.perClass.map(c => {
-                                const cc = App.attendanceColor(c.pct) || 'var(--primary)';
+                                const cc = App.attendanceColor(c.pct);
                                 return `
                                 <div class="att-class-row">
                                     <strong class="att-class-name">${Utils.escapeHTML(c.name)}</strong>
-                                    <div class="att-class-bar">${c.pct != null ? `<div class="att-class-fill" style="width:${c.pct}%; background:${cc};"></div>` : ''}</div>
-                                    <span class="att-class-pct" style="color:${c.pct != null ? cc : 'inherit'};">${c.pct == null ? '—' : c.pct + '%'}</span>
+                                    <div class="att-class-bar">${c.pct != null ? `<div class="att-class-fill" style="width:${c.pct}%; ${cc ? `background:${cc};` : 'background:var(--gray);'}"></div>` : ''}</div>
+                                    <span class="att-class-pct" style="color:${c.pct != null ? (cc || 'inherit') : 'inherit'};">${c.pct == null ? '—' : c.pct + '%'}</span>
                                     <span class="att-class-emoji">${App.attendanceEmoji(c.pct)}</span>
                                 </div>`;
                             }).join('')}
