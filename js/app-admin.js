@@ -455,16 +455,15 @@ Object.assign(App, {
                     : `<div class="text-gray" style="font-size:0.85rem;">${res.attended} attended of ${res.available} available sessions</div>`;
                 const pctHtml = (p) => p == null ? '—' : `<span style="color:${App.attendanceColor(p) || 'inherit'}; font-weight:700;">${p}%</span>`;
                 el.innerHTML = `
-                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${pctHtml(res.pct)} ${App.attendanceEmoji(res.pct)}</div>
+                    <div style="font-size:1.1rem; font-weight:700; margin-bottom:0.25rem;">Overall: ${pctHtml(res.pct)}</div>
                     ${overallHtml}
                     <div style="border-top:1px solid var(--gray-light); margin:0.75rem 0 0.5rem 0;"></div>
                     ${res.perClass.length ? `
-                        <div style="display:grid; grid-template-columns: 1fr 72px 110px auto; align-items:center; gap:0.25rem 0.5rem;">
+                        <div style="display:grid; grid-template-columns: 1fr 72px 110px; align-items:center; gap:0.25rem 0.5rem;">
                             ${res.perClass.map(c => `
                                 <strong style="overflow-wrap:anywhere; padding:0.25rem 0;">${Utils.escapeHTML(c.name)}</strong>
                                 <span style="text-align:right; font-size:0.85rem; font-weight:600; padding:0.25rem 0;">${pctHtml(c.pct)}</span>
-                                <span class="text-gray" style="font-size:0.8rem; text-align:center; padding:0.25rem 0;">${c.attended}/${c.available}</span>
-                                <span style="text-align:center; font-size:1.1rem; padding:0.25rem 0;">${App.attendanceEmoji(c.pct)}</span>`).join('')}
+                                <span class="text-gray" style="font-size:0.8rem; text-align:center; padding:0.25rem 0;">${c.attended}/${c.available}</span>`).join('')}
                         </div>` : '<div class="text-gray" style="padding:0.5rem 0;">No class sessions available in this period.</div>'}
                     <div class="text-gray" style="font-size:0.8rem; margin-top:0.5rem;">Window: ${fmt(since)} – ${fmt(until)}. Only classes available by each date are counted.</div>`;
             },
@@ -1232,41 +1231,33 @@ Object.assign(App, {
                 alert('Leaderboard medals reset to defaults.');
             },
 
-            // Admin editor for the attendance feedback emojis + percentage colors.
+            // Admin editor for the attendance feedback percentage colors.
             renderAttendanceFeedbackConfig: () => {
                 const el = document.getElementById('attendance-feedback-config');
                 if (!el) return;
-                const emojis = STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS;
                 const colors = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
                 el.innerHTML = [50, 60, 70, 80, 90, 95, 98].map(t => `
                     <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
                         <span class="text-gray" style="width:64px; font-weight:600;">${t}%+</span>
-                        <input type="text" class="search-bar" data-tier="${t}" data-type="emoji" value="${Utils.escapeHTML(emojis[t] || '')}" maxlength="8" style="width:84px; text-align:center;">
                         <input type="color" data-tier="${t}" data-type="color" value="${colors[t] || '#000000'}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
                         <input type="text" class="search-bar" data-tier="${t}" data-type="hex" value="${Utils.escapeHTML(colors[t] || '')}" placeholder="#RRGGBB" maxlength="7" style="width:96px; text-align:center; font-family:monospace;">
-                        <span style="width:70px; text-align:center; font-size:1.25rem; color:${colors[t] || 'inherit'};">${Utils.escapeHTML(emojis[t] || '')}</span>
                     </div>`).join('');
             },
 
             saveAttendanceFeedback: () => {
-                const emojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS);
                 const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
                 const hexSet = new Set();
                 document.querySelectorAll('#attendance-feedback-config input[type="text"]').forEach(inp => {
                     const tier = parseInt(inp.dataset.tier, 10);
-                    if (!tier) return;
-                    if (inp.dataset.type === 'emoji') { if (inp.value.trim()) emojis[tier] = inp.value.trim(); }
-                    else if (inp.dataset.type === 'hex') {
-                        const hex = (inp.value || '').trim();
-                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) { colors[tier] = hex; hexSet.add(tier); }
-                    }
+                    if (!tier || inp.dataset.type !== 'hex') return;
+                    const hex = (inp.value || '').trim();
+                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) { colors[tier] = hex; hexSet.add(tier); }
                 });
                 // A valid hex code wins; otherwise fall back to the color picker value.
                 document.querySelectorAll('#attendance-feedback-config input[type="color"]').forEach(inp => {
                     const tier = parseInt(inp.dataset.tier, 10);
                     if (tier && !hexSet.has(tier) && inp.value) colors[tier] = inp.value;
                 });
-                STATE.attendanceEmojis = emojis;
                 STATE.attendanceColors = colors;
                 fallbackToLocal();
                 saveToCloud();
@@ -1275,7 +1266,6 @@ Object.assign(App, {
             },
 
             resetAttendanceFeedback: () => {
-                STATE.attendanceEmojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS);
                 STATE.attendanceColors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
                 fallbackToLocal();
                 saveToCloud();

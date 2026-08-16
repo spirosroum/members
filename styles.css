@@ -487,13 +487,11 @@
         .stat-card { background: var(--white); padding: 1.5rem; border-radius: var(--border-radius); box-shadow: var(--shadow); border-left: 4px solid var(--primary); display: flex; flex-direction: column; justify-content: center;}
         .stat-card h3 { font-size: 0.85rem; color: var(--gray); text-transform: uppercase; letter-spacing: 0.5px; margin: 0;}
         .stat-card .value { font-size: 2.25rem; font-weight: 800; color: var(--dark); margin-top: 0.5rem; line-height: 1;}
-        .stat-icon { font-size: 1.5rem; line-height: 1; margin-bottom: 0.4rem; }
         .stat-card-rank { background: linear-gradient(135deg, #fefce8 0%, var(--white) 70%); border-left-color: #f59e0b; }
 
-        /* Gamified member Training Stats: big % with progress bars per class */
+        /* Member Training Stats: big % with progress bars per class */
         .member-attendance-overview { text-align: center; padding: 0.5rem 0 0.25rem 0; }
         .member-attendance-big { font-size: 2.5rem; font-weight: 800; color: var(--dark); line-height: 1; }
-        .member-attendance-big .att-emoji { font-size: 1.5rem; vertical-align: middle; line-height: 0; }
         .attendance-bar { height: 12px; background: var(--gray-light); border-radius: 999px; overflow: hidden; margin: 0.7rem 0 0.4rem 0; }
         .attendance-bar-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
         .member-attendance-sessions { font-size: 0.9rem; color: var(--gray); }
@@ -503,12 +501,10 @@
         .att-class-bar { flex: 1 1 auto; height: 10px; background: var(--gray-light); border-radius: 999px; overflow: hidden; min-width: 50px; }
         .att-class-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
         .att-class-pct { flex: 0 0 auto; min-width: 42px; text-align: right; font-weight: 800; font-size: 0.9rem; }
-        .att-class-emoji { flex: 0 0 auto; font-size: 1.15rem; width: 1.4rem; text-align: center; }
 
         /* Best-class / streak highlights above the per-class list */
         .member-attendance-highlights { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.9rem; padding: 0.7rem 0.9rem; background: var(--light); border-radius: var(--border-radius); border: 1px solid var(--gray-light); }
         .att-highlight { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; color: var(--dark); }
-        .att-highlight-icon { font-size: 1.2rem; line-height: 1; }
 
         /* Retention & Attendance analytics */
         .retention-period-nav { flex-wrap: wrap; }

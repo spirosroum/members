@@ -293,29 +293,24 @@ Object.assign(App, {
                 };
                 const mode = (opts.memberView || !App.isAdminAuthed()) ? (App.memberStatsMode === 'month' ? 'month' : 'week') : 'both';
                 const cards = [];
-                const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '🏆';
                 if (show('totalTrainings')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
-                        <div class="stat-icon">🥋</div>
                         <h3>${Utils.escapeHTML(map.memberViewTotalTrainings || 'Total Trainings')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${total}</div>
                     </div>`);
                 if (show('totalHours')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
-                        <div class="stat-icon">⏱️</div>
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.formatDurationMins(App.getMemberTotalHours(memberId))}</div>
                     </div>`);
                 if (mode === 'week' || mode === 'both') {
                     if (show('avgWeek')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
-                            <div class="stat-icon">📈</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgWeek || 'Avg Trainings / Week')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perWeek}</div>
                         </div>`);
                     if (show('avgDays')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
-                            <div class="stat-icon">🗓️</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgDays || 'Avg Days / Week')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perWeekDays}</div>
                         </div>`);
@@ -323,26 +318,22 @@ Object.assign(App, {
                 if (mode === 'month' || mode === 'both') {
                     if (show('avgMonth')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
-                            <div class="stat-icon">📆</div>
                             <h3>${Utils.escapeHTML(map.memberViewAvgMonth || 'Avg Trainings / Month')}</h3>
                             <div class="value" style="font-size: 1.5rem;">${perMonth}</div>
                         </div>`);
                 }
                 if (show('avgDay')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
-                        <div class="stat-icon">⚡</div>
                         <h3>${Utils.escapeHTML(map.memberViewAvgDay || 'Avg Trainings / Day')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perDay}</div>
                     </div>`);
                 if (show('avgDaysMonth')) cards.push(`
                     <div class="stat-card" style="padding: 1rem;">
-                        <div class="stat-icon">📊</div>
                         <h3>${Utils.escapeHTML(map.memberViewAvgDaysMonth || 'Avg Days / Month')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${perMonthDays}</div>
                     </div>`);
                 if (!opts.separateRank && show('rank')) cards.push(`
                     <div class="stat-card stat-card-rank" style="padding: 1rem;">
-                        <div class="stat-icon">${rankIcon}</div>
                         <h3>${Utils.escapeHTML((map.memberViewRankLabel || 'Leaderboard Rank') + (map.memberViewRank90d || ' (last 90 days)'))}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.escapeHTML(rankDisplay)}</div>
                     </div>`);
@@ -573,14 +564,12 @@ Object.assign(App, {
                     const bc = App.attendanceColor(bestClass.pct) || 'var(--primary)';
                     highlightsHTML += `
                         <div class="att-highlight">
-                            <span class="att-highlight-icon">🏅</span>
                             <span><strong>${Utils.escapeHTML(map.memberViewBestClass || 'Best Class')}:</strong> ${Utils.escapeHTML(bestClass.name)} <span style="color:${bc}; font-weight:800;">${bestClass.pct}%</span></span>
                         </div>`;
                 }
                 if (streak >= 2) {
                     highlightsHTML += `
                         <div class="att-highlight">
-                            <span class="att-highlight-icon">🔥</span>
                             <span><strong>${Utils.escapeHTML(map.memberViewStreak || 'Streak')}:</strong> ${streak} ${streak === 1 ? (Utils.escapeHTML(map.memberViewStreakWeek || 'week')) : (Utils.escapeHTML(map.memberViewStreakWeeks || 'weeks'))}</span>
                         </div>`;
                 }
@@ -588,7 +577,7 @@ Object.assign(App, {
                 el.innerHTML = `
                     <div class="member-attendance-overview">
                         <div class="text-gray" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}</div>
-                        <div class="member-attendance-big">${res.pct}% <span class="att-emoji">${App.attendanceEmoji(res.pct)}</span></div>
+                        <div class="member-attendance-big">${res.pct}%</div>
                         <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; ${overallColor ? `background:${overallColor};` : 'background:var(--gray);'}"></div></div>
                         <div class="member-attendance-sessions">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     </div>
@@ -602,7 +591,6 @@ Object.assign(App, {
                                     <strong class="att-class-name">${Utils.escapeHTML(c.name)}</strong>
                                     <div class="att-class-bar">${c.pct != null ? `<div class="att-class-fill" style="width:${c.pct}%; ${cc ? `background:${cc};` : 'background:var(--gray);'}"></div>` : ''}</div>
                                     <span class="att-class-pct" style="color:${c.pct != null ? (cc || 'inherit') : 'inherit'};">${c.pct == null ? '—' : c.pct + '%'}</span>
-                                    <span class="att-class-emoji">${App.attendanceEmoji(c.pct)}</span>
                                 </div>`;
                             }).join('')}
                         </div>` : `<div class="text-gray" style="text-align:center; padding:1rem 0;">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}

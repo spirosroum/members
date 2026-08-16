@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.51 (12:50) — Remove emojis from Training Stats (admin + member portal)
+- Removed all emoji icons from the Training Stats stat cards (Total Trainings, Total Hours, averages, Leaderboard Rank) in both the member portal and the admin member modal — these share `getMemberStatsHTML`, so one change covers both. The stat cards now show just the label + value (rank color accent retained)
+- Removed the attendance feedback emojis (overall %, per-class %, and the 🏅/🔥 Best Class / Streak highlight icons) from the member portal attendance section
+- Admin member modal attendance: removed the emoji from the Overall line and the emoji column from the per-class grid
+- Admin "Attendance Feedback" editor now edits only the percentage colors (emoji inputs and preview removed); card text updated accordingly. The stored `attendanceEmojis` setting is left in place for backup compatibility but is no longer displayed
+- Removed now-unused CSS rules (`.stat-icon`, `.att-emoji`, `.att-class-emoji`, `.att-highlight-icon`)
+- Bumped `version.txt` and the `styles.css`/`app-member-portal.js`/`app-admin.js` cache-busters
+
 ## 2026-08-15 — v0.50 (12:35) — Top member card titled "Member Info"
 - The top info card on the member dashboard now has a "Member Info" heading (EN `Member Info` / EL `Στοιχεία Μέλους`) above the Current Belt / Member ID / Account Status / Expiration Date / Sessions Left lines
 - New i18n key `memberViewMemberInfo` (EN+EL) applied in `applyKioskTranslations`
