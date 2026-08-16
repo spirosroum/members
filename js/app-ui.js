@@ -104,6 +104,7 @@ Object.assign(App, {
 
                 if(group === 'plans' && tabId === 'closed') { App.renderClosedDates(); }
                 if(group === 'schedule' && tabId === 'list') { App.renderClassList(); }
+                if(group === 'dashboard' && tabId === 'log') { App.renderVisitLog(); }
             },
 
             addNotification: (title, msg, type = 'info', memberId = null) => {

@@ -2,6 +2,18 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-17 — v0.52 (02:06) — Fix Dashboard Check-in Log date boundaries, attribution, validations, and sync
+- Date filters in Check-in Log (`renderVisitLog`) now use `Utils.dayStart` and `Utils.dayEnd` to parse local day boundaries without UTC midnight timezone offset shifts
+- Soft-deleted members in Recycle Bin (`DB.getBin()`) are now checked in `getVisitPaidByInfo` so paid historical visits correctly attribute to their plans
+- Pre-filtered orphan visits in `renderVisitLog` so "Filtered Total" and "Unpaid Hits" cards precisely match the rendered table row count
+- Guarded `parseFloat(pay.amount || 0).toFixed(2)` in `renderVisitLog` against missing amounts
+- Added chronologically invalid exit time validation in `saveVisitEdit` (`exitTime < entryTime`)
+- Editing active visits (`exitTime === null`) in `saveVisitEdit` now recomputes `expectedExitTime` to prevent dropping from live present list
+- `saveVisitEdit` now triggers live view updates (`renderLivePresent`, `renderKioskLeaderboard`, `renderAdminDashboard`)
+- `switchTab('dashboard', 'log')` now auto-refreshes `renderVisitLog`
+- `exportMonthlyExcel` now includes Recycle Bin members and exports UTF-8 BOM blob CSV for Excel compatibility
+- Bumped `version.txt` and `index.html` cache-busters for `app-admin.js` and `app-ui.js`
+
 ## 2026-08-15 — v0.51 (12:50) — Remove emojis from Training Stats (admin + member portal)
 - Removed all emoji icons from the Training Stats stat cards (Total Trainings, Total Hours, averages, Leaderboard Rank) in both the member portal and the admin member modal — these share `getMemberStatsHTML`, so one change covers both. The stat cards now show just the label + value (rank color accent retained)
 - Removed the attendance feedback emojis (overall %, per-class %, and the 🏅/🔥 Best Class / Streak highlight icons) from the member portal attendance section

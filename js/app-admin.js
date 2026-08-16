@@ -811,14 +811,15 @@ Object.assign(App, {
             exportMonthlyExcel: () => {
                 const monthStr = document.getElementById('export-month-picker').value; 
                 if(!monthStr) return alert("Select a month first");
-                const [year, month] = monthStr.split('-').map(Number);
                 
                 const visits = DB.getVisits();
                 const members = DB.getMembers();
-                const memMap = new Map(members.map(m => [m.id, m]));
+                const binMembers = DB.getBin();
+                const memMap = new Map();
+                members.forEach(m => memMap.set(m.id, m));
+                binMembers.forEach(m => { if (!memMap.has(m.id)) memMap.set(m.id, m); });
 
-                let csvContent = "data:text/csv;charset=utf-8,";
-                csvContent += "Date,Time,Member ID,First Name,Last Name,Belt,Status\n";
+                const header = ["Date", "Time", "Member ID", "First Name", "Last Name", "Belt", "Status"];
 
                 // CSV escape helper: neutralize spreadsheet formulas (=, +, -, @) that
                 // Excel/LibreOffice would otherwise execute when the file is opened.
@@ -831,7 +832,7 @@ Object.assign(App, {
                     return str;
                 };
 
-                let hasData = false;
+                const rows = [];
                 visits.forEach(v => {
                     const visitLocalDate = v.entryTime ? Utils.dateToLocalIso(new Date(v.entryTime)) : '';
                     if (visitLocalDate.startsWith(monthStr)) {
@@ -840,21 +841,23 @@ Object.assign(App, {
                             const date = visitLocalDate;
                             const time = new Date(v.entryTime).toLocaleTimeString();
                             const status = v.isUnpaid ? 'Unpaid/Expired' : 'Paid';
-                            csvContent += `${esc(date)},${esc(time)},${esc(m.id)},${esc(m.firstName)},${esc(m.lastName)},${esc(m.belt)},${esc(status)}\n`;
-                            hasData = true;
+                            rows.push([esc(date), esc(time), esc(m.id), esc(m.firstName), esc(m.lastName), esc(m.belt), esc(status)].join(','));
                         }
                     }
                 });
 
-                if(!hasData) return alert("No valid check-ins found for this month.");
+                if(rows.length === 0) return alert("No valid check-ins found for this month.");
 
-                const encodedUri = encodeURI(csvContent);
+                const csv = '\uFEFF' + header.map(h => esc(h)).join(',') + '\n' + rows.join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.setAttribute("href", url);
                 link.setAttribute("download", `GymDesk_Checkins_${monthStr}.csv`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
+                URL.revokeObjectURL(url);
             },
 
             /**
@@ -868,7 +871,7 @@ Object.assign(App, {
             getVisitPaidByInfo: (v) => {
                 if (!v || v.isUnpaid) return null;
                 const payments = DB.getPayments().filter(p => p.memberId === v.memberId);
-                const member = DB.getMembers().find(m => m.id === v.memberId);
+                const member = DB.getMembers().find(m => m.id === v.memberId) || DB.getBin().find(m => m.id === v.memberId);
 
                 // 1. Explicitly cleared by a payment record — except session-granting payments,
                 // whose clearedVisitIds are legacy artifacts (they cleared debt without consuming
@@ -964,14 +967,18 @@ Object.assign(App, {
                 const statusFilter = document.getElementById('filter-visit-status').value;
                 const sortBy = document.getElementById('filter-visit-sort').value;
 
-                if (startFilter) { const sd = new Date(startFilter); sd.setHours(0,0,0,0); visits = visits.filter(v => new Date(v.entryTime) >= sd); }
-                if (endFilter) { const ed = new Date(endFilter); ed.setHours(23,59,59,999); visits = visits.filter(v => new Date(v.entryTime) <= ed); }
+                if (startFilter) { const sd = Utils.dayStart(startFilter); if (sd) visits = visits.filter(v => v.entryTime && new Date(v.entryTime) >= sd); }
+                if (endFilter) { const ed = Utils.dayEnd(endFilter); if (ed) visits = visits.filter(v => v.entryTime && new Date(v.entryTime) <= ed); }
                 if (statusFilter === 'active') { visits = visits.filter(v => !v.isUnpaid); }
                 if (statusFilter === 'unpaid') { visits = visits.filter(v => v.isUnpaid); }
 
+                const memberMap = new Map();
+                members.forEach(m => memberMap.set(m.id, m));
+                binMembers.forEach(m => { if (!memberMap.has(m.id)) memberMap.set(m.id, m); });
+                visits = visits.filter(v => memberMap.has(v.memberId));
+
                 const nameMap = new Map();
-                members.forEach(m => nameMap.set(m.id, Utils.sortKey(`${m.firstName} ${m.lastName}`)));
-                binMembers.forEach(m => { if (!nameMap.has(m.id)) nameMap.set(m.id, Utils.sortKey(`${m.firstName} ${m.lastName}`)); });
+                memberMap.forEach((m, id) => nameMap.set(id, Utils.sortKey(`${m.firstName} ${m.lastName}`)));
 
                 if (sortBy === 'name-asc') {
                     visits.sort((a, b) => (nameMap.get(a.memberId) || '').localeCompare(nameMap.get(b.memberId) || ''));
@@ -985,10 +992,8 @@ Object.assign(App, {
                 let unpaidCount = 0;
 
                 const rowsHTML = visits.map(v => {
-                    let m = members.find(m => m.id === v.memberId);
-                    const isDeleted = !m;
-                    if (isDeleted) m = binMembers.find(m => m.id === v.memberId);
-                    if (!m) return ''; // visit belongs to a member not even in the bin (orphan) — skip
+                    const m = memberMap.get(v.memberId);
+                    const isDeleted = !members.some(activeM => activeM.id === v.memberId);
                     if (v.isUnpaid) unpaidCount++;
 
                     const nameHtml = isDeleted
@@ -1004,7 +1009,7 @@ Object.assign(App, {
                         if (pay) {
                             const plan = pay.planId ? DB.getPlans().find(p => p.id === pay.planId) : null;
                             const planName = plan ? ` · ${Utils.escapeHTML(plan.name)}` : '';
-                            const payLabel = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> ${DB.getCurrency()}${parseFloat(pay.amount).toFixed(2)}${planName} <span class="text-gray" style="font-size:0.8rem;">(${Utils.formatDate(pay.date)})</span>`;
+                            const payLabel = `<span class="badge badge-active" style="font-size:0.7rem;">Paid</span> ${DB.getCurrency()}${parseFloat(pay.amount || 0).toFixed(2)}${planName} <span class="text-gray" style="font-size:0.8rem;">(${Utils.formatDate(pay.date)})</span>`;
                             statusHtml = pay.note
                                 ? `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div><div class="text-gray" style="font-size:0.8rem;">${Utils.escapeHTML(pay.note)}</div>`
                                 : `<div style="display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;">${payLabel}</div>`;
@@ -1070,9 +1075,21 @@ Object.assign(App, {
                 if(v) {
                     const entryVal = document.getElementById('form-visit-entry').value;
                     const exitVal = document.getElementById('form-visit-exit').value;
-                    if(entryVal) v.entryTime = new Date(entryVal).toISOString();
-                    if(exitVal) v.exitTime = new Date(exitVal).toISOString();
-                    else v.exitTime = null;
+                    if (entryVal && exitVal && new Date(exitVal) < new Date(entryVal)) {
+                        return alert('Exit time cannot be earlier than entry time.');
+                    }
+                    if(entryVal) {
+                        v.entryTime = new Date(entryVal).toISOString();
+                    }
+                    if(exitVal) {
+                        v.exitTime = new Date(exitVal).toISOString();
+                    } else {
+                        v.exitTime = null;
+                        if (entryVal) {
+                            const checkins = DB.getClassCheckins().filter(c => c.visitId === v.id);
+                            v.expectedExitTime = App.computeExpectedExitTime(v.entryTime, checkins);
+                        }
+                    }
                     const payVal = document.getElementById('form-visit-payment').value;
                     if (payVal === 'paid' || payVal === 'unpaid') v.paidOverride = payVal;
                     else delete v.paidOverride;
@@ -1083,6 +1100,11 @@ Object.assign(App, {
                     if (v.memberId) App.reconcileMemberPaymentVisitStatus(v.memberId);
                     App.closeModal('modal-visit');
                     App.renderVisitLog();
+                    App.renderLivePresent();
+                    App.renderKioskLeaderboard();
+                    if (!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) {
+                        App.renderAdminDashboard();
+                    }
                 }
             },
 
