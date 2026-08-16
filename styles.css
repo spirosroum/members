@@ -505,6 +505,11 @@
         .att-class-pct { flex: 0 0 auto; min-width: 42px; text-align: right; font-weight: 800; font-size: 0.9rem; }
         .att-class-emoji { flex: 0 0 auto; font-size: 1.15rem; width: 1.4rem; text-align: center; }
 
+        /* Best-class / streak highlights above the per-class list */
+        .member-attendance-highlights { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.9rem; padding: 0.7rem 0.9rem; background: var(--light); border-radius: var(--border-radius); border: 1px solid var(--gray-light); }
+        .att-highlight { display: flex; align-items: center; gap: 0.6rem; font-size: 0.95rem; color: var(--dark); }
+        .att-highlight-icon { font-size: 1.2rem; line-height: 1; }
+
         /* Retention & Attendance analytics */
         .retention-period-nav { flex-wrap: wrap; }
         .retention-period-btn.active { background: var(--primary); border-color: var(--primary); color: var(--white); }

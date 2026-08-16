@@ -306,6 +306,24 @@ Object.assign(App, {
                         <h3>${Utils.escapeHTML(map.memberViewTotalHours || 'Total Hours Trained')}</h3>
                         <div class="value" style="font-size: 1.5rem;">${Utils.formatDurationMins(App.getMemberTotalHours(memberId))}</div>
                     </div>`);
+                // Session-based members: show the remaining bundle as a progress bar
+                // instead of a bare number, using the ledger's granted total.
+                const sMember = DB.getMembers().find(x => x.id === memberId);
+                if (sMember && sMember.sessionsTotal) {
+                    const left = parseInt(sMember.sessionsLeft, 10) || 0;
+                    const total = DB.getPayments()
+                        .filter(p => p.memberId === memberId && p.sessionsGranted && parseInt(p.sessionsGranted, 10) > 0)
+                        .reduce((s, p) => s + parseInt(p.sessionsGranted, 10), 0);
+                    const pct = total > 0 ? Math.round(left / total * 100) : (left > 0 ? 100 : 0);
+                    const barColor = pct > 50 ? 'var(--success)' : pct > 20 ? 'var(--warning)' : 'var(--danger)';
+                    cards.push(`
+                        <div class="stat-card" style="padding: 1rem;">
+                            <div class="stat-icon">🎟️</div>
+                            <h3>${Utils.escapeHTML(map.memberSessionsLeft || 'Sessions Left')}</h3>
+                            <div class="value" style="font-size: 1.5rem;">${left}${total > 0 ? `<span style="font-size:0.9rem; color:var(--gray);"> / ${total}</span>` : ''}</div>
+                            <div class="attendance-bar" style="margin:0.6rem 0 0 0;"><div class="attendance-bar-fill" style="width:${pct}%; background:${barColor};"></div></div>
+                        </div>`);
+                }
                 if (mode === 'week' || mode === 'both') {
                     if (show('avgWeek')) cards.push(`
                         <div class="stat-card" style="padding: 1rem;">
@@ -403,6 +421,18 @@ Object.assign(App, {
                 const isFrozen = member.accountStatus === 'Frozen';
                 const isCancelled = member.accountStatus === 'Cancelled';
                 const isInactive = member.accountStatus === 'Inactive';
+
+                // Expiration countdown banner: only for currently-valid memberships ending
+                // within 7 days (expired members already get the red status line instead).
+                const expiryBanner = document.getElementById('member-expiry-banner');
+                if (expiryBanner) {
+                    const showBanner = hasValidity && daysRemaining >= 0 && daysRemaining <= 7
+                        && !isFrozen && !isCancelled && !isInactive;
+                    expiryBanner.classList.toggle('hidden', !showBanner);
+                    if (showBanner) {
+                        expiryBanner.innerHTML = `⏳ ${Utils.escapeHTML(map.memberExpiryBanner || 'Your membership expires in')} <strong>${daysRemaining}</strong> ${Utils.escapeHTML(map.memberStatusDaysLeft || 'days left')} (${Utils.formatDate(member.expirationDate)}).`;
+                    }
+                }
                 
                 let statusText = '';
                 if (isFrozen) {
@@ -507,6 +537,54 @@ Object.assign(App, {
                 // below 50% so it never discourages), up to the sloth mascot at 98%+.
                 const overallLabel = map.memberViewAttendanceOverall || 'Overall';
                 const overallColor = App.attendanceColor(res.pct) || 'var(--primary)';
+
+                // Best class = the highest-%. class with data; streak = consecutive weeks
+                // (Mon-based) with at least one training inside the window.
+                const bestClass = res.perClass.find(c => c.pct != null) || null;
+                const weekSet = new Set();
+                DB.getClassCheckins().forEach(ci => {
+                    if (ci.memberId !== member.id || !ci.entryTime) return;
+                    const d = new Date(ci.entryTime);
+                    if (isNaN(d.getTime()) || d < since || d >= until) return;
+                    const wk = new Date(d);
+                    wk.setHours(0, 0, 0, 0);
+                    wk.setDate(wk.getDate() - ((wk.getDay() + 6) % 7));
+                    weekSet.add(wk.toISOString());
+                });
+                let streak = 0;
+                const sortedWeeks = [...weekSet].sort((a, b) => new Date(b) - new Date(a));
+                if (sortedWeeks.length) {
+                    const last = new Date(sortedWeeks[0]);
+                    const thisWeek = new Date();
+                    thisWeek.setHours(0, 0, 0, 0);
+                    thisWeek.setDate(thisWeek.getDate() - ((thisWeek.getDay() + 6) % 7));
+                    const current = new Date(thisWeek.toISOString());
+                    // Count back from the latest attended week. If the current week has no
+                    // training yet, start from the previous week so the streak isn't reset.
+                    let anchor = last < current ? last : current;
+                    const anchorSet = new Set(sortedWeeks.map(s => new Date(s).toISOString()));
+                    while (anchorSet.has(anchor.toISOString())) {
+                        streak++;
+                        anchor.setDate(anchor.getDate() - 7);
+                    }
+                }
+                let highlightsHTML = '';
+                if (bestClass) {
+                    const bc = App.attendanceColor(bestClass.pct) || 'var(--primary)';
+                    highlightsHTML += `
+                        <div class="att-highlight">
+                            <span class="att-highlight-icon">🏅</span>
+                            <span><strong>${Utils.escapeHTML(map.memberViewBestClass || 'Best Class')}:</strong> ${Utils.escapeHTML(bestClass.name)} <span style="color:${bc}; font-weight:800;">${bestClass.pct}%</span></span>
+                        </div>`;
+                }
+                if (streak >= 2) {
+                    highlightsHTML += `
+                        <div class="att-highlight">
+                            <span class="att-highlight-icon">🔥</span>
+                            <span><strong>${Utils.escapeHTML(map.memberViewStreak || 'Streak')}:</strong> ${streak} ${streak === 1 ? (Utils.escapeHTML(map.memberViewStreakWeek || 'week')) : (Utils.escapeHTML(map.memberViewStreakWeeks || 'weeks'))}</span>
+                        </div>`;
+                }
+
                 el.innerHTML = `
                     <div class="member-attendance-overview">
                         <div class="text-gray" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}</div>
@@ -514,6 +592,7 @@ Object.assign(App, {
                         <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; background:${overallColor};"></div></div>
                         <div class="member-attendance-sessions">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     </div>
+                    ${highlightsHTML ? `<div class="member-attendance-highlights">${highlightsHTML}</div>` : ''}
                     ${res.perClass.length ? `
                         <div class="member-attendance-classes">
                             ${res.perClass.map(c => {

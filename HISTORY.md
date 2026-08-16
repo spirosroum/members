@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.47 (11:50) — Member portal: session progress, attendance highlights, expiry banner
+- Session-based members now get a "Sessions Left" stat card with a progress bar showing the remaining bundle (granted total from the payment ledger), color-coded green/amber/red by how many are left — instead of just a bare number in the status line
+- Member attendance now surfaces a "Best Class" highlight (the member's highest-%. class) and a consecutive-week training streak (🔥 N-week streak) above the per-class list; both EN+EL, hidden when there's no data
+- Added an expiration countdown banner shown when a valid membership has ≤7 days left ("⏳ Your membership expires in N days …"), separate from the red expired status line
+- New i18n keys `memberViewBestClass`, `memberViewStreak`, `memberViewStreakWeek(s)`, `memberExpiryBanner` (EN+EL); new `.member-attendance-highlights`/`.att-highlight` styles
+- Bumped `version.txt` and the `styles.css`/`app-member-portal.js`/`app-i18n.js` cache-busters
+
 ## 2026-08-15 — v0.46 (11:30) — Member portal settings & spacing
 - Merged the member portal's two separate cards — "Change Member ID" and "Hide From Leaderboard" — into a single unified "Settings" card (EN+EL), with the leaderboard toggle on top and the ID change below, separated by a divider
 - Fixed excessive vertical spacing between member portal sections: `.main-content` already spaces its flex children with `gap: 1.5rem`, but every card also carried `mb-2` (1rem), making gaps ~2.5rem. Removed the redundant bottom margins from the member view cards and topbar so sections sit closer together
