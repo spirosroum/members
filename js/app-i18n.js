@@ -43,6 +43,8 @@ App.KIOSK_I18N = {
         memberViewCurrentBelt: 'Current Belt:',
         memberViewAccountStatus: 'Account Status:',
         memberViewExpiration: 'Expiration Date:',
+        memberViewMemberId: 'Member ID:',
+        memberSettingsTitle: 'Settings',
         memberChangeIdTitle: 'Change Member ID',
         memberChangeIdDesc: 'Update your login ID code.',
         memberChangeIdPlaceholder: 'New ID (max 8 digits)',
@@ -213,6 +215,8 @@ App.KIOSK_I18N = {
         memberViewCurrentBelt: 'Τρέχουσα Ζώνη:',
         memberViewAccountStatus: 'Κατάσταση Λογαριασμού:',
         memberViewExpiration: 'Ημερομηνία Λήξης:',
+        memberViewMemberId: 'Κωδικός Μέλους:',
+        memberSettingsTitle: 'Ρυθμίσεις',
         memberChangeIdTitle: 'Αλλαγή Κωδικού Μέλους',
         memberChangeIdDesc: 'Ενημερώστε τον κωδικό εισόδου σας.',
         memberChangeIdPlaceholder: 'Νέος Κωδικός (έως 8 ψηφία)',
@@ -466,6 +470,7 @@ App.applyKioskTranslations = function() {
         const checkinClassesConfirm = Array.from(document.querySelectorAll('#modal-checkin-classes .btn-primary')).find(b => b && b.onclick && (b.onclick.toString().includes('App.confirmCheckin') || b.onclick.toString().includes('App.confirmKioskClassSelection')));
         if (checkinClassesConfirm) checkinClassesConfirm.innerText = map.checkinConfirmButton || 'Confirm Check-In';
 
+        const memberSettingsTitle = document.getElementById('member-settings-title'); if (memberSettingsTitle) memberSettingsTitle.innerText = map.memberSettingsTitle || 'Settings';
         const memberChangeIdTitle = document.getElementById('member-change-id-title'); if (memberChangeIdTitle) memberChangeIdTitle.innerText = map.memberChangeIdTitle || 'Change Member ID';
         const memberChangeIdDesc = document.getElementById('member-change-id-desc'); if (memberChangeIdDesc) memberChangeIdDesc.innerText = map.memberChangeIdDesc || 'Update your login ID code.';
         const memberNewIdInput = document.getElementById('member-new-id'); if (memberNewIdInput) memberNewIdInput.placeholder = map.memberChangeIdPlaceholder || 'New ID (max 8 digits)';

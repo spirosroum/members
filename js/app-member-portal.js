@@ -133,6 +133,14 @@ Object.assign(App, {
                     const checkins = DB.getClassCheckins();
                     checkins.forEach(c => { if (c.memberId === oldId) c.memberId = newId; });
                     DB.saveClassCheckins(checkins);
+                    const payments = DB.getPayments();
+                    let payChanged = false;
+                    payments.forEach(p => { if (p.memberId === oldId) { p.memberId = newId; payChanged = true; } });
+                    if (payChanged) DB.savePayments(payments);
+                    const notifications = DB.getNotifications();
+                    let notifChanged = false;
+                    notifications.forEach(n => { if (n.memberId === oldId) { n.memberId = newId; notifChanged = true; } });
+                    if (notifChanged) DB.saveNotifications(notifications);
                     App.currentUser = members.find(m => m.id === newId);
                     localStorage.setItem('gym_member_session', newId);
                     alert("ID successfully updated!");
@@ -431,6 +439,7 @@ Object.assign(App, {
 
                 document.getElementById('member-dash-info').innerHTML = `
                     <div style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
+                    <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewMemberId || 'Member ID:')}</strong> <span class="text-gray" style="font-size:0.95rem;">${Utils.escapeHTML(member.id)}</span></div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewExpiration || 'Expiration Date:')}</strong> ${expText}</div>
                 `;

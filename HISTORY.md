@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.46 (11:30) — Member portal settings & spacing
+- Merged the member portal's two separate cards — "Change Member ID" and "Hide From Leaderboard" — into a single unified "Settings" card (EN+EL), with the leaderboard toggle on top and the ID change below, separated by a divider
+- Fixed excessive vertical spacing between member portal sections: `.main-content` already spaces its flex children with `gap: 1.5rem`, but every card also carried `mb-2` (1rem), making gaps ~2.5rem. Removed the redundant bottom margins from the member view cards and topbar so sections sit closer together
+- The member dashboard now shows the member's own ID (new `memberViewMemberId` i18n key) so members always know the ID they use to check in
+- `changeMemberId` in the member portal now also rewrites the local payments and notifications `memberId`s (matching the admin form fix from v0.43), so the ledger/notifications update immediately
+- Bumped `version.txt` and the `app-member-portal.js`/`app-i18n.js` cache-busters
+
 ## 2026-08-15 — v0.45 (11:05) — Member form auto-log payment now uses the server RPC
 - The member form's automatic payment log (`saveMember` with a plan + payment) previously wrote the payment through the client-side ledger and reconciled visits with the legacy client-side engine — a second source of truth that could drift from the server's `recompute_member`. It now calls the same server-side `apply_payment` RPC the payment modal uses, after flushing the member row so the FK/recompute see it, then reloads payments/members/visits.
 - `prevExpiration` on the auto-log now records the member's actual prior expiration instead of an empty string.
