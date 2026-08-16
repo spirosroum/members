@@ -464,7 +464,7 @@ Object.assign(App, {
                         </div>`;
                 }
 
-                document.getElementById('member-dash-info').innerHTML = `
+                document.getElementById('member-dash-info-lines').innerHTML = `
                     <div style="font-size:1.1rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;"><strong>${Utils.escapeHTML(map.memberViewCurrentBelt || 'Current Belt:')}</strong> ${Utils.getBeltBadge(member.belt)}</div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewMemberId || 'Member ID:')}</strong> <span class="text-gray" style="font-size:0.95rem;">${Utils.escapeHTML(member.id)}</span></div>
                     <div class="mt-1" style="font-size:1.1rem;"><strong>${Utils.escapeHTML(map.memberViewAccountStatus || 'Account Status:')}</strong> ${statusText}</div>

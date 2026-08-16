@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-15 — v0.50 (12:35) — Top member card titled "Member Info"
+- The top info card on the member dashboard now has a "Member Info" heading (EN `Member Info` / EL `Στοιχεία Μέλους`) above the Current Belt / Member ID / Account Status / Expiration Date / Sessions Left lines
+- New i18n key `memberViewMemberInfo` (EN+EL) applied in `applyKioskTranslations`
+- Bumped `version.txt` and the `app-member-portal.js`/`app-i18n.js` cache-busters
+
 ## 2026-08-15 — v0.49 (12:20) — Move Sessions Left out of Training Stats into the info card
 - The "Sessions Left" progress bar no longer renders as a stat card inside the Training Stats grid. Session-based members now see it as a dedicated info line (with a progress bar) right below Expiration Date in the top info card, matching the Current Belt / Member ID / Account Status / Expiration Date layout
 - Removed the redundant "Sessions Left: N" text appended to the Account Status line (the dedicated line replaces it)

@@ -40,6 +40,7 @@ App.KIOSK_I18N = {
         leaderboardBeltColumn: 'Belt',
         leaderboardSessionsColumn: 'Trainings',
         memberViewWelcome: 'Welcome',
+        memberViewMemberInfo: 'Member Info',
         memberViewCurrentBelt: 'Current Belt:',
         memberViewAccountStatus: 'Account Status:',
         memberViewExpiration: 'Expiration Date:',
@@ -217,6 +218,7 @@ App.KIOSK_I18N = {
         leaderboardBeltColumn: 'Ζώνη',
         leaderboardSessionsColumn: 'Προπονήσεις',
         memberViewWelcome: 'Καλώς ήρθες',
+        memberViewMemberInfo: 'Στοιχεία Μέλους',
         memberViewCurrentBelt: 'Τρέχουσα Ζώνη:',
         memberViewAccountStatus: 'Κατάσταση Λογαριασμού:',
         memberViewExpiration: 'Ημερομηνία Λήξης:',
@@ -481,6 +483,7 @@ App.applyKioskTranslations = function() {
         if (checkinClassesConfirm) checkinClassesConfirm.innerText = map.checkinConfirmButton || 'Confirm Check-In';
 
         const memberSettingsTitle = document.getElementById('member-settings-title'); if (memberSettingsTitle) memberSettingsTitle.innerText = map.memberSettingsTitle || 'Settings';
+        const memberInfoTitle = document.getElementById('member-info-title'); if (memberInfoTitle) memberInfoTitle.innerText = map.memberViewMemberInfo || 'Member Info';
         const memberChangeIdTitle = document.getElementById('member-change-id-title'); if (memberChangeIdTitle) memberChangeIdTitle.innerText = map.memberChangeIdTitle || 'Change Member ID';
         const memberChangeIdDesc = document.getElementById('member-change-id-desc'); if (memberChangeIdDesc) memberChangeIdDesc.innerText = map.memberChangeIdDesc || 'Update your login ID code.';
         const memberNewIdInput = document.getElementById('member-new-id'); if (memberNewIdInput) memberNewIdInput.placeholder = map.memberChangeIdPlaceholder || 'New ID (max 8 digits)';
