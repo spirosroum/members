@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.64 (01:00) — Fix replaced class double-counted in Attendance Statistics
+- A class instance replaced via Day Details (one-off override to another class) was counted twice in the Attendance Statistics denominator: once under the original class's slot (resolved to the replacement) and again under the replacement class's own scheduled slot that same date
+- `buildAvailableTrainings` now dedupes sessions by effective `date|classId`, so a replaced instance counts as one session (and matches the attended-side keying already used by `getMemberAttendance`)
+
 ## 2026-08-20 — v0.63 (00:50) — Rename Attendance %, skip not-yet-started sessions
 - Renamed the admin member modal's "Attendance %" section to "Attendance Statistics" (and the matching Activation Date helper text)
 - Attendance Statistics no longer counts today's class sessions whose start time hasn't arrived yet — only classes that have already begun (or are on past days) count toward the denominator

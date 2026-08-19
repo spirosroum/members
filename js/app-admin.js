@@ -325,6 +325,7 @@ Object.assign(App, {
                 const end = new Date(until);
                 end.setHours(23, 59, 59, 999);
                 const schedules = App.getActiveSchedules();
+                const emittedKeys = new Set();
                 while (cursor <= end) {
                     const dayIso = Utils.dateToLocalIso(cursor);
                     if (dayIso > today) break;
@@ -336,12 +337,17 @@ Object.assign(App, {
                                 if (slot.day !== dayName) return;
                                 const eff = App.resolveInstance(cls, dayIso);
                                 if (eff.cancelled) return;
+                                const key = `${dayIso}|${eff.classId}`;
+                                // A replaced instance IS that class's session for the date, so
+                                // dedupe by effective class so the same session isn't counted twice.
+                                if (emittedKeys.has(key)) return;
                                 if (dayIso === today && slot.start) {
                                     const [sh, sm] = slot.start.split(':').map(Number);
                                     const sessionStart = new Date(dayIso + 'T' + slot.start + ':00');
                                     const now = new Date();
                                     if (!isNaN(sessionStart.getTime()) && sessionStart > now) return;
                                 }
+                                emittedKeys.add(key);
                                 sessions.push({ date: dayIso, classId: eff.classId, className: eff.name, slotStart: slot.start, slotEnd: slot.end });
                             });
                         });
