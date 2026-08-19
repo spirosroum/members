@@ -179,6 +179,14 @@
             align-items: center;
         }
 
+        /* Analytical calendar day-detail modal */
+        .analytical-day-section { margin-bottom: 1rem; border: 1px solid var(--gray-light); border-radius: 10px; overflow: hidden; }
+        .analytical-day-section-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.9rem; background: var(--light); border-bottom: 1px solid var(--gray-light); }
+        .analytical-day-class-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .analytical-day-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.9rem; border-bottom: 1px dashed var(--gray-light); flex-wrap: wrap; }
+        .analytical-day-row:last-child { border-bottom: none; }
+        .analytical-day-member { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; min-width: 0; }
+
         /* Color Palette Swatches */
         .color-swatch { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s, border-color 0.2s; }
         .color-swatch:hover, .color-swatch.selected { transform: scale(1.15); border-color: var(--dark); }
@@ -742,7 +750,7 @@
 
             /* Analytical calendar denser on small screens */
             #analytical-calendar-container > div > div { padding: 4px !important; }
-            .analytical-cal-cell { height: 64px !important; }
+        .analytical-cal-cell { height: 64px !important; }
             #analytical-calendar-container strong { font-size: 0.85rem; }
             #analytical-calendar-container span { font-size: 0.65rem; }
 

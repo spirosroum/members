@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.56 (22:45) — Analytical calendar day-detail modal
+- Clicking a day in the Check-in Activity Calendar now opens a "Day Details" modal (`modal-analytical-day` / `App.openAnalyticalDay`) instead of jumping straight to the Visit Log
+- The modal groups the day's check-ins into subsections: one per scheduled class (name, color dot, member count), a "Removed classes" section for check-ins whose class was deleted (time-only rows), and an "Open Gym / No class" section
+- Each row shows the member (name + belt), their check-in/out time (or "Inside"), and a Paid/Unpaid badge; deleted-member names still resolve via the recycle bin
+- A "View in Visit Log" button filters the Check-in Log to that date (`analyticalDayOpenLog` → existing `filterVisitsByDate`)
+
 ## 2026-08-19 — v0.55 (22:30) — Deleted-class check-ins fall back to time-only display
 - `buildVisitClassTags` now skips check-ins whose class no longer exists in the schedule, so Visit History and the kiosk "Currently Inside" list fall back to the raw entry/exit time (open-gym style) instead of a generic "Class" label
 - Class check-in rows themselves are untouched (they have no FK to `schedules`, so deleting a class never deletes its check-ins); restoring a class from the bin re-resolves its tags automatically

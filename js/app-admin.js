@@ -762,7 +762,7 @@ Object.assign(App, {
                         }
  
                         html += `
-                            <div class="analytical-cal-cell" style="background: ${bg}; cursor:pointer;" onclick="App.filterVisitsByDate('${dateStr}')">
+                            <div class="analytical-cal-cell" style="background: ${bg}; cursor:pointer;" onclick="App.openAnalyticalDay('${dateStr}')">
                                 <strong style="display:block; margin-bottom:5px;">${day}</strong>
                                 <span style="font-size:0.85rem; color:var(--dark); font-weight:600;">${vCount} people</span>
                                 ${unpaidCount > 0 ? `<span style="font-size:0.7rem; color:var(--danger); font-weight:600;">${unpaidCount} unpaid</span>` : ''}
@@ -784,6 +784,100 @@ Object.assign(App, {
                 document.getElementById('filter-visit-status').value = 'all';
                 document.getElementById('filter-visit-sort').value = 'newest';
                 App.renderVisitLog();
+            },
+
+            // Day detail modal: group a day's check-ins by class, then a fallback
+            // section for visits with no (or deleted) class. Clicking a day in the
+            // analytical calendar now opens this instead of jumping straight to the log.
+            openAnalyticalDay: (dateStr) => {
+                const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                const [y, m, d] = dateStr.split('-').map(Number);
+                const weekday = dayNames[new Date(y, m - 1, d).getDay()];
+
+                let visits = DB.getVisits().filter(v => v.entryTime && Utils.dateToLocalIso(new Date(v.entryTime)) === dateStr);
+                const members = DB.getMembers();
+                const binMembers = DB.getBin();
+                const memMap = new Map();
+                members.forEach(x => memMap.set(x.id, x));
+                binMembers.forEach(x => { if (!memMap.has(x.id)) memMap.set(x.id, x); });
+                visits = visits.filter(v => memMap.has(v.memberId));
+
+                const checkins = DB.getClassCheckins().filter(c => c.slotDate === dateStr);
+                const byVisit = {};
+                checkins.forEach(c => { (byVisit[c.visitId] = byVisit[c.visitId] || []).push(c); });
+
+                const schedules = DB.getSchedules() || [];
+                const validClassIds = new Set(schedules.map(s => s.id));
+
+                const rowHtml = (visit) => {
+                    const m = memMap.get(visit.memberId);
+                    if (!m) return '';
+                    const name = Utils.escapeHTML(m.firstName + ' ' + m.lastName);
+                    const belt = Utils.getBeltBadge(m.belt);
+                    const time = `${Utils.formatTime(visit.entryTime)}${visit.exitTime ? ' - ' + Utils.formatTime(visit.exitTime) : ' (Inside)'}`;
+                    const pay = visit.isUnpaid
+                        ? '<span class="badge badge-inactive">Unpaid</span>'
+                        : '<span class="badge badge-active">Paid</span>';
+                    return `
+                        <div class="analytical-day-row">
+                            <div class="analytical-day-member">
+                                <strong>${name}</strong> ${belt}
+                                <span class="text-gray" style="font-size:0.85rem;">${time}</span>
+                            </div>
+                            ${pay}
+                        </div>`;
+                };
+
+                const sectionHtml = (title, color, rows) => `
+                    <div class="analytical-day-section">
+                        <div class="analytical-day-section-head">
+                            <span class="analytical-day-class-dot" style="background:${color};"></span>
+                            <strong>${Utils.escapeHTML(title)}</strong>
+                            <span class="badge badge-inside">${rows.length}</span>
+                        </div>
+                        ${rows.length ? rows.join('') : '<div class="text-gray" style="padding:0.5rem 0 0.25rem 0; font-size:0.9rem;">No check-ins.</div>'}
+                    </div>`;
+
+                const groups = [];
+                // Group by each scheduled class on this weekday.
+                schedules.forEach(cls => {
+                    const slotForDay = (cls.slots || []).find(s => s.day === weekday);
+                    if (!slotForDay) return;
+                    const clsCheckins = checkins.filter(c => c.classId === cls.id);
+                    const clsVisitIds = new Set(clsCheckins.map(c => c.visitId));
+                    const rows = visits.filter(v => clsVisitIds.has(v.id)).map(rowHtml);
+                    groups.push(sectionHtml(cls.name, cls.color || '#2563eb', rows));
+                });
+
+                // Orphaned check-ins (class deleted) — time only.
+                const orphanedCheckins = checkins.filter(c => !validClassIds.has(c.classId));
+                const orphanVisitIds = new Set(orphanedCheckins.map(c => c.visitId));
+                if (orphanVisitIds.size) {
+                    const rows = visits.filter(v => orphanVisitIds.has(v.id)).map(rowHtml);
+                    groups.push(sectionHtml('Removed classes', 'var(--gray)', rows));
+                }
+
+                // Visits with no class at all → open gym.
+                const classedVisitIds = new Set(Object.keys(byVisit));
+                const openGymRows = visits.filter(v => !classedVisitIds.has(v.id)).map(rowHtml);
+                if (openGymRows.length) {
+                    groups.push(sectionHtml('Open Gym / No class', 'var(--primary)', openGymRows));
+                }
+
+                document.getElementById('analytical-day-title').innerText = `${Utils.formatDate(dateStr)} — Day Details`;
+                const btn = document.getElementById('analytical-day-log-btn');
+                if (btn) btn.dataset.date = dateStr;
+                document.getElementById('analytical-day-content').innerHTML = groups.length
+                    ? groups.join('')
+                    : '<div class="text-gray" style="text-align:center; padding:2rem 0;">No check-ins or classes on this day.</div>';
+                App.openModal('modal-analytical-day');
+            },
+
+            analyticalDayOpenLog: () => {
+                const btn = document.getElementById('analytical-day-log-btn');
+                const date = btn ? btn.dataset.date : '';
+                App.closeModal('modal-analytical-day');
+                if (date) App.filterVisitsByDate(date);
             },
 
             changeAnalyticalMonth: (delta) => {

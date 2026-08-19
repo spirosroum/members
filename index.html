@@ -40,7 +40,7 @@
     </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥋</text></svg>">
     <title>Sloth Submission Grappling - Members</title>
-    <link rel="stylesheet" href="styles.css?v=20260819-2">
+    <link rel="stylesheet" href="styles.css?v=20260819-4">
 </head>
 <body>
 
@@ -410,6 +410,23 @@
                                 <p class="text-gray">Download all check-ins for <strong id="export-month-label">this month</strong> as a CSV file, ready to open in Excel.</p>
                             </div>
                             <button class="btn-success btn-small" onclick="App.exportMonthlyExcel()">Download CSV</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ANALYTICAL CALENDAR DAY DETAIL MODAL -->
+                <div id="modal-analytical-day" class="modal-overlay hidden">
+                    <div class="modal-content" style="max-width: 560px;">
+                        <div class="flex justify-between align-center mb-1">
+                            <h2 id="analytical-day-title" style="margin:0;">Day Details</h2>
+                            <button class="btn-outline" style="padding: 0.25rem 0.75rem;" onclick="App.closeModal('modal-analytical-day')">✕</button>
+                        </div>
+                        <hr style="border:none; border-top: 1px solid var(--gray-light); margin-bottom: 1rem;">
+                        <div id="analytical-day-content" style="max-height: 60vh; overflow-y: auto;"></div>
+                        <div class="flex gap-2 mt-4" style="border-top: 1px solid var(--gray-light); padding-top: 1.25rem;">
+                            <button type="button" class="btn-outline" onclick="App.closeModal('modal-analytical-day')">Close</button>
+                            <div style="flex: 1;"></div>
+                            <button type="button" id="analytical-day-log-btn" class="btn-primary" onclick="App.analyticalDayOpenLog()">View in Visit Log</button>
                         </div>
                     </div>
                 </div>
@@ -1596,7 +1613,7 @@
     <script src="js/app-plans.js?v=20260815-1"></script>
     <script src="js/app-schedule.js?v=20260815-1"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
-    <script src="js/app-admin.js?v=20260819-2"></script>
+    <script src="js/app-admin.js?v=20260819-4"></script>
     <script src="js/app-i18n.js?v=20260815-4"></script>
 
 
