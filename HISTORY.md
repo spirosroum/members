@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.58 (23:06) — Day Details: edit/delete the class (not individual members)
+- Moved the Edit / Delete actions in Day Details from the per-member rows to the class section header, per the request to edit/delete the class itself directly from Day Details
+- Edit opens the existing Schedule editor for that class (`editClassFromDayDetail` → navigate + `editScheduleClass`)
+- Delete soft-deletes the class (moves to bin, keeps all existing check-ins) and refreshes the open Day Details view (`deleteClassFromDayDetail`)
+- Member rows now show only the member (name, belt, time) and paid/unpaid badge
+
 ## 2026-08-19 — v0.57 (22:54) — Day Details: active-class filter, per-session edit/delete, spacing fix
 - Added `App.getActiveSchedules()` (schedules where `isPublic !== false`); `buildAvailableTrainings` now uses it so hidden/inactive classes are excluded from the attendance % denominator (training stats) — hidden classes the member attended no longer count toward their %
 - Day Details now builds class sections only from active/visible classes; check-ins whose class is hidden or deleted group under "Inactive / Removed classes" (time-only), preserving full history

@@ -836,20 +836,17 @@ Object.assign(App, {
                                 <strong>${name}</strong> ${belt}
                                 <span class="text-gray" style="font-size:0.85rem;">${time}</span>
                             </div>
-                            <div class="analytical-day-actions">
-                                ${pay}
-                                <button class="btn-outline btn-small" onclick="App.editVisitFromDayDetail('${visit.id}')" title="Edit check-in">Edit</button>
-                                <button class="btn-danger btn-small" onclick="App.deleteVisitFromDayDetail('${visit.id}')" title="Delete check-in">Delete</button>
-                            </div>
+                            <div class="analytical-day-actions">${pay}</div>
                         </div>`;
                 };
 
-                const sectionHtml = (title, color, rows) => `
+                const sectionHtml = (title, color, rows, actions = '') => `
                     <div class="analytical-day-section">
                         <div class="analytical-day-section-head">
                             <span class="analytical-day-class-dot" style="background:${color};"></span>
                             <strong>${Utils.escapeHTML(title)}</strong>
                             <span class="badge badge-inside">${rows.length}</span>
+                            ${actions ? `<div class="analytical-day-actions">${actions}</div>` : ''}
                         </div>
                         ${rows.length ? rows.join('') : '<div class="analytical-day-empty">No check-ins.</div>'}
                     </div>`;
@@ -862,7 +859,10 @@ Object.assign(App, {
                     const clsCheckins = checkins.filter(c => c.classId === cls.id);
                     const clsVisitIds = new Set(clsCheckins.map(c => c.visitId));
                     const rows = visits.filter(v => clsVisitIds.has(v.id)).map(rowHtml);
-                    groups.push(sectionHtml(cls.name, cls.color || '#2563eb', rows));
+                    const actions = `
+                        <button class="btn-outline btn-small" onclick="App.editClassFromDayDetail('${cls.id}')" title="Edit this class">Edit</button>
+                        <button class="btn-danger btn-small" onclick="App.deleteClassFromDayDetail('${cls.id}')" title="Delete this class">Delete</button>`;
+                    groups.push(sectionHtml(cls.name, cls.color || '#2563eb', rows, actions));
                 });
 
                 // Check-ins whose class is no longer active (hidden or deleted) — time only,
@@ -889,28 +889,29 @@ Object.assign(App, {
                     : '<div class="text-gray" style="text-align:center; padding:2rem 0;">No check-ins or classes on this day.</div>';
             },
 
-            // Open the existing Visit Edit modal from a Day Details row; the date is already
-            // stored on App._dayDetailDate so the modal re-renders after save.
-            editVisitFromDayDetail: (id) => {
-                App.openVisitEditModal(id);
+            // Edit the class itself from Day Details: navigate to the Schedule editor.
+            editClassFromDayDetail: (classId) => {
+                App.closeModal('modal-analytical-day');
+                App.navigate('admin-schedules');
+                App.editScheduleClass(classId);
             },
 
-            // Delete a check-in directly from Day Details (removes the visit and its class
-            // check-ins, then re-renders the open modal + Visit Log / live views).
-            deleteVisitFromDayDetail: (id) => {
-                if (!confirm('Permanently delete this check-in record?')) return;
-                const visits = DB.getVisits();
-                const v = visits.find(x => x.id === id);
-                const memberId = v ? v.memberId : null;
-                DB.saveVisits(visits.filter(x => x.id !== id));
-                App.cleanupClassCheckins();
-                if (memberId) App.reconcileMemberPaymentVisitStatus(memberId);
-                App.renderVisitLog();
-                App.renderLivePresent();
-                App.renderKioskLeaderboard();
-                if (!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) {
-                    App.renderAdminDashboard();
+            // Delete the class itself from Day Details: soft-deletes it (moves to bin) and
+            // keeps all existing check-ins, then refreshes the open Day Details view.
+            deleteClassFromDayDetail: (classId) => {
+                if (!confirm('Delete this entire class and all its slots? Existing check-ins will be kept.')) return;
+                const schedules = DB.getSchedules();
+                const bin = DB.getScheduleBin();
+                const cls = schedules.find(c => c.id === classId);
+                if (cls) {
+                    cls.deletedAt = new Date().toISOString();
+                    bin.push(cls);
+                    DB.saveScheduleBin(bin);
+                    DB.saveSchedules(schedules.filter(c => c.id !== classId));
                 }
+                App.renderSchedules();
+                App.renderScheduleBin();
+                App.renderCalendarView('kiosk-schedule-container', false);
                 const date = App._dayDetailDate;
                 if (date) App.renderAnalyticalDayContent(date);
             },

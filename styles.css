@@ -183,6 +183,8 @@
         .analytical-day-section { margin-bottom: 0.6rem; border: 1px solid var(--gray-light); border-radius: 10px; overflow: hidden; }
         .analytical-day-section:last-child { margin-bottom: 0; }
         .analytical-day-section-head { display: flex; align-items: center; gap: 0.5rem; padding: 0.55rem 0.9rem; background: var(--light); border-bottom: 1px solid var(--gray-light); }
+        .analytical-day-section-head .analytical-day-actions { margin-left: auto; }
+        .analytical-day-section-head .analytical-day-actions .btn-small { padding: 0.2rem 0.55rem; font-size: 0.75rem; }
         .analytical-day-class-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .analytical-day-row { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.45rem 0.9rem; border-bottom: 1px dashed var(--gray-light); flex-wrap: wrap; }
         .analytical-day-row:last-child { border-bottom: none; }
