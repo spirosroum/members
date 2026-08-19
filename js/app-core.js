@@ -523,6 +523,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     STATE.planBin = [];
                     STATE.scheduleBin = [];
                     STATE.notificationBin = [];
+                    // Empty the mirrors so a later admin flush can't diff-delete the
+                    // sensitive rows from Supabase based on a stale snapshot.
+                    this.mirrors.payments = new Map();
+                    this.mirrors.notifications = new Map();
+                    this.mirrors.notificationBin = new Map();
+                    this.mirrors.bin = new Map();
                     this._markReady('payments');
                     this._markReady('notifications');
                 }
@@ -685,7 +691,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 push(this.persistClosedDates());
                 push(this.persistScheduleOverrides());
                 if (isAdmin) {
-                    push(this.persist('payments'));
+                    // Payments are upsert-only here: the only legitimate way to remove a
+                    // payment is the delete_payment RPC (then reload), so the sync diff
+                    // must never hard-delete payment rows when STATE/mirror get out of sync.
+                    push(this.persist('payments', { upsertOnly: true }));
                     push(this.persist('notifications'));
                     push(this.persistMemberPrivate());
                     push(this.persistBins());
@@ -1559,6 +1568,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.removeItem('gym_notifications');
                 localStorage.removeItem('gym_notification_bin');
                 localStorage.removeItem('gym_bin');
+                // Clear the in-memory sync mirrors too, so a later flush can never
+                // treat these wiped collections as deleted and hard-delete the
+                // rows from Supabase (which would permanently destroy payments).
+                Sync.mirrors.payments = new Map();
+                Sync.mirrors.notifications = new Map();
+                Sync.mirrors.notificationBin = new Map();
+                Sync.mirrors.bin = new Map();
+                Sync.ready.payments = false;
+                Sync.ready.notifications = false;
                 fallbackToLocal();
             },
 

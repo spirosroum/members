@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.62 (00:40) — Fix payment history loss risk from sync diff-delete
+- Fixed a data-loss bug where a payment/notification history could be wiped from Supabase: the sync layer's diff (`persist`) would hard-delete rows that exist in the in-memory mirror but are missing from `STATE`. When the sensitive collections (`payments`, `notifications`) were emptied client-side (non-admin boot / admin lock via `clearSensitiveData`) while a stale mirror remained, a subsequent admin flush would permanently delete every row from the DB.
+- Payments are now upsert-only in `flush()` — they can only be removed through the `delete_payment` RPC (followed by a reload), never by the sync diff.
+- `clearSensitiveData()` and the non-admin boot path now also clear the `payments`/`notifications` sync mirrors and reset their ready flags, so a later flush can't treat the wiped state as a deletion.
+- This is a safety fix; it does not change how payments are stored or displayed.
+
 ## 2026-08-20 — v0.61 (00:32) — Custom attendance feedback ranges with emojis
 - Member Settings → Attendance Feedback now lets the admin add/remove custom statistic ranges (threshold %, emoji, and color per range) instead of a fixed tier list
 - Each range has an editable threshold, a color picker, and an emoji input; removed the redundant hex code text field (the color picker covers it)
