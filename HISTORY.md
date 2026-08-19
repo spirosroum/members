@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.65 (01:00) — Fix "not started" check comparing against invalid time string
+- The "don't count classes that haven't started" filter was silently disabled: `slot.start` is stored as `"19:30:00"` (with seconds), so `new Date(day + 'T' + slot.start + ':00')` produced an invalid `"…T19:30:00:00"` string and the comparison was skipped
+- Today's not-yet-started session (e.g. the 19:30 Fundamentals on the current day) was therefore still counted, inflating the Attendance Statistics denominator (e.g. 11 instead of 10)
+- `buildAvailableTrainings` now parses the slot's hour/minute via `split(':')` instead of concatenating the raw seconds-bearing string
+
 ## 2026-08-20 — v0.64 (01:00) — Fix replaced class double-counted in Attendance Statistics
 - A class instance replaced via Day Details (one-off override to another class) was counted twice in the Attendance Statistics denominator: once under the original class's slot (resolved to the replacement) and again under the replacement class's own scheduled slot that same date
 - `buildAvailableTrainings` now dedupes sessions by effective `date|classId`, so a replaced instance counts as one session (and matches the attended-side keying already used by `getMemberAttendance`)

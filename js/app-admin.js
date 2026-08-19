@@ -343,7 +343,7 @@ Object.assign(App, {
                                 if (emittedKeys.has(key)) return;
                                 if (dayIso === today && slot.start) {
                                     const [sh, sm] = slot.start.split(':').map(Number);
-                                    const sessionStart = new Date(dayIso + 'T' + slot.start + ':00');
+                                    const sessionStart = new Date(dayIso + 'T' + String(sh).padStart(2, '0') + ':' + String(sm).padStart(2, '0') + ':00');
                                     const now = new Date();
                                     if (!isNaN(sessionStart.getTime()) && sessionStart > now) return;
                                 }
