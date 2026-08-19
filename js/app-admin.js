@@ -1054,6 +1054,7 @@ Object.assign(App, {
             openVisitEditModal: (id) => {
                 const visit = DB.getVisits().find(v => v.id === id);
                 if (!visit) return;
+                App._editingVisit = visit;
                 document.getElementById('form-visit-id').value = visit.id;
                 
                 const entryInput = document.getElementById('form-visit-entry');
@@ -1064,7 +1065,67 @@ Object.assign(App, {
 
                 document.getElementById('form-visit-payment').value = visit.paidOverride || '';
 
+                App.renderVisitClassPicker(visit);
+
                 App.openModal('modal-visit');
+            },
+
+            // Build the multi-select class list for the visit's entry date, pre-checking
+            // any classes already attached to this visit. Selecting classes here replaces
+            // the visit's class_checkins on save (see saveVisitEdit).
+            renderVisitClassPicker: (visit) => {
+                const container = document.getElementById('visit-class-picker');
+                const empty = document.getElementById('visit-class-picker-empty');
+                if (!container) return;
+                const existing = new Map(DB.getClassCheckins().filter(c => c.visitId === visit.id).map(c => [App.normalizeScheduleSlotId(c.classId, c.slotDay, c.slotStart, c.slotEnd), c]));
+
+                let entries = [];
+                const d = new Date(visit.entryTime);
+                const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()];
+                const dateIso = Utils.dateToLocalIso(d);
+                (DB.getSchedules() || []).forEach(cls => {
+                    (cls.slots || []).forEach(slot => {
+                        if (slot.day !== dayName) return;
+                        const slotId = App.normalizeScheduleSlotId(cls.id, slot.day, slot.start, slot.end);
+                        entries.push({ slotId, cls, slot, checked: existing.has(slotId) });
+                    });
+                });
+                entries.sort((a, b) => a.slot.start.localeCompare(b.slot.start) || a.cls.name.localeCompare(b.cls.name));
+
+                if (entries.length === 0) {
+                    container.innerHTML = '';
+                    if (empty) empty.classList.remove('hidden');
+                    return;
+                }
+                if (empty) empty.classList.add('hidden');
+                container.innerHTML = entries.map(e => {
+                    const color = e.cls.color || '#2563eb';
+                    return `
+                    <label class="visit-class-option${e.checked ? ' checked' : ''}" style="border-left: 4px solid ${color};">
+                        <input type="checkbox" data-slot-id="${Utils.escapeHTML(e.slotId)}" data-class-id="${Utils.escapeHTML(e.cls.id)}" data-slot-day="${Utils.escapeHTML(e.slot.day)}" data-slot-start="${Utils.escapeHTML(e.slot.start)}" data-slot-end="${Utils.escapeHTML(e.slot.end)}" data-slot-date="${dateIso}" ${e.checked ? 'checked' : ''} onchange="App.toggleVisitClassOption(this)" hidden>
+                        <strong>${Utils.escapeHTML(e.cls.name)}</strong>
+                        <span class="text-gray" style="font-size:0.85rem;">${Utils.convertTo12Hour(e.slot.start)} - ${Utils.convertTo12Hour(e.slot.end)}</span>
+                        <span class="badge badge-inside visit-class-option-badge" style="font-size:0.7rem;">${e.checked ? 'Selected' : 'Select'}</span>
+                    </label>`;
+                }).join('');
+            },
+
+            toggleVisitClassOption: (input) => {
+                const label = input.closest('.visit-class-option');
+                if (!label) return;
+                label.classList.toggle('checked', input.checked);
+                const badge = label.querySelector('.visit-class-option-badge');
+                if (badge) badge.innerText = input.checked ? 'Selected' : 'Select';
+            },
+
+            // Re-render the class picker when the admin changes the entry date, so the
+            // available classes match the new date.
+            onVisitEntryChange: () => {
+                const visit = App._editingVisit;
+                const entryVal = document.getElementById('form-visit-entry').value;
+                if (!visit || !entryVal) return;
+                const pickerVisit = Object.assign({}, visit, { entryTime: new Date(entryVal).toISOString() });
+                App.renderVisitClassPicker(pickerVisit);
             },
 
             saveVisitEdit: (e) => {
@@ -1093,6 +1154,34 @@ Object.assign(App, {
                     const payVal = document.getElementById('form-visit-payment').value;
                     if (payVal === 'paid' || payVal === 'unpaid') v.paidOverride = payVal;
                     else delete v.paidOverride;
+
+                    // Replace the visit's classes with whatever the admin selected in the
+                    // picker. Unchecking everything clears the class assignment (open gym).
+                    const selected = Array.from(document.querySelectorAll('#visit-class-picker input:checked'));
+                    const allCheckins = DB.getClassCheckins().filter(c => c.visitId !== v.id);
+                    const prefix = Date.now();
+                    const nowIso = new Date().toISOString();
+                    selected.forEach((input, i) => {
+                        allCheckins.push({
+                            id: 'CC-' + (v.memberId || '') + '-' + prefix + '-' + (i + 1),
+                            visitId: v.id,
+                            memberId: v.memberId,
+                            classId: input.dataset.classId,
+                            slotDate: input.dataset.slotDate || null,
+                            slotDay: input.dataset.slotDay || null,
+                            slotStart: input.dataset.slotStart || null,
+                            slotEnd: input.dataset.slotEnd || null,
+                            entryTime: nowIso
+                        });
+                    });
+                    DB.saveClassCheckins(allCheckins);
+                    v.classIds = selected.map(i => i.dataset.classId);
+                    if (!v.exitTime) {
+                        v.expectedExitTime = App.computeExpectedExitTime(v.entryTime, selected.map(i => ({
+                            classId: i.dataset.classId, slotDay: i.dataset.slotDay,
+                            slotStart: i.dataset.slotStart, slotEnd: i.dataset.slotEnd
+                        })), selected.length === 0);
+                    }
                     DB.saveVisits(visits);
                     // Moving a visit in time can change which payment/session covers it, so
                     // re-run the reconciliation engine to keep isUnpaid flags and the member's

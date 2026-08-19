@@ -579,6 +579,11 @@
         .table-inside td:first-child { display: flex; justify-content: space-between; align-items: center; border-bottom: none; flex-wrap: wrap; gap: 0.5rem; }
         .table-inside tr { border-bottom: 1px solid var(--gray-light); min-height: 65px; }
         .kiosk-class-tags { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; }
+        .visit-class-option { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; border: 1px solid var(--gray-light); border-radius: 8px; margin-bottom: 0.4rem; background: var(--white); cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+        .visit-class-option:hover { border-color: var(--primary); }
+        .visit-class-option.checked { background: #eff6ff; border-color: var(--primary); }
+        .visit-class-option strong { flex: 1; min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+        .visit-class-option-badge { flex-shrink: 0; }
         .kiosk-class-tag { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--light); border: 1px solid var(--gray-light); border-radius: 6px; color: var(--dark); line-height: 1.2; max-width: 100%; overflow-wrap: anywhere; }
         .kiosk-class-tag strong { font-weight: 600; min-width: 0; }
         .kiosk-class-tag small { color: var(--gray); font-size: 0.75rem; font-weight: 500; }

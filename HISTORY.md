@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.54 (22:18) — Assign classes to an existing check-in from Visit History
+- Visit Edit modal now includes a multi-select class picker (`renderVisitClassPicker`), listing the classes scheduled on the visit's entry date with the visit's current classes pre-checked
+- Saving replaces the visit's `class_checkins` with the selected classes (unchecking all clears the assignment → open gym), updates `visit.classIds`, and recomputes `expectedExitTime` from the new classes when the visit is still open
+- Changing the entry date re-renders the picker for the new date (`onVisitEntryChange`); the picker reuses the existing slot-id normalization and the shared `.visit-class-option` styles
+- Only the client record is edited here (same `DB.saveVisits` / `DB.saveClassCheckins` path as the rest of the editor) — this does not invoke the `check_in_member` RPC
+
 ## 2026-08-19 — v0.53 (22:07) — Live-sync class check-ins to Visit History & other views
 - Root cause: realtime only subscribed to `visits` and `notifications`, so a check-in performed on a different device (QR / mobile / kiosk) left the admin's `class_checkins` cache stale — Visit History showed the entry time instead of the chosen class ("Fundamentals") until a full reload/`loadAll`
 - Added a realtime subscription on the `class_checkins` table (`refreshClassCheckins`) for all clients, so new/edited class check-ins appear immediately in Visit History, the kiosk "Currently Inside" tags, and the calendar
