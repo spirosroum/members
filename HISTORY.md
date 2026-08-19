@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.55 (22:30) — Deleted-class check-ins fall back to time-only display
+- `buildVisitClassTags` now skips check-ins whose class no longer exists in the schedule, so Visit History and the kiosk "Currently Inside" list fall back to the raw entry/exit time (open-gym style) instead of a generic "Class" label
+- Class check-in rows themselves are untouched (they have no FK to `schedules`, so deleting a class never deletes its check-ins); restoring a class from the bin re-resolves its tags automatically
+
 ## 2026-08-19 — v0.54 (22:18) — Assign classes to an existing check-in from Visit History
 - Visit Edit modal now includes a multi-select class picker (`renderVisitClassPicker`), listing the classes scheduled on the visit's entry date with the visit's current classes pre-checked
 - Saving replaces the visit's `class_checkins` with the selected classes (unchecking all clears the assignment → open gym), updates `visit.classIds`, and recomputes `expectedExitTime` from the new classes when the visit is still open

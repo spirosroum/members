@@ -408,9 +408,15 @@ Object.assign(App, {
             // instead of beside it (used in narrow table columns).
             buildVisitClassTags: (visit, small = false, stacked = false) => {
                 if (!visit || !visit.id) return '';
-                const checkins = DB.getClassCheckins().filter(c => c.visitId === visit.id);
-                if (checkins.length === 0) return '';
                 const schedules = DB.getSchedules() || [];
+                // Only render tags for classes that still exist. Check-ins whose class was
+                // deleted keep their row but are skipped here, so the caller falls back to
+                // showing the raw entry/exit time (open-gym style) instead of a generic
+                // "Class" label.
+                const checkins = DB.getClassCheckins()
+                    .filter(c => c.visitId === visit.id)
+                    .filter(c => schedules.some(s => s.id === c.classId));
+                if (checkins.length === 0) return '';
                 const sizeStyle = small ? ' font-size:0.72rem; padding:0.15rem 0.5rem;' : ' font-size:0.8rem; padding:0.3rem 0.6rem;';
                 const layoutStyle = stacked ? ' flex-direction: column; align-items: flex-start; gap: 0.15rem;' : '';
                 return `<div class="kiosk-class-tags">${checkins.map(c => {
