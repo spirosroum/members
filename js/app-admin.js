@@ -460,29 +460,21 @@ Object.assign(App, {
             },
 
             // Positive-only emoji feedback for attendance %. Nothing below 50% so it
-            // never discourages; escalates up to the sloth mascot at 98%+. Emojis and
-            // colors are admin-editable (stored in settings).
+            // never discourages; escalates up to the sloth mascot at 98%+. Emojis,
+            // colors, and the range thresholds are admin-editable (stored in settings).
             attendanceEmoji: (p) => {
                 if (p == null || p < 50) return '';
-                const e = STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS;
-                if (p >= 98) return e[98];
-                if (p >= 95) return e[95];
-                if (p >= 90) return e[90];
-                if (p >= 80) return e[80];
-                if (p >= 70) return e[70];
-                if (p >= 60) return e[60];
-                return e[50];
+                const ranges = (STATE.attendanceRanges || []).slice().sort((a, b) => a.threshold - b.threshold);
+                let emoji = '';
+                ranges.forEach(r => { if (p >= r.threshold) emoji = r.emoji || ''; });
+                return emoji;
             },
             attendanceColor: (p) => {
                 if (p == null || p < 50) return '';
-                const c = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
-                if (p >= 98) return c[98];
-                if (p >= 95) return c[95];
-                if (p >= 90) return c[90];
-                if (p >= 80) return c[80];
-                if (p >= 70) return c[70];
-                if (p >= 60) return c[60];
-                return c[50];
+                const ranges = (STATE.attendanceRanges || []).slice().sort((a, b) => a.threshold - b.threshold);
+                let color = '';
+                ranges.forEach(r => { if (p >= r.threshold) color = r.color || ''; });
+                return color;
             },
 
             renderMemberAttendance: () => {
@@ -1656,34 +1648,55 @@ Object.assign(App, {
                 alert('Leaderboard medals reset to defaults.');
             },
 
-            // Admin editor for the attendance feedback percentage colors.
+            // Admin editor for the attendance feedback ranges (threshold %, emoji, color).
             renderAttendanceFeedbackConfig: () => {
                 const el = document.getElementById('attendance-feedback-config');
                 if (!el) return;
-                const colors = STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS;
-                el.innerHTML = [50, 60, 70, 80, 90, 95, 98].map(t => `
-                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
-                        <span class="text-gray" style="width:64px; font-weight:600;">${t}%+</span>
-                        <input type="color" data-tier="${t}" data-type="color" value="${colors[t] || '#000000'}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
-                        <input type="text" class="search-bar" data-tier="${t}" data-type="hex" value="${Utils.escapeHTML(colors[t] || '')}" placeholder="#RRGGBB" maxlength="7" style="width:96px; text-align:center; font-family:monospace;">
-                    </div>`).join('');
+                const ranges = (STATE.attendanceRanges || []).slice().sort((a, b) => a.threshold - b.threshold);
+                el.innerHTML = `
+                    <div id="att-feedback-rows">
+                        ${ranges.map((r, i) => `
+                            <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
+                                <input type="number" data-idx="${i}" data-field="threshold" value="${r.threshold}" min="1" max="100" style="width:70px; padding:0.35rem; border:1px solid var(--gray-light); border-radius:var(--border-radius); text-align:center;">
+                                <span class="text-gray" style="font-weight:600;">%+</span>
+                                <input type="color" data-idx="${i}" data-field="color" value="${r.color || '#000000'}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
+                                <input type="text" class="search-bar" data-idx="${i}" data-field="emoji" value="${Utils.escapeHTML(r.emoji || '')}" maxlength="8" style="width:60px; text-align:center; font-size:1.1rem;">
+                                <button class="btn-danger btn-small" onclick="App.removeAttendanceRange(${i})">Remove</button>
+                            </div>`).join('')}
+                    </div>
+                    <button class="btn-outline btn-small mt-1" onclick="App.addAttendanceRange()">+ Add Range</button>
+                `;
+            },
+
+            addAttendanceRange: () => {
+                const ranges = (STATE.attendanceRanges || []).slice().sort((a, b) => a.threshold - b.threshold);
+                const last = ranges[ranges.length - 1];
+                const threshold = last ? Math.min(100, last.threshold + 5) : 50;
+                ranges.push({ threshold, emoji: '', color: '#2563eb' });
+                ranges.sort((a, b) => a.threshold - b.threshold);
+                STATE.attendanceRanges = ranges;
+                App.renderAttendanceFeedbackConfig();
+            },
+
+            removeAttendanceRange: (i) => {
+                const ranges = (STATE.attendanceRanges || []).slice().sort((a, b) => a.threshold - b.threshold);
+                if (ranges.length <= 1) return alert('At least one range is required.');
+                ranges.splice(i, 1);
+                ranges.sort((a, b) => a.threshold - b.threshold);
+                STATE.attendanceRanges = ranges;
+                App.renderAttendanceFeedbackConfig();
             },
 
             saveAttendanceFeedback: () => {
-                const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
-                const hexSet = new Set();
-                document.querySelectorAll('#attendance-feedback-config input[type="text"]').forEach(inp => {
-                    const tier = parseInt(inp.dataset.tier, 10);
-                    if (!tier || inp.dataset.type !== 'hex') return;
-                    const hex = (inp.value || '').trim();
-                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) { colors[tier] = hex; hexSet.add(tier); }
+                const ranges = [];
+                document.querySelectorAll('#att-feedback-rows > div').forEach(row => {
+                    const threshold = parseInt(row.querySelector('[data-field="threshold"]').value, 10);
+                    const color = row.querySelector('[data-field="color"]').value;
+                    const emoji = row.querySelector('[data-field="emoji"]').value.trim();
+                    if (!isNaN(threshold) && threshold >= 1 && threshold <= 100) ranges.push({ threshold, color, emoji });
                 });
-                // A valid hex code wins; otherwise fall back to the color picker value.
-                document.querySelectorAll('#attendance-feedback-config input[type="color"]').forEach(inp => {
-                    const tier = parseInt(inp.dataset.tier, 10);
-                    if (tier && !hexSet.has(tier) && inp.value) colors[tier] = inp.value;
-                });
-                STATE.attendanceColors = colors;
+                ranges.sort((a, b) => a.threshold - b.threshold);
+                STATE.attendanceRanges = ranges;
                 fallbackToLocal();
                 saveToCloud();
                 App.renderAttendanceFeedbackConfig();
@@ -1691,7 +1704,7 @@ Object.assign(App, {
             },
 
             resetAttendanceFeedback: () => {
-                STATE.attendanceColors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS);
+                STATE.attendanceRanges = DEFAULT_ATTENDANCE_RANGES.map(r => Object.assign({}, r));
                 fallbackToLocal();
                 saveToCloud();
                 App.renderAttendanceFeedbackConfig();

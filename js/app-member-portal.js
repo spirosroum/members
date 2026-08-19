@@ -580,7 +580,7 @@ Object.assign(App, {
                 el.innerHTML = `
                     <div class="member-attendance-overview">
                         <div class="text-gray" style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:0.25rem;">${Utils.escapeHTML(overallLabel)}</div>
-                        <div class="member-attendance-big">${res.pct}%</div>
+                        <div class="member-attendance-big">${App.attendanceEmoji(res.pct) ? `<span style="margin-right:0.4rem;">${Utils.escapeHTML(App.attendanceEmoji(res.pct))}</span>` : ''}${res.pct}%</div>
                         <div class="attendance-bar"><div class="attendance-bar-fill" style="width:${res.pct}%; ${overallColor ? `background:${overallColor};` : 'background:var(--gray);'}"></div></div>
                         <div class="member-attendance-sessions">${res.attended} / ${res.available} ${Utils.escapeHTML(map.memberViewAttendanceSessions || 'sessions')}</div>
                     </div>

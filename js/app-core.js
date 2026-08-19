@@ -98,9 +98,34 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         const MEMBER_PRIVATE_FIELDS = ['phone', 'dob', 'notes'];
 
         // Attendance feedback defaults (admin-editable via Member Settings).
-        const DEFAULT_ATTENDANCE_EMOJIS = { 50: '👍', 60: '💪', 70: '⭐', 80: '🏆', 90: '🔥', 95: '👑', 98: '🦥' };
-        const DEFAULT_ATTENDANCE_COLORS = { 50: '#10b981', 60: '#22c55e', 70: '#84cc16', 80: '#eab308', 90: '#f59e0b', 95: '#f97316', 98: '#d4af37' };
+        // Each range is { threshold, emoji, color }: the emoji+color shown when
+        // attendance % is >= threshold.
+        const DEFAULT_ATTENDANCE_RANGES = [
+            { threshold: 50, emoji: '👍', color: '#10b981' },
+            { threshold: 60, emoji: '💪', color: '#22c55e' },
+            { threshold: 70, emoji: '⭐', color: '#84cc16' },
+            { threshold: 80, emoji: '🏆', color: '#eab308' },
+            { threshold: 90, emoji: '🔥', color: '#f59e0b' },
+            { threshold: 95, emoji: '👑', color: '#f97316' },
+            { threshold: 98, emoji: '🦥', color: '#d4af37' }
+        ];
+        const DEFAULT_ATTENDANCE_EMOJIS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.emoji]));
+        const DEFAULT_ATTENDANCE_COLORS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.color]));
         const DEFAULT_LEADERBOARD_EMOJIS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+
+        // Hydrate attendance ranges from localStorage, migrating the legacy
+        // keyed maps (threshold -> emoji/color) into the ordered range array.
+        function loadAttendanceRanges() {
+            try {
+                const stored = JSON.parse(localStorage.getItem('gym_attendance_ranges') || 'null');
+                if (Array.isArray(stored) && stored.length) return stored;
+            } catch (e) { /* ignore and migrate below */ }
+            const emojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, JSON.parse(localStorage.getItem('gym_attendance_emojis') || '{}'));
+            const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS, JSON.parse(localStorage.getItem('gym_attendance_colors') || '{}'));
+            const thresholds = Object.keys(colors).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+            if (thresholds.length) return thresholds.map(t => ({ threshold: t, emoji: emojis[t] || '', color: colors[t] || '#000000' }));
+            return DEFAULT_ATTENDANCE_RANGES.map(r => Object.assign({}, r));
+        }
 
         // CLOUD-SYNCED DATA LAYER (Supabase)
         const STATE = {
@@ -125,8 +150,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             memberPrivate: JSON.parse(localStorage.getItem('gym_member_private') || '{}'),
             showClassCheckins: JSON.parse(localStorage.getItem('gym_show_class_checkins') ?? 'true'),
             memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}'),
-            attendanceEmojis: Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, JSON.parse(localStorage.getItem('gym_attendance_emojis') || '{}')),
-            attendanceColors: Object.assign({}, DEFAULT_ATTENDANCE_COLORS, JSON.parse(localStorage.getItem('gym_attendance_colors') || '{}')),
+            attendanceRanges: loadAttendanceRanges(),
             leaderboardEmojis: Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, JSON.parse(localStorage.getItem('gym_leaderboard_emojis') || '{}'))
         };
 
@@ -153,8 +177,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_member_private', JSON.stringify(STATE.memberPrivate || {}));
                 localStorage.setItem('gym_show_class_checkins', JSON.stringify(STATE.showClassCheckins !== false));
                 localStorage.setItem('gym_member_stats_visibility', JSON.stringify(STATE.memberStatsVisibility || {}));
-                localStorage.setItem('gym_attendance_emojis', JSON.stringify(STATE.attendanceEmojis || {}));
-                localStorage.setItem('gym_attendance_colors', JSON.stringify(STATE.attendanceColors || {}));
+                localStorage.setItem('gym_attendance_ranges', JSON.stringify(STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES));
                 localStorage.setItem('gym_leaderboard_emojis', JSON.stringify(STATE.leaderboardEmojis || {}));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
@@ -170,8 +193,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 checkinNoticeColor: STATE.checkinNoticeColor || '#fde68a',
                 showClassCheckins: STATE.showClassCheckins !== false,
                 memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true },
-                attendanceEmojis: STATE.attendanceEmojis || DEFAULT_ATTENDANCE_EMOJIS,
-                attendanceColors: STATE.attendanceColors || DEFAULT_ATTENDANCE_COLORS,
+                attendanceRanges: STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES,
                 leaderboardEmojis: STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS
             };
         }
@@ -444,8 +466,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (s.checkin_notice_color != null) STATE.checkinNoticeColor = s.checkin_notice_color;
                 if (s.show_class_checkins != null) STATE.showClassCheckins = !!s.show_class_checkins;
                 if (s.member_stats_visibility) STATE.memberStatsVisibility = Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, s.member_stats_visibility);
-                if (s.attendance_emojis) STATE.attendanceEmojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, s.attendance_emojis);
-                if (s.attendance_colors) STATE.attendanceColors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS, s.attendance_colors);
+                if (Array.isArray(s.attendance_ranges) && s.attendance_ranges.length) STATE.attendanceRanges = s.attendance_ranges;
+                else if (s.attendance_colors) {
+                    const colors = Object.assign({}, DEFAULT_ATTENDANCE_COLORS, s.attendance_colors);
+                    const emojis = Object.assign({}, DEFAULT_ATTENDANCE_EMOJIS, s.attendance_emojis || {});
+                    STATE.attendanceRanges = Object.keys(colors).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b).map(t => ({ threshold: t, emoji: emojis[t] || '', color: colors[t] || '#000000' }));
+                }
                 if (s.leaderboard_emojis) STATE.leaderboardEmojis = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, s.leaderboard_emojis);
                 this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
@@ -593,8 +619,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'checkin_notice_color', value: p.checkinNoticeColor },
                     { key: 'show_class_checkins', value: p.showClassCheckins },
                     { key: 'member_stats_visibility', value: p.memberStatsVisibility },
-                    { key: 'attendance_emojis', value: p.attendanceEmojis },
-                    { key: 'attendance_colors', value: p.attendanceColors },
+                    { key: 'attendance_ranges', value: p.attendanceRanges },
                     { key: 'leaderboard_emojis', value: p.leaderboardEmojis }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });

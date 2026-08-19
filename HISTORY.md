@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.61 (00:32) — Custom attendance feedback ranges with emojis
+- Member Settings → Attendance Feedback now lets the admin add/remove custom statistic ranges (threshold %, emoji, and color per range) instead of a fixed tier list
+- Each range has an editable threshold, a color picker, and an emoji input; removed the redundant hex code text field (the color picker covers it)
+- Added an "+ Add Range" button and a per-range "Remove" action (at least one range is always required)
+- The chosen emoji now displays next to the member's attendance percentage on the member dashboard
+- Attendance storage migrated from legacy `attendance_emojis`/`attendance_colors` maps to a single ordered `attendance_ranges` setting (old values auto-migrate)
+
 ## 2026-08-20 — v0.60 (00:21) — Open-gym counted on leaderboard only; fix override persistence
 - `getMemberTrainingCount` now counts only actual class sessions (Total Trainings / member stats) — open-gym visits (no class selected) are excluded from attendance statistics
 - Added `getMemberLeaderboardCount` (class sessions + open-gym visits) and switched the leaderboard to use it, so open-gym check-ins count toward ranking but not toward Total Trainings
