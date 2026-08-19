@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.53 (22:07) — Live-sync class check-ins to Visit History & other views
+- Root cause: realtime only subscribed to `visits` and `notifications`, so a check-in performed on a different device (QR / mobile / kiosk) left the admin's `class_checkins` cache stale — Visit History showed the entry time instead of the chosen class ("Fundamentals") until a full reload/`loadAll`
+- Added a realtime subscription on the `class_checkins` table (`refreshClassCheckins`) for all clients, so new/edited class check-ins appear immediately in Visit History, the kiosk "Currently Inside" tags, and the calendar
+- `refreshClassCheckins` mirrors `refreshVisits` (diffs against the canonical mirror, respects the flush guard, then re-renders via `scheduleAfterCloudSyncRender`)
+- Auto-checkout itself is unchanged: the pg_cron `auto-checkout-visits` job (every minute) closes a visit at its `expected_exit_time` (class end + 15 min), so members are not "instantly" checked out by design
+
 ## 2026-08-17 — v0.52 (02:06) — Fix Dashboard Check-in Log date boundaries, attribution, validations, and sync
 - Date filters in Check-in Log (`renderVisitLog`) now use `Utils.dayStart` and `Utils.dayEnd` to parse local day boundaries without UTC midnight timezone offset shifts
 - Soft-deleted members in Recycle Bin (`DB.getBin()`) are now checked in `getVisitPaidByInfo` so paid historical visits correctly attribute to their plans

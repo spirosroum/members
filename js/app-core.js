@@ -682,6 +682,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'visits' }, () => this.refreshVisits())
                         .subscribe();
                 }
+                if (!this._subs.classCheckins) {
+                    this._subs.classCheckins = sb.channel('class-checkins-changes')
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'class_checkins' }, () => this.refreshClassCheckins())
+                        .subscribe();
+                }
                 if (FSEngine.isAdminClient() && !this._subs.notifications) {
                     this._subs.notifications = sb.channel('notifications-changes')
                         .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => this.refreshNotifications())
@@ -704,6 +709,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     fallbackToLocal();
                     scheduleAfterCloudSyncRender();
                 } catch (e) { console.warn('realtime visits refresh failed', e); }
+            },
+            async refreshClassCheckins() {
+                if (!this.loaded) return;
+                if (this._flushPromise) return;
+                try {
+                    const rows = await this._fetch('class_checkins');
+                    STATE.classCheckins = rows.map(MAPS.classCheckins.from);
+                    this.mirrors.classCheckins = new Map(STATE.classCheckins.map(r => [String(r.id), JSON.stringify(MAPS.classCheckins.to(r))]));
+                    fallbackToLocal();
+                    scheduleAfterCloudSyncRender();
+                } catch (e) { console.warn('realtime class-checkins refresh failed', e); }
             },
             async refreshNotifications() {
                 if (!this.loaded) return;
