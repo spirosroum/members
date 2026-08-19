@@ -275,6 +275,12 @@ Object.assign(App, {
             // the window: not on closed dates, not in the future, and only for classes
             // whose available_from date had passed (so classes added later never penalize
             // a member who couldn't have attended them).
+            // Classes the app treats as active/visible: present in the schedule and not
+            // hidden (isPublic !== false). Soft-deleted classes are already absent from
+            // DB.getSchedules(). Hidden/inactive classes are excluded here so they are
+            // neither calculated into attendance % nor displayed in Day Details.
+            getActiveSchedules: () => (DB.getSchedules() || []).filter(s => s.isPublic !== false),
+
             buildAvailableTrainings: (since, until) => {
                 const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                 const closedSet = Utils.buildClosedSet(until.getFullYear() + 1);
@@ -284,7 +290,7 @@ Object.assign(App, {
                 cursor.setHours(0, 0, 0, 0);
                 const end = new Date(until);
                 end.setHours(23, 59, 59, 999);
-                const schedules = DB.getSchedules();
+                const schedules = App.getActiveSchedules();
                 while (cursor <= end) {
                     const dayIso = Utils.dateToLocalIso(cursor);
                     if (dayIso > today) break;
@@ -786,10 +792,16 @@ Object.assign(App, {
                 App.renderVisitLog();
             },
 
-            // Day detail modal: group a day's check-ins by class, then a fallback
-            // section for visits with no (or deleted) class. Clicking a day in the
-            // analytical calendar now opens this instead of jumping straight to the log.
+            // Day detail modal: group a day's check-ins by class, then fallback sections
+            // for visits with no (or inactive/removed) class. Clicking a day in the
+            // analytical calendar opens this instead of jumping straight to the log.
             openAnalyticalDay: (dateStr) => {
+                App.renderAnalyticalDayContent(dateStr);
+                App._dayDetailDate = dateStr;
+                App.openModal('modal-analytical-day');
+            },
+
+            renderAnalyticalDayContent: (dateStr) => {
                 const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                 const [y, m, d] = dateStr.split('-').map(Number);
                 const weekday = dayNames[new Date(y, m - 1, d).getDay()];
@@ -806,7 +818,7 @@ Object.assign(App, {
                 const byVisit = {};
                 checkins.forEach(c => { (byVisit[c.visitId] = byVisit[c.visitId] || []).push(c); });
 
-                const schedules = DB.getSchedules() || [];
+                const schedules = App.getActiveSchedules();
                 const validClassIds = new Set(schedules.map(s => s.id));
 
                 const rowHtml = (visit) => {
@@ -824,7 +836,11 @@ Object.assign(App, {
                                 <strong>${name}</strong> ${belt}
                                 <span class="text-gray" style="font-size:0.85rem;">${time}</span>
                             </div>
-                            ${pay}
+                            <div class="analytical-day-actions">
+                                ${pay}
+                                <button class="btn-outline btn-small" onclick="App.editVisitFromDayDetail('${visit.id}')" title="Edit check-in">Edit</button>
+                                <button class="btn-danger btn-small" onclick="App.deleteVisitFromDayDetail('${visit.id}')" title="Delete check-in">Delete</button>
+                            </div>
                         </div>`;
                 };
 
@@ -835,11 +851,11 @@ Object.assign(App, {
                             <strong>${Utils.escapeHTML(title)}</strong>
                             <span class="badge badge-inside">${rows.length}</span>
                         </div>
-                        ${rows.length ? rows.join('') : '<div class="text-gray" style="padding:0.5rem 0 0.25rem 0; font-size:0.9rem;">No check-ins.</div>'}
+                        ${rows.length ? rows.join('') : '<div class="analytical-day-empty">No check-ins.</div>'}
                     </div>`;
 
                 const groups = [];
-                // Group by each scheduled class on this weekday.
+                // Group by each active (visible) class on this weekday.
                 schedules.forEach(cls => {
                     const slotForDay = (cls.slots || []).find(s => s.day === weekday);
                     if (!slotForDay) return;
@@ -849,12 +865,13 @@ Object.assign(App, {
                     groups.push(sectionHtml(cls.name, cls.color || '#2563eb', rows));
                 });
 
-                // Orphaned check-ins (class deleted) — time only.
+                // Check-ins whose class is no longer active (hidden or deleted) — time only,
+                // so full history is preserved without attributing to that class.
                 const orphanedCheckins = checkins.filter(c => !validClassIds.has(c.classId));
                 const orphanVisitIds = new Set(orphanedCheckins.map(c => c.visitId));
                 if (orphanVisitIds.size) {
                     const rows = visits.filter(v => orphanVisitIds.has(v.id)).map(rowHtml);
-                    groups.push(sectionHtml('Removed classes', 'var(--gray)', rows));
+                    groups.push(sectionHtml('Inactive / Removed classes', 'var(--gray)', rows));
                 }
 
                 // Visits with no class at all → open gym.
@@ -870,7 +887,32 @@ Object.assign(App, {
                 document.getElementById('analytical-day-content').innerHTML = groups.length
                     ? groups.join('')
                     : '<div class="text-gray" style="text-align:center; padding:2rem 0;">No check-ins or classes on this day.</div>';
-                App.openModal('modal-analytical-day');
+            },
+
+            // Open the existing Visit Edit modal from a Day Details row; the date is already
+            // stored on App._dayDetailDate so the modal re-renders after save.
+            editVisitFromDayDetail: (id) => {
+                App.openVisitEditModal(id);
+            },
+
+            // Delete a check-in directly from Day Details (removes the visit and its class
+            // check-ins, then re-renders the open modal + Visit Log / live views).
+            deleteVisitFromDayDetail: (id) => {
+                if (!confirm('Permanently delete this check-in record?')) return;
+                const visits = DB.getVisits();
+                const v = visits.find(x => x.id === id);
+                const memberId = v ? v.memberId : null;
+                DB.saveVisits(visits.filter(x => x.id !== id));
+                App.cleanupClassCheckins();
+                if (memberId) App.reconcileMemberPaymentVisitStatus(memberId);
+                App.renderVisitLog();
+                App.renderLivePresent();
+                App.renderKioskLeaderboard();
+                if (!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) {
+                    App.renderAdminDashboard();
+                }
+                const date = App._dayDetailDate;
+                if (date) App.renderAnalyticalDayContent(date);
             },
 
             analyticalDayOpenLog: () => {
@@ -1288,6 +1330,10 @@ Object.assign(App, {
                     if (!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) {
                         App.renderAdminDashboard();
                     }
+                    // If the Day Details modal was the source, refresh it after the edit.
+                    if (App._dayDetailDate && !document.getElementById('modal-analytical-day').classList.contains('hidden')) {
+                        App.renderAnalyticalDayContent(App._dayDetailDate);
+                    }
                 }
             },
 
@@ -1310,6 +1356,9 @@ Object.assign(App, {
                 App.renderKioskLeaderboard();
                 if (!document.getElementById('pane-admin-dashboard').classList.contains('hidden')) {
                     App.renderAdminDashboard();
+                }
+                if (App._dayDetailDate && !document.getElementById('modal-analytical-day').classList.contains('hidden')) {
+                    App.renderAnalyticalDayContent(App._dayDetailDate);
                 }
             },
 

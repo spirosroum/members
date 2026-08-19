@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.57 (22:54) — Day Details: active-class filter, per-session edit/delete, spacing fix
+- Added `App.getActiveSchedules()` (schedules where `isPublic !== false`); `buildAvailableTrainings` now uses it so hidden/inactive classes are excluded from the attendance % denominator (training stats) — hidden classes the member attended no longer count toward their %
+- Day Details now builds class sections only from active/visible classes; check-ins whose class is hidden or deleted group under "Inactive / Removed classes" (time-only), preserving full history
+- Day Details rows now have Edit + Delete buttons per check-in: Edit opens the existing Visit Edit modal (and the Day Details view re-renders after save); Delete removes the visit + its class check-ins and reconciles the member, then refreshes Day Details
+- Refactored Day Details rendering into `renderAnalyticalDayContent` so edits/deletes refresh in place without re-pushing the modal onto the stack
+- Fixed awkward spacing when a section shows "No check-ins": compact `.analytical-day-empty` state and tightened section margins
+
 ## 2026-08-19 — v0.56 (22:45) — Analytical calendar day-detail modal
 - Clicking a day in the Check-in Activity Calendar now opens a "Day Details" modal (`modal-analytical-day` / `App.openAnalyticalDay`) instead of jumping straight to the Visit Log
 - The modal groups the day's check-ins into subsections: one per scheduled class (name, color dot, member count), a "Removed classes" section for check-ins whose class was deleted (time-only rows), and an "Open Gym / No class" section
