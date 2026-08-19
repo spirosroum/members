@@ -184,14 +184,10 @@ Object.assign(App, {
                 }
             },
 
-            // Training count used by the leaderboard and member stats.
-            // Intentional: one "training" = one unique class/date/time-slot check-in,
-            // NOT one check-in action. A member who checks in for two classes in a
-            // single action (e.g. back-to-back classes) therefore earns TWO trainings
-            // here, even though session bundles are consumed per action (see
-            // confirmKioskClassSelection / confirmAdminCheckinSelection).
-            // Falls back to raw visit count only when no class check-ins exist
-            // (legacy data recorded before class-level check-ins).
+            // Training count used by the member stats (Total Trainings, averages).
+            // Counts only actual class sessions (unique class/date/time-slot check-ins).
+            // Open-gym visits (no class selected) are intentionally excluded here — they
+            // appear only on the leaderboard via getMemberLeaderboardCount.
             getMemberTrainingCount: (memberId, sinceDate = null, untilDate = null) => {
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
                 let filtered = checkins;
@@ -205,14 +201,21 @@ Object.assign(App, {
                     uniqueSessionKeys.add(sessionKey);
                 });
 
-                if (uniqueSessionKeys.size > 0) {
-                    return uniqueSessionKeys.size;
-                }
+                return uniqueSessionKeys.size;
+            },
 
+            // Leaderboard count = class sessions + open-gym visits (a visit with no class
+            // check-in). This is what ranks members on the leaderboard; Total Trainings in
+            // the member stats deliberately excludes open gym.
+            getMemberLeaderboardCount: (memberId, sinceDate = null) => {
+                const classCount = App.getMemberTrainingCount(memberId, sinceDate);
+                const checkinVisitIds = new Set(DB.getClassCheckins()
+                    .filter(c => c.memberId === memberId)
+                    .map(c => c.visitId));
                 const visits = DB.getVisits().filter(v => v.memberId === memberId
-                    && (!sinceDate || new Date(v.entryTime) >= sinceDate)
-                    && (!untilDate || new Date(v.entryTime) < untilDate));
-                return visits.length;
+                    && (!sinceDate || new Date(v.entryTime) >= sinceDate));
+                const openGym = visits.filter(v => !checkinVisitIds.has(v.id)).length;
+                return classCount + openGym;
             },
 
             getMemberLeaderboardRank: (memberId) => {

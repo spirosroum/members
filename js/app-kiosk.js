@@ -518,7 +518,7 @@ Object.assign(App, {
                     .filter(member => !member.hideFromLeaderboard)
                     .map(member => ({
                         member,
-                        count: App.getMemberTrainingCount(member.id, threeMonthsAgo)
+                        count: App.getMemberLeaderboardCount(member.id, threeMonthsAgo)
                     }))
                     .filter(entry => entry.count > 0)
                     .sort((a, b) => b.count - a.count || a.member.lastName.localeCompare(b.member.lastName));

@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.60 (00:21) — Open-gym counted on leaderboard only; fix override persistence
+- `getMemberTrainingCount` now counts only actual class sessions (Total Trainings / member stats) — open-gym visits (no class selected) are excluded from attendance statistics
+- Added `getMemberLeaderboardCount` (class sessions + open-gym visits) and switched the leaderboard to use it, so open-gym check-ins count toward ranking but not toward Total Trainings
+- NOTE: the one-off override persistence requires the `cancelled` column in `schedule_overrides` — if the table was created from the chat SQL (which lacked it), apply: `alter table public.schedule_overrides add column if not exists cancelled boolean not null default false;`
+
 ## 2026-08-19 — v0.59 (23:31) — One-off class instance overrides + explicit activation date
 - Day Details Edit is now date-specific: a new `schedule_overrides` table + `modal-day-override` lets an admin replace that date's class instance with another existing class, or set a custom name/details for that date only — the recurring weekly schedule is untouched
 - When replacing with another class, that date's check-ins are re-pointed to the replacement class (per the chosen attribution); clearing/replacing updates attendance and Day Details accordingly
