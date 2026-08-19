@@ -336,6 +336,12 @@ Object.assign(App, {
                                 if (slot.day !== dayName) return;
                                 const eff = App.resolveInstance(cls, dayIso);
                                 if (eff.cancelled) return;
+                                if (dayIso === today && slot.start) {
+                                    const [sh, sm] = slot.start.split(':').map(Number);
+                                    const sessionStart = new Date(dayIso + 'T' + slot.start + ':00');
+                                    const now = new Date();
+                                    if (!isNaN(sessionStart.getTime()) && sessionStart > now) return;
+                                }
                                 sessions.push({ date: dayIso, classId: eff.classId, className: eff.name, slotStart: slot.start, slotEnd: slot.end });
                             });
                         });

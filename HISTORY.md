@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.63 (00:50) — Rename Attendance %, skip not-yet-started sessions
+- Renamed the admin member modal's "Attendance %" section to "Attendance Statistics" (and the matching Activation Date helper text)
+- Attendance Statistics no longer counts today's class sessions whose start time hasn't arrived yet — only classes that have already begun (or are on past days) count toward the denominator
+
 ## 2026-08-20 — v0.62 (00:40) — Fix payment history loss risk from sync diff-delete
 - Fixed a data-loss bug where a payment/notification history could be wiped from Supabase: the sync layer's diff (`persist`) would hard-delete rows that exist in the in-memory mirror but are missing from `STATE`. When the sensitive collections (`payments`, `notifications`) were emptied client-side (non-admin boot / admin lock via `clearSensitiveData`) while a stale mirror remained, a subsequent admin flush would permanently delete every row from the DB.
 - Payments are now upsert-only in `flush()` — they can only be removed through the `delete_payment` RPC (followed by a reload), never by the sync diff.
