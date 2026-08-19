@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-19 — v0.59 (23:31) — One-off class instance overrides + explicit activation date
+- Day Details Edit is now date-specific: a new `schedule_overrides` table + `modal-day-override` lets an admin replace that date's class instance with another existing class, or set a custom name/details for that date only — the recurring weekly schedule is untouched
+- When replacing with another class, that date's check-ins are re-pointed to the replacement class (per the chosen attribution); clearing/replacing updates attendance and Day Details accordingly
+- Day Details Delete now cancels just that date's instance (a `cancelled` one-off override, shown as a strikethrough "Cancelled" section with a Restore action), keeping the recurring class and all check-ins
+- Attendance % and Day Details honor overrides via `resolveInstance`; cancelled/replaced/hidden instances are excluded from the attendance denominator
+- Added an explicit **Activation Date** field to the class editor (`available_from`); it defaults to today for new classes, is editable, and is auto-set to today when a class is reactivated (hidden → visible) so past dates are not retroactively counted
+- New migration `20260819000007_schedule_overrides.sql` must be applied to Supabase
+
 ## 2026-08-19 — v0.58 (23:06) — Day Details: edit/delete the class (not individual members)
 - Moved the Edit / Delete actions in Day Details from the per-member rows to the class section header, per the request to edit/delete the class itself directly from Day Details
 - Edit opens the existing Schedule editor for that class (`editClassFromDayDetail` → navigate + `editScheduleClass`)

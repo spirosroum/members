@@ -281,6 +281,40 @@ Object.assign(App, {
             // neither calculated into attendance % nor displayed in Day Details.
             getActiveSchedules: () => (DB.getSchedules() || []).filter(s => s.isPublic !== false),
 
+            // One-off override for a (schedule, date) instance, if any.
+            getOverrideFor: (scheduleId, dateIso) =>
+                (DB.getScheduleOverrides() || []).find(o => o.scheduleId === scheduleId && o.date === dateIso) || null,
+
+            // Resolve the effective identity of a class instance on a date, honoring a
+            // one-off override: replacement class, or a custom name/details for that date.
+            // Returns { classId, name, description, color }.
+            resolveInstance: (schedule, dateIso) => {
+                const o = App.getOverrideFor(schedule.id, dateIso);
+                if (!o) {
+                    return { classId: schedule.id, name: schedule.name, description: schedule.description, color: schedule.color || '#2563eb', cancelled: false };
+                }
+                if (o.cancelled) {
+                    return { classId: schedule.id, name: schedule.name, description: schedule.description, color: schedule.color || '#2563eb', cancelled: true };
+                }
+                if (o.replacementClassId) {
+                    const rep = DB.getSchedules().find(s => s.id === o.replacementClassId);
+                    return {
+                        classId: rep ? rep.id : schedule.id,
+                        name: (rep && rep.name) || o.name || schedule.name,
+                        description: (rep && rep.description) || o.description || schedule.description,
+                        color: (rep && rep.color) || o.color || schedule.color || '#2563eb',
+                        cancelled: false
+                    };
+                }
+                return {
+                    classId: schedule.id,
+                    name: o.name || schedule.name,
+                    description: o.description || schedule.description,
+                    color: o.color || schedule.color || '#2563eb',
+                    cancelled: false
+                };
+            },
+
             buildAvailableTrainings: (since, until) => {
                 const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
                 const closedSet = Utils.buildClosedSet(until.getFullYear() + 1);
@@ -299,7 +333,10 @@ Object.assign(App, {
                         schedules.forEach(cls => {
                             if (cls.availableFrom && cls.availableFrom > dayIso) return;
                             (cls.slots || []).forEach(slot => {
-                                if (slot.day === dayName) sessions.push({ date: dayIso, classId: cls.id, className: cls.name, slotStart: slot.start, slotEnd: slot.end });
+                                if (slot.day !== dayName) return;
+                                const eff = App.resolveInstance(cls, dayIso);
+                                if (eff.cancelled) return;
+                                sessions.push({ date: dayIso, classId: eff.classId, className: eff.name, slotStart: slot.start, slotEnd: slot.end });
                             });
                         });
                     }
@@ -852,17 +889,54 @@ Object.assign(App, {
                     </div>`;
 
                 const groups = [];
-                // Group by each active (visible) class on this weekday.
+                // Build the set of effective class instances for this day, honoring one-off
+                // overrides. Keyed by the effective class id so a replaced instance collapses
+                // into the replacement's section instead of duplicating it.
+                const instances = new Map();
+                const addInstance = (cls) => {
+                    const eff = App.resolveInstance(cls, dateStr);
+                    const hasOverride = !!App.getOverrideFor(cls.id, dateStr);
+                    const existing = instances.get(eff.classId);
+                    // Prefer the schedule that owns a one-off override as the Edit target.
+                    if (!existing || (hasOverride && !existing.hasOverride)) {
+                        instances.set(eff.classId, { classId: eff.classId, name: eff.name, color: eff.color, scheduleId: cls.id, hasOverride, cancelled: !!eff.cancelled });
+                    }
+                };
                 schedules.forEach(cls => {
                     const slotForDay = (cls.slots || []).find(s => s.day === weekday);
                     if (!slotForDay) return;
-                    const clsCheckins = checkins.filter(c => c.classId === cls.id);
+                    addInstance(cls);
+                });
+                // Ensure classes that appear in today's check-ins (e.g. a replacement class)
+                // also get a section even if they have no recurring slot this weekday.
+                checkins.forEach(c => {
+                    const cls = DB.getSchedules().find(s => s.id === c.classId);
+                    if (cls && cls.isPublic !== false) addInstance(cls);
+                });
+
+                instances.forEach(inst => {
+                    if (inst.cancelled) {
+                        const actions = `
+                            <button class="btn-outline btn-small" onclick="App.clearDayOverrideFor('${inst.scheduleId}','${dateStr}')" title="Restore this class instance">Restore</button>`;
+                        groups.push(`
+                            <div class="analytical-day-section analytical-day-cancelled">
+                                <div class="analytical-day-section-head">
+                                    <span class="analytical-day-class-dot" style="background:var(--gray);"></span>
+                                    <strong><s>${Utils.escapeHTML(inst.name)}</s></strong>
+                                    <span class="badge badge-inactive">Cancelled</span>
+                                    ${actions ? `<div class="analytical-day-actions">${actions}</div>` : ''}
+                                </div>
+                                <div class="analytical-day-empty">This class did not run on this date.</div>
+                            </div>`);
+                        return;
+                    }
+                    const clsCheckins = checkins.filter(c => c.classId === inst.classId);
                     const clsVisitIds = new Set(clsCheckins.map(c => c.visitId));
                     const rows = visits.filter(v => clsVisitIds.has(v.id)).map(rowHtml);
                     const actions = `
-                        <button class="btn-outline btn-small" onclick="App.editClassFromDayDetail('${cls.id}')" title="Edit this class">Edit</button>
-                        <button class="btn-danger btn-small" onclick="App.deleteClassFromDayDetail('${cls.id}')" title="Delete this class">Delete</button>`;
-                    groups.push(sectionHtml(cls.name, cls.color || '#2563eb', rows, actions));
+                        <button class="btn-outline btn-small" onclick="App.openDayOverride('${inst.scheduleId}','${dateStr}')" title="Edit this class instance for this date">Edit</button>
+                        <button class="btn-danger btn-small" onclick="App.deleteDayInstance('${inst.scheduleId}','${dateStr}')" title="Cancel this class instance for this date">Delete</button>`;
+                    groups.push(sectionHtml(inst.name, inst.color, rows, actions));
                 });
 
                 // Check-ins whose class is no longer active (hidden or deleted) — time only,
@@ -889,31 +963,127 @@ Object.assign(App, {
                     : '<div class="text-gray" style="text-align:center; padding:2rem 0;">No check-ins or classes on this day.</div>';
             },
 
-            // Edit the class itself from Day Details: navigate to the Schedule editor.
-            editClassFromDayDetail: (classId) => {
-                App.closeModal('modal-analytical-day');
-                App.navigate('admin-schedules');
-                App.editScheduleClass(classId);
+            // Open the one-off override editor for a class instance on a specific date.
+            openDayOverride: (scheduleId, dateStr) => {
+                App._dayOverrideDate = dateStr;
+                const cls = DB.getSchedules().find(s => s.id === scheduleId);
+                const override = App.getOverrideFor(scheduleId, dateStr);
+                document.getElementById('day-override-schedule-id').value = scheduleId || '';
+                document.getElementById('day-override-date').value = dateStr;
+                document.getElementById('day-override-title').innerText =
+                    (cls ? cls.name : 'Class') + ' — ' + Utils.formatDate(dateStr);
+
+                // Mode: replace (default) or custom.
+                const replacementMode = !override || !!(override.replacementClassId) || !override.name;
+                document.getElementById('day-override-mode-replace').checked = replacementMode;
+                document.getElementById('day-override-mode-custom').checked = !replacementMode;
+
+                // Replacement class dropdown (excludes the class being overridden).
+                const repSelect = document.getElementById('day-override-replacement');
+                const otherClasses = (DB.getSchedules() || []).filter(s => s.id !== scheduleId && s.isPublic !== false);
+                repSelect.innerHTML = '<option value="">— no change —</option>' + otherClasses.map(s =>
+                    `<option value="${Utils.escapeHTML(s.id)}" ${override && override.replacementClassId === s.id ? 'selected' : ''}>${Utils.escapeHTML(s.name)}</option>`
+                ).join('');
+
+                document.getElementById('day-override-custom-name').value = (override && override.name) || '';
+                document.getElementById('day-override-custom-desc').value = (override && override.description) || '';
+                document.getElementById('day-override-custom-color').value = (override && override.color) || (cls && cls.color) || '#2563eb';
+
+                App.updateDayOverrideModeUI();
+                App.openModal('modal-day-override');
             },
 
-            // Delete the class itself from Day Details: soft-deletes it (moves to bin) and
-            // keeps all existing check-ins, then refreshes the open Day Details view.
-            deleteClassFromDayDetail: (classId) => {
-                if (!confirm('Delete this entire class and all its slots? Existing check-ins will be kept.')) return;
-                const schedules = DB.getSchedules();
-                const bin = DB.getScheduleBin();
-                const cls = schedules.find(c => c.id === classId);
-                if (cls) {
-                    cls.deletedAt = new Date().toISOString();
-                    bin.push(cls);
-                    DB.saveScheduleBin(bin);
-                    DB.saveSchedules(schedules.filter(c => c.id !== classId));
+            updateDayOverrideModeUI: () => {
+                const replace = document.getElementById('day-override-mode-replace').checked;
+                document.getElementById('day-override-replace-block').classList.toggle('hidden', !replace);
+                document.getElementById('day-override-custom-block').classList.toggle('hidden', replace);
+            },
+
+            // Save (or clear) the one-off override. If replacing with another class, re-point
+            // that date's check-ins to the replacement class so attendance/history attribute
+            // them correctly.
+            saveDayOverride: () => {
+                const scheduleId = document.getElementById('day-override-schedule-id').value;
+                const dateStr = document.getElementById('day-override-date').value;
+                if (!scheduleId || !dateStr) return;
+                const replace = document.getElementById('day-override-mode-replace').checked;
+                const replacementClassId = replace
+                    ? document.getElementById('day-override-replacement').value || null
+                    : null;
+                const customName = replace ? '' : document.getElementById('day-override-custom-name').value.trim();
+                const customDesc = replace ? '' : document.getElementById('day-override-custom-desc').value.trim();
+                const customColor = replace ? '' : document.getElementById('day-override-custom-color').value || null;
+
+                const overrides = DB.getScheduleOverrides().filter(o => !(o.scheduleId === scheduleId && o.date === dateStr));
+
+                // Clear: if no replacement and no custom name/details, remove the override.
+                const hasContent = replacementClassId || customName || customDesc || customColor;
+                if (hasContent) {
+                    overrides.push({
+                        id: 'OVR-' + scheduleId + '-' + dateStr,
+                        scheduleId,
+                        date: dateStr,
+                        replacementClassId,
+                        name: customName || null,
+                        description: customDesc || null,
+                        color: customColor || null,
+                        cancelled: false
+                    });
                 }
-                App.renderSchedules();
-                App.renderScheduleBin();
-                App.renderCalendarView('kiosk-schedule-container', false);
-                const date = App._dayDetailDate;
-                if (date) App.renderAnalyticalDayContent(date);
+                DB.saveScheduleOverrides(overrides);
+
+                // If replacing with another class, re-point that date's check-ins to the
+                // replacement class so attendance/day-details attribute them correctly.
+                if (replacementClassId) {
+                    const checkins = DB.getClassCheckins();
+                    let changed = false;
+                    checkins.forEach(c => {
+                        if (c.slotDate === dateStr && c.classId === scheduleId) { c.classId = replacementClassId; changed = true; }
+                    });
+                    if (changed) DB.saveClassCheckins(checkins);
+                }
+
+                App.closeModal('modal-day-override');
+                if (App._dayDetailDate) App.renderAnalyticalDayContent(App._dayDetailDate);
+            },
+
+            // Clear the one-off override for this date (keeps check-ins as-is; if the
+            // override had replaced the class, re-point check-ins back to the original).
+            clearDayOverride: () => {
+                const scheduleId = document.getElementById('day-override-schedule-id').value;
+                const dateStr = document.getElementById('day-override-date').value;
+                if (!scheduleId || !dateStr) return;
+                const existing = App.getOverrideFor(scheduleId, dateStr);
+                const overrides = DB.getScheduleOverrides().filter(o => !(o.scheduleId === scheduleId && o.date === dateStr));
+                DB.saveScheduleOverrides(overrides);
+                // Restore check-ins that had been re-pointed to a replacement class.
+                if (existing && existing.replacementClassId) {
+                    const checkins = DB.getClassCheckins();
+                    let changed = false;
+                    checkins.forEach(c => {
+                        if (c.slotDate === dateStr && c.classId === existing.replacementClassId) { c.classId = scheduleId; changed = true; }
+                    });
+                    if (changed) DB.saveClassCheckins(checkins);
+                }
+                App.closeModal('modal-day-override');
+                if (App._dayDetailDate) App.renderAnalyticalDayContent(App._dayDetailDate);
+            },
+
+            // Cancel this class instance for a single date (one-off "no class" override).
+            // The recurring class stays for all other dates; existing check-ins are kept.
+            deleteDayInstance: (scheduleId, dateStr) => {
+                if (!confirm('Cancel this class for this date only? The recurring schedule stays, and existing check-ins are kept.')) return;
+                const overrides = DB.getScheduleOverrides().filter(o => !(o.scheduleId === scheduleId && o.date === dateStr));
+                overrides.push({ id: 'OVR-' + scheduleId + '-' + dateStr, scheduleId, date: dateStr, replacementClassId: null, name: null, description: null, color: null, cancelled: true });
+                DB.saveScheduleOverrides(overrides);
+                if (App._dayDetailDate) App.renderAnalyticalDayContent(App._dayDetailDate);
+            },
+
+            // Restore a cancelled instance (clear the one-off override for that date).
+            clearDayOverrideFor: (scheduleId, dateStr) => {
+                const overrides = DB.getScheduleOverrides().filter(o => !(o.scheduleId === scheduleId && o.date === dateStr));
+                DB.saveScheduleOverrides(overrides);
+                if (App._dayDetailDate) App.renderAnalyticalDayContent(App._dayDetailDate);
             },
 
             analyticalDayOpenLog: () => {

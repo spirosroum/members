@@ -112,6 +112,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             closedDates: JSON.parse(localStorage.getItem('gym_closed_dates') || '[]'),
             schedules: JSON.parse(localStorage.getItem('gym_schedules') || '[]'),
             scheduleBin: JSON.parse(localStorage.getItem('gym_schedule_bin') || '[]'),
+            scheduleOverrides: JSON.parse(localStorage.getItem('gym_schedule_overrides') || '[]'),
             notifications: JSON.parse(localStorage.getItem('gym_notifications') || '[]'),
             notificationBin: JSON.parse(localStorage.getItem('gym_notification_bin') || '[]'),
             bin: JSON.parse(localStorage.getItem('gym_bin') || '[]'),
@@ -139,6 +140,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_closed_dates', JSON.stringify(STATE.closedDates || []));
                 localStorage.setItem('gym_schedules', JSON.stringify(STATE.schedules || []));
                 localStorage.setItem('gym_schedule_bin', JSON.stringify(STATE.scheduleBin || []));
+                localStorage.setItem('gym_schedule_overrides', JSON.stringify(STATE.scheduleOverrides || []));
                 localStorage.setItem('gym_notifications', JSON.stringify(STATE.notifications || []));
                 localStorage.setItem('gym_notification_bin', JSON.stringify(STATE.notificationBin || []));
                 localStorage.setItem('gym_bin', JSON.stringify(STATE.bin || []));
@@ -419,6 +421,12 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 this._markReady('schedules');
             },
 
+            async loadScheduleOverrides() {
+                const rows = await this._fetch('schedule_overrides');
+                STATE.scheduleOverrides = rows.map(MAPS_EXTRA.overrideFrom);
+                this._markReady('scheduleOverrides');
+            },
+
             async loadClosedDates() {
                 const rows = await this._fetch('closed_dates');
                 STATE.closedDates = rows.map(MAPS_EXTRA.closedDateFrom);
@@ -476,7 +484,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const isAdmin = FSEngine.isAdminClient();
                 await Promise.all([
                     this.load('members'), this.load('visits'), this.load('plans'),
-                    this.load('classCheckins'), this.loadSchedules(), this.loadClosedDates(), this.loadSettings()
+                    this.load('classCheckins'), this.loadSchedules(), this.loadScheduleOverrides(),
+                    this.loadClosedDates(), this.loadSettings()
                 ]);
                 if (isAdmin) {
                     await this.loadAdminOnly();
@@ -562,6 +571,15 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 (existing || []).forEach(e => { if (!keep.has(e.id)) sb.from('closed_dates').delete().eq('id', e.id); });
             },
 
+            async persistScheduleOverrides() {
+                if (!sb || !this.ready.scheduleOverrides) return;
+                const rows = (STATE.scheduleOverrides || []).map(MAPS_EXTRA.overrideTo);
+                for (const c of chunkRows(rows)) await sb.from('schedule_overrides').upsert(c, { onConflict: 'id' });
+                const keep = new Set(rows.map(r => r.id));
+                const { data: existing } = await sb.from('schedule_overrides').select('id');
+                (existing || []).forEach(e => { if (!keep.has(e.id)) sb.from('schedule_overrides').delete().eq('id', e.id); });
+            },
+
             async persistSettings() {
                 if (!sb || !this.ready.settings) return;
                 const p = settingsPayload();
@@ -640,6 +658,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 ['members', 'visits', 'plans', 'classCheckins'].forEach(col => push(this.persist(col)));
                 push(this.persistSchedules());
                 push(this.persistClosedDates());
+                push(this.persistScheduleOverrides());
                 if (isAdmin) {
                     push(this.persist('payments'));
                     push(this.persist('notifications'));
@@ -771,6 +790,26 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 available_from: cls.availableFrom || null
             }),
             closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat, reason: r.reason || '' }),
+            overrideFrom: (r) => ({
+                id: r.id,
+                scheduleId: r.schedule_id,
+                date: r.date,
+                replacementClassId: r.replacement_class_id || null,
+                name: r.name || null,
+                description: r.description || null,
+                color: r.color || null,
+                cancelled: !!r.cancelled
+            }),
+            overrideTo: (o) => ({
+                id: o.id,
+                schedule_id: o.scheduleId,
+                date: o.date,
+                replacement_class_id: o.replacementClassId || null,
+                name: o.name || null,
+                description: o.description || null,
+                color: o.color || null,
+                cancelled: !!o.cancelled
+            }),
             privateFrom: (r) => {
                 const entry = {};
                 if (r.phone != null) entry.phone = r.phone;
@@ -893,6 +932,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getClosedDates: () => STATE.closedDates || [],
             getSchedules: () => STATE.schedules || [],
             getScheduleBin: () => STATE.scheduleBin || [],
+            getScheduleOverrides: () => STATE.scheduleOverrides || [],
             getClassCheckins: () => STATE.classCheckins || [],
             getNotifications: () => STATE.notifications || [],
             getNotificationBin: () => STATE.notificationBin || [],
@@ -936,6 +976,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             saveClosedDates: (data) => { STATE.closedDates = data || []; return saveToCloud(); },
             saveSchedules: (data) => { STATE.schedules = data || []; return saveToCloud(); },
             saveScheduleBin: (data) => { STATE.scheduleBin = data || []; return saveToCloud(); },
+            saveScheduleOverrides: (data) => { STATE.scheduleOverrides = data || []; return saveToCloud(); },
             saveClassCheckins: (data) => { STATE.classCheckins = data || []; return saveToCloud(); },
             saveNotifications: (data) => { STATE.notifications = data || []; return saveToCloud(); },
             saveNotificationBin: (data) => { STATE.notificationBin = data || []; return saveToCloud(); },

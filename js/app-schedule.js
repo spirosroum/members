@@ -102,7 +102,9 @@ Object.assign(App, {
                 const practitioners = document.getElementById('form-sched-practitioners').value.trim();
                 const requirements = document.getElementById('form-sched-requirements').value.trim();
                 const capacity = parseInt(document.getElementById('form-sched-capacity').value, 10) || null;
-                const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, availableFrom: isNew ? Utils.todayLocalIso() : (schedules.find(c => c.id === id) || {}).availableFrom || null, slots: App.draftClassSlots };
+                const availVal = document.getElementById('form-sched-avail').value;
+                const availableFrom = availVal ? availVal : (isNew ? Utils.todayLocalIso() : (schedules.find(c => c.id === id) || {}).availableFrom || null);
+                const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, availableFrom, slots: App.draftClassSlots };
 
                 if (isNew) schedules.push(newClass);
                 else { const idx = schedules.findIndex(c => c.id === id); if(idx > -1) schedules[idx] = newClass; }
@@ -123,6 +125,7 @@ Object.assign(App, {
                 document.getElementById('form-sched-requirements').value = '';
                 document.getElementById('form-sched-visible').checked = true;
                 App.updateClassVisibilityLabel();
+                document.getElementById('form-sched-avail').value = '';
                 App.selectPaletteColor('form-sched-color', 'preset-sched-color-palette', '#2563eb');
                 document.getElementById('btn-delete-schedule').classList.add('hidden');
                 document.getElementById('btn-cancel-schedule-edit').classList.add('hidden');
@@ -144,6 +147,7 @@ Object.assign(App, {
                 document.getElementById('form-sched-requirements').value = cls.requirements || '';
                 document.getElementById('form-sched-visible').checked = cls.isPublic !== false;
                 App.updateClassVisibilityLabel();
+                document.getElementById('form-sched-avail').value = cls.availableFrom || '';
                 App.selectPaletteColor('form-sched-color', 'preset-sched-color-palette', cls.color || '#2563eb');
                 App.draftClassSlots = [...cls.slots];
                 App.renderDraftSlots();
@@ -257,6 +261,11 @@ Object.assign(App, {
                 const cls = schedules.find(c => c.id === id);
                 if (!cls) return;
                 cls.isPublic = !!visible;
+                // Reactivating a class (hidden → visible) restarts its attendance window:
+                // set availableFrom to today so past dates are not retroactively counted.
+                if (visible) {
+                    cls.availableFrom = Utils.todayLocalIso();
+                }
                 DB.saveSchedules(schedules);
                 App.renderClassList();
                 App.renderCalendarView('kiosk-schedule-container', false);
