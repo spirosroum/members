@@ -871,7 +871,8 @@ Object.assign(App, {
                     if (!m) return '';
                     const name = Utils.escapeHTML(m.firstName + ' ' + m.lastName);
                     const belt = Utils.getBeltBadge(m.belt);
-                    const time = `${Utils.formatTime(visit.entryTime)}${visit.exitTime ? ' - ' + Utils.formatTime(visit.exitTime) : ' (Inside)'}`;
+                    const effExit = App.getVisitEffectiveExit(visit);
+                    const time = `${Utils.formatTime(visit.entryTime)}${effExit ? ' - ' + Utils.formatTime(effExit) : ' (Inside)'}`;
                     const pay = visit.isUnpaid
                         ? '<span class="badge badge-inactive">Unpaid</span>'
                         : '<span class="badge badge-active">Paid</span>';
@@ -1341,7 +1342,7 @@ Object.assign(App, {
                     const classTags = App.buildVisitClassTags(v, false, true);
                     let entryHtml = classTags
                         ? classTags
-                        : `<div>${Utils.formatTime(v.entryTime)} ${v.exitTime ? ` - ${Utils.formatTime(v.exitTime)}` : '(Inside)'}</div>
+                        : `<div>${Utils.formatTime(v.entryTime)} ${App.getVisitEffectiveExit(v) ? ` - ${Utils.formatTime(App.getVisitEffectiveExit(v))}` : '(Inside)'}</div>
                            <div class="text-gray" style="font-size:0.8rem;">${App.calcVisitDuration(v)}</div>`;
 
                     return `

@@ -1395,6 +1395,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const hours = App.visitTimeoutHours || 1;
                 return new Date(now.getTime() + hours * 60 * 60 * 1000).toISOString();
             },
+            // Effective check-out time for display. If the visit was never explicitly closed
+            // (exit_time null) but its expected window has passed (e.g. the auto-checkout cron
+            // hasn't run), treat the expected exit as the checkout time so it stops showing
+            // "still inside". Returns null only when genuinely still open.
+            getVisitEffectiveExit: (visit) => {
+                if (!visit) return null;
+                if (visit.exitTime) return visit.exitTime;
+                if (visit.expectedExitTime && new Date(visit.expectedExitTime) <= new Date()) {
+                    return visit.expectedExitTime;
+                }
+                return null;
+            },
             getClassStartTime: (checkin) => {
                 if (!checkin) return null;
                 let y = null, mo = null, d = null;
@@ -1440,9 +1452,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             },
             calcVisitDuration: (visit) => {
                 if (!visit || !visit.id) return Utils.calcDuration(visit && visit.entryTime, visit && visit.exitTime);
-                if (!visit.exitTime) return 'In Progress';
+                const effExit = App.getVisitEffectiveExit(visit);
+                if (!effExit) return 'In Progress';
                 const checkins = DB.getClassCheckins().filter(c => c.visitId === visit.id);
-                if (checkins.length === 0) return Utils.calcDuration(visit.entryTime, visit.exitTime);
+                if (checkins.length === 0) return Utils.calcDuration(visit.entryTime, effExit);
                 let minStart = null;
                 let maxEnd = null;
                 checkins.forEach(c => {
@@ -1462,7 +1475,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (minStart && maxEnd) {
                     return Utils.formatDurationMins(Math.round((maxEnd.getTime() - minStart.getTime()) / 60000));
                 }
-                return Utils.calcDuration(visit.entryTime, visit.exitTime);
+                return Utils.calcDuration(visit.entryTime, effExit);
             },
             computeVisitUnpaid: (member) => {
                 if (!member) return true;
