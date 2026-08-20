@@ -426,8 +426,12 @@ Object.assign(App, {
                     });
                     const publicIds = new Set(DB.getSchedules().filter(s => s.isPublic !== false).map(s => s.id));
                     perClass = perClass.filter(c => publicIds.has(c.classId) || attendedIds.has(c.classId));
-                    const shownAvailable = perClass.reduce((s, c) => s + c.available, 0);
-                    const shownAttended = perClass.reduce((s, c) => s + c.attended, 0);
+                    // Mark classes the member isn't attending (0 attended in the window) so
+                    // they show as "Not attending" and do NOT lower the overall %.
+                    perClass.forEach(c => { c.notAttending = c.attended === 0; });
+                    const overallClasses = perClass.filter(c => !c.notAttending);
+                    const shownAvailable = overallClasses.reduce((s, c) => s + c.available, 0);
+                    const shownAttended = overallClasses.reduce((s, c) => s + c.attended, 0);
                     return { attended: shownAttended, available: shownAvailable, pct: shownAvailable > 0 ? Math.round(shownAttended / shownAvailable * 100) : null, perClass };
                 }
                 const pct = totalAvailable > 0 ? Math.round(totalMatched / totalAvailable * 100) : null;

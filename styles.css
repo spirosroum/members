@@ -517,6 +517,8 @@
         .att-class-bar { flex: 1 1 auto; height: 10px; background: var(--gray-light); border-radius: 999px; overflow: hidden; min-width: 50px; }
         .att-class-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; }
         .att-class-pct { flex: 0 0 auto; min-width: 42px; text-align: right; font-weight: 800; font-size: 0.9rem; }
+        .att-class-emoji { flex: 0 0 auto; font-size: 1.1rem; width: 1.4rem; text-align: center; }
+        .att-class-not-attending .att-class-name { opacity: 0.6; }
 
         /* Best-class / streak highlights above the per-class list */
         .member-attendance-highlights { display: flex; flex-direction: column; gap: 0.45rem; margin-top: 0.9rem; padding: 0.7rem 0.9rem; background: var(--light); border-radius: var(--border-radius); border: 1px solid var(--gray-light); }

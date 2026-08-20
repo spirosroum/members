@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.63 (18:50) — Member attendance: not-attending classes + per-row emoji
+- Classes the member hasn't attended in the window now show "Not attending" (i18n `memberViewNotAttending`) instead of 0%, and are excluded from the Overall % so they don't lower it; the per-person available window already starts at the member's first check-in in the last 90 days
+- Restored the gamified per-class emoji in the member attendance rows (`att-class-emoji`)
+
 ## 2026-08-20 — v0.62 (18:36) — Schedule: hide empty days + activation-date visibility
 - Training Schedule now hides any day with no public classes that week (previously only Sat/Sun were hidden), and the remaining day columns stretch to fill the full width via the existing `--days-count` grid
 - A class is now shown in the schedule only from its activation date (`availableFrom`) onward, so a class activated this week no longer appears in earlier weeks' views

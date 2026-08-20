@@ -534,7 +534,7 @@ Object.assign(App, {
                 // a 0% "best class" is meaningless, so below the feedback threshold the
                 // highlight is skipped entirely. Streak = consecutive weeks (Mon-based)
                 // with at least one training inside the window.
-                const bestClass = res.perClass.find(c => c.pct != null && c.pct >= 50) || null;
+                const bestClass = res.perClass.find(c => !c.notAttending && c.pct != null && c.pct >= 50) || null;
                 const weekSet = new Set();
                 DB.getClassCheckins().forEach(ci => {
                     if (ci.memberId !== member.id || !ci.entryTime) return;
@@ -588,12 +588,21 @@ Object.assign(App, {
                     ${res.perClass.length ? `
                         <div class="member-attendance-classes">
                             ${res.perClass.map(c => {
+                                if (c.notAttending) {
+                                    return `
+                                    <div class="att-class-row att-class-not-attending">
+                                        <strong class="att-class-name">${Utils.escapeHTML(c.name)}</strong>
+                                        <div class="att-class-bar"></div>
+                                        <span class="att-class-pct text-gray" style="font-style:italic;">${Utils.escapeHTML(map.memberViewNotAttending || 'Not attending')}</span>
+                                    </div>`;
+                                }
                                 const cc = App.attendanceColor(c.pct);
                                 return `
                                 <div class="att-class-row">
                                     <strong class="att-class-name">${Utils.escapeHTML(c.name)}</strong>
                                     <div class="att-class-bar">${c.pct != null ? `<div class="att-class-fill" style="width:${c.pct}%; ${cc ? `background:${cc};` : 'background:var(--gray);'}"></div>` : ''}</div>
                                     <span class="att-class-pct" style="color:${c.pct != null ? (cc || 'inherit') : 'inherit'};">${c.pct == null ? '—' : c.pct + '%'}</span>
+                                    <span class="att-class-emoji">${App.attendanceEmoji(c.pct)}</span>
                                 </div>`;
                             }).join('')}
                         </div>` : `<div class="text-gray" style="text-align:center; padding:1rem 0;">${Utils.escapeHTML(map.memberViewNoAttendance || 'No class sessions available in this period.')}</div>`}
