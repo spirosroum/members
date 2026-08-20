@@ -718,6 +718,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const { error } = await sb.rpc('delete_payment', { p_member_id: memberId, p_payment_id: paymentId });
                 if (error) throw error;
             },
+            async recomputeMember(memberId) {
+                const { error } = await sb.rpc('recompute_member_admin', { p_member_id: memberId });
+                if (error) throw error;
+            },
             async renameMember(oldId, newId) {
                 const { error } = await sb.rpc('rename_member', { p_old_id: oldId, p_new_id: newId });
                 if (error) throw error;
@@ -893,6 +897,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             flush: () => Sync.flush(),
             checkIn: (payload) => Sync.checkIn(payload),
             reloadCheckinData: () => Sync.reloadCheckinData(),
+            recomputeMember: (memberId) => Sync.recomputeMember(memberId),
             resyncAll: () => { Sync.loadAll().then(() => scheduleAfterCloudSyncRender()); }
         };
 

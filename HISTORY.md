@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.66 (23:46) — Fix payment recompute inverting "covered (no payment record)" check-ins
+- Root cause: `recompute_member`'s full reset (`update visits set is_unpaid = (paid_override is distinct from 'paid')`) wiped the paid status of any visit that is paid but has no covering payment record and no `paid_override` ("paid: covered (no payment record)"). With no ledger backing to re-derive from, adding a new payment (e.g. a drop-in session) then left that previously-paid check-in Unpaid while the new session got consumed by another visit — statuses inverted.
+- New migration `20260820000009_fix_recompute_preserve_covered.sql` (create-or-replace `recompute_member`): the reset now preserves currently-paid visits that have no manual override and are not attributable to a covering time-payment window. Time/membership-covered visits are still reset and re-derived, so deleting a payment still re-marks its visits unpaid.
+
 ## 2026-08-20 — v0.64 (19:06) — Member portal: unpaid spacing + class shown in history
 - Added spacing below the Unpaid Training Sessions description (was cramped against the table)
 - Added a Class column to the member's "Unpaid Training Sessions" and "My Personal Calendar & Check-in History" tables, showing the attended class (e.g. Fundamentals) via `buildVisitClassTags`; open-gym/no-class rows show "—"

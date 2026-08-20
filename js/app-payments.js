@@ -543,7 +543,6 @@ Object.assign(App, {
                 if (changed) DB.saveVisits(visits);
                 if (memberSessionChanged || memberHealed) DB.saveMembers(members);
             },
-
             /**
              * Handles saving a payment record from the payment modal form.
              * 
