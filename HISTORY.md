@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.62 (18:36) — Schedule: hide empty days + activation-date visibility
+- Training Schedule now hides any day with no public classes that week (previously only Sat/Sun were hidden), and the remaining day columns stretch to fill the full width via the existing `--days-count` grid
+- A class is now shown in the schedule only from its activation date (`availableFrom`) onward, so a class activated this week no longer appears in earlier weeks' views
+
 ## 2026-08-20 — v0.61 (18:27) — Training Schedule shows real week dates + syncs cancellations
 - The Training Schedule calendar (kiosk + admin master) now displays the actual dates of the current week under each day (e.g. "Monday 12 Aug") instead of bare day names, via `getWeekDates` (Monday-first)
 - Added prev/next week navigation (`scheduleWeekNav`) and a week-range label in both the kiosk card header and the admin master calendar

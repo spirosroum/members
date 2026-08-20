@@ -320,7 +320,12 @@ Object.assign(App, {
 
                 days.forEach((day, i) => {
                     let daySlots = [];
+                    const dateObj = weekDates[i];
+                    const dateIso = Utils.dateToLocalIso(dateObj);
                     schedules.forEach(cls => {
+                        // A class is only shown from its activation date onward, so a class
+                        // activated this week does not appear in earlier weeks' schedule.
+                        if (cls.availableFrom && cls.availableFrom > dateIso) return;
                         (cls.slots || []).filter(s => s.day === day).forEach(slot => {
                             daySlots.push({ ...slot, className: cls.name, classId: cls.id, color: cls.color || '#2563eb' });
                         });
@@ -328,11 +333,10 @@ Object.assign(App, {
 
                     daySlots.sort((a,b) => a.start.localeCompare(b.start));
 
-                    // Hide Saturday or Sunday columns only when they have no classes
-                    if ((day === 'Saturday' || day === 'Sunday') && daySlots.length === 0) return;
+                    // Hide any day that has no classes this week; the grid stretches the
+                    // remaining days to fill the full width.
+                    if (daySlots.length === 0) return;
 
-                    const dateObj = weekDates[i];
-                    const dateIso = Utils.dateToLocalIso(dateObj);
                     const visibleDay = (containerId === 'kiosk-schedule-container' && App.currentKioskLang && App.KIOSK_I18N[App.currentKioskLang])
                         ? App.KIOSK_I18N[App.currentKioskLang].days[day] || day
                         : day;
