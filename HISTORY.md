@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.67 (23:55) — Deleting a payment now reverts its visits to Unpaid
+- The 000009 recompute preservation (keep "paid: covered (no payment record)" visits paid) also prevented deleting a session/time payment from re-marking its visits unpaid, because recompute can't tell a no-record visit from one paid solely by a session payment.
+- New migration `20260820000010_fix_delete_payment_unpay.sql` (create-or-replace `delete_payment`): it now explicitly un-pays the visits the deleted payment covered (time-window visits, or the first N session-quota visits) before recompute, so those visits are no longer "currently paid" and are not preserved. recompute then re-covers any still covered by remaining payments, and genuine no-record visits (not covered by the deleted payment) stay preserved.
+
 ## 2026-08-20 — v0.66 (23:46) — Fix payment recompute inverting "covered (no payment record)" check-ins
 - Root cause: `recompute_member`'s full reset (`update visits set is_unpaid = (paid_override is distinct from 'paid')`) wiped the paid status of any visit that is paid but has no covering payment record and no `paid_override` ("paid: covered (no payment record)"). With no ledger backing to re-derive from, adding a new payment (e.g. a drop-in session) then left that previously-paid check-in Unpaid while the new session got consumed by another visit — statuses inverted.
 - New migration `20260820000009_fix_recompute_preserve_covered.sql` (create-or-replace `recompute_member`): the reset now preserves currently-paid visits that have no manual override and are not attributable to a covering time-payment window. Time/membership-covered visits are still reset and re-derived, so deleting a payment still re-marks its visits unpaid.
