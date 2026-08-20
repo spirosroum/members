@@ -56,8 +56,10 @@ App.KIOSK_I18N = {
         memberUnpaidDateHeader: 'Date',
         memberUnpaidEntryHeader: 'Entry Time',
         memberUnpaidDurationHeader: 'Duration',
+        memberUnpaidClassHeader: 'Class',
         memberViewNoUnpaid: 'You have no unpaid trainings!',
         memberViewNoHistory: 'No history found.',
+        memberViewHistoryClass: 'Class',
         memberViewHistoryDate: 'Date',
         memberViewHistoryEntry: 'Entry',
         memberViewHistoryDuration: 'Duration',
@@ -235,8 +237,10 @@ App.KIOSK_I18N = {
         memberUnpaidDateHeader: 'Ημερομηνία',
         memberUnpaidEntryHeader: 'Ώρα Εισόδου',
         memberUnpaidDurationHeader: 'Διάρκεια',
+        memberUnpaidClassHeader: 'Μάθημα',
         memberViewNoUnpaid: 'Δεν έχετε απλήρωτες προπονήσεις!',
         memberViewNoHistory: 'Δεν βρέθηκαν εγγραφές.',
+        memberViewHistoryClass: 'Μάθημα',
         memberViewHistoryDate: 'Ημερομηνία',
         memberViewHistoryEntry: 'Είσοδος',
         memberViewHistoryDuration: 'Διάρκεια',
@@ -498,6 +502,7 @@ App.applyKioskTranslations = function() {
         const memberUnpaidDateHeader = document.getElementById('member-unpaid-date-header'); if (memberUnpaidDateHeader) memberUnpaidDateHeader.innerText = map.memberUnpaidDateHeader || 'Date';
         const memberUnpaidEntryHeader = document.getElementById('member-unpaid-entry-header'); if (memberUnpaidEntryHeader) memberUnpaidEntryHeader.innerText = map.memberUnpaidEntryHeader || 'Entry Time';
         const memberUnpaidDurationHeader = document.getElementById('member-unpaid-duration-header'); if (memberUnpaidDurationHeader) memberUnpaidDurationHeader.innerText = map.memberUnpaidDurationHeader || 'Duration';
+        const memberUnpaidClassHeader = document.getElementById('member-unpaid-class-header'); if (memberUnpaidClassHeader) memberUnpaidClassHeader.innerText = map.memberUnpaidClassHeader || 'Class';
         if (!document.getElementById('view-member').classList.contains('hidden')) App.renderMemberDashboard();
 
         // --- Additional kiosk-only translations requested ---

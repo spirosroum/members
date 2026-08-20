@@ -158,6 +158,7 @@ Object.assign(App, {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const noHistoryText = containerId === 'member-personal-history' ? (map.memberViewNoHistory || 'No history found.') : 'No history found.';
+                const classHeader = containerId === 'member-personal-history' ? (map.memberViewHistoryClass || 'Class') : 'Class';
                 const dateHeader = containerId === 'member-personal-history' ? (map.memberViewHistoryDate || 'Date') : 'Date';
                 const entryHeader = containerId === 'member-personal-history' ? (map.memberViewHistoryEntry || 'Entry') : 'Entry';
                 const durationHeader = containerId === 'member-personal-history' ? (map.memberViewHistoryDuration || 'Duration') : 'Duration';
@@ -168,10 +169,11 @@ Object.assign(App, {
                 } else {
                     container.innerHTML = `<div class="table-responsive mobile-cards" style="border:none;">
                         <table style="width: 100%;">
-                            <thead><tr><th>${Utils.escapeHTML(dateHeader)}</th><th>${Utils.escapeHTML(entryHeader)}</th><th>${Utils.escapeHTML(durationHeader)}</th><th>${Utils.escapeHTML(statusHeader)}</th></tr></thead>
+                            <thead><tr><th>${Utils.escapeHTML(classHeader)}</th><th>${Utils.escapeHTML(dateHeader)}</th><th>${Utils.escapeHTML(entryHeader)}</th><th>${Utils.escapeHTML(durationHeader)}</th><th>${Utils.escapeHTML(statusHeader)}</th></tr></thead>
                             <tbody>
                                 ${visits.map(v => `
                                     <tr>
+                                        <td data-label="${Utils.escapeHTML(classHeader)}">${App.buildVisitClassTags(v, true, true) || '<span class="text-gray">—</span>'}</td>
                                         <td data-label="${Utils.escapeHTML(dateHeader)}">${Utils.formatDate(v.entryTime)}</td>
                                         <td data-label="${Utils.escapeHTML(entryHeader)}">${Utils.formatTime(v.entryTime)}</td>
                                         <td data-label="${Utils.escapeHTML(durationHeader)}">${App.calcVisitDuration(v)}</td>
@@ -480,11 +482,13 @@ Object.assign(App, {
                 const listEl = document.getElementById('member-unpaid-visits-list');
 
                 if (unpaidVisits.length > 0) {
+                    const classHeader = map.memberUnpaidClassHeader || 'Class';
                     const dateHeader = map.memberUnpaidDateHeader || 'Date';
                     const entryHeader = map.memberUnpaidEntryHeader || 'Entry Time';
                     const durationHeader = map.memberUnpaidDurationHeader || 'Duration';
                     listEl.innerHTML = unpaidVisits.sort((a,b) => new Date(b.entryTime) - new Date(a.entryTime)).map(v => `
                         <tr>
+                            <td data-label="${Utils.escapeHTML(classHeader)}">${App.buildVisitClassTags(v, true, true) || '<span class="text-gray">—</span>'}</td>
                             <td data-label="${Utils.escapeHTML(dateHeader)}">${Utils.formatDate(v.entryTime)}</td>
                             <td data-label="${Utils.escapeHTML(entryHeader)}">${Utils.formatTime(v.entryTime)}</td>
                             <td data-label="${Utils.escapeHTML(durationHeader)}">${App.calcVisitDuration(v)}</td>

@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.64 (19:06) — Member portal: unpaid spacing + class shown in history
+- Added spacing below the Unpaid Training Sessions description (was cramped against the table)
+- Added a Class column to the member's "Unpaid Training Sessions" and "My Personal Calendar & Check-in History" tables, showing the attended class (e.g. Fundamentals) via `buildVisitClassTags`; open-gym/no-class rows show "—"
+- New i18n keys `memberUnpaidClassHeader` and `memberViewHistoryClass` (EN+EL)
+
 ## 2026-08-20 — v0.63 (18:50) — Member attendance: not-attending classes + per-row emoji
 - Classes the member hasn't attended in the window now show "Not attending" (i18n `memberViewNotAttending`) instead of 0%, and are excluded from the Overall % so they don't lower it; the per-person available window already starts at the member's first check-in in the last 90 days
 - Restored the gamified per-class emoji in the member attendance rows (`att-class-emoji`)
