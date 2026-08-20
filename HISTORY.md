@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.61 (18:27) — Training Schedule shows real week dates + syncs cancellations
+- The Training Schedule calendar (kiosk + admin master) now displays the actual dates of the current week under each day (e.g. "Monday 12 Aug") instead of bare day names, via `getWeekDates` (Monday-first)
+- Added prev/next week navigation (`scheduleWeekNav`) and a week-range label in both the kiosk card header and the admin master calendar
+- Classes cancelled through the Check-in Activity Calendar (a `cancelled` `schedule_overrides` row for that date) now render greyed-out with a strikethrough and "Cancelled" badge in that week's column, and the `📅` count reflects non-cancelled sessions
+- Fully backward compatible: no DB schema change; reuses the existing `schedule_overrides` table (requires the `cancelled` column). If no overrides exist the calendar shows the normal weekly template with dates
+
 ## 2026-08-20 — v0.65 (01:00) — Fix "not started" check comparing against invalid time string
 - The "don't count classes that haven't started" filter was silently disabled: `slot.start` is stored as `"19:30:00"` (with seconds), so `new Date(day + 'T' + slot.start + ':00')` produced an invalid `"…T19:30:00:00"` string and the comparison was skipped
 - Today's not-yet-started session (e.g. the 19:30 Fundamentals on the current day) was therefore still counted, inflating the Attendance Statistics denominator (e.g. 11 instead of 10)

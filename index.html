@@ -125,7 +125,12 @@
                         <h3 id="kiosk-schedule-title" style="margin: 0;">Training Schedule</h3>
                         <p id="kiosk-schedule-subtitle" class="text-gray" style="margin: 0;">Weekly class schedule.</p>
                     </div>
-                    <span id="kiosk-schedule-badge" class="badge badge-inside" style="background: #eef2ff; color: #1e3a8a;">📅</span>
+                    <div class="flex gap-1 align-center" style="flex-shrink:0;">
+                        <button class="btn-outline btn-small" onclick="App.scheduleWeekNav(-1)" title="Previous week" aria-label="Previous week">‹</button>
+                        <span id="kiosk-schedule-week-label" class="schedule-week-label"></span>
+                        <button class="btn-outline btn-small" onclick="App.scheduleWeekNav(1)" title="Next week" aria-label="Next week">›</button>
+                        <span id="kiosk-schedule-badge" class="badge badge-inside" style="background: #eef2ff; color: #1e3a8a;">📅</span>
+                    </div>
                 </div>
                 <!-- FIXED SCHEDULE SCROLLABLE CONTAINER -->
                 <div class="calendar-wrapper" style="border:none; border-radius: 0;">
@@ -1024,7 +1029,13 @@
                 </div>
 
                 <div id="tab-content-schedule-master" class="tab-content-schedule hidden mt-1">
-                    <p class="text-gray mb-2">See the full weekly timetable at a glance.</p>
+                    <div class="flex gap-1 align-center mb-1" style="flex-wrap: wrap;">
+                        <span class="text-gray">See the full weekly timetable at a glance.</span>
+                        <div style="flex: 1;"></div>
+                        <button class="btn-outline btn-small" onclick="App.scheduleWeekNav(-1)" title="Previous week" aria-label="Previous week">‹</button>
+                        <span id="master-schedule-week-label" class="schedule-week-label"></span>
+                        <button class="btn-outline btn-small" onclick="App.scheduleWeekNav(1)" title="Next week" aria-label="Next week">›</button>
+                    </div>
                     <div class="calendar-wrapper">
                         <div id="master-schedule-container"></div>
                     </div>
@@ -1657,7 +1668,7 @@
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
     <script src="js/app-members.js?v=20260815-5"></script>
     <script src="js/app-plans.js?v=20260815-1"></script>
-    <script src="js/app-schedule.js?v=20260819-7"></script>
+    <script src="js/app-schedule.js?v=20260820-5"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260820-4"></script>
     <script src="js/app-i18n.js?v=20260815-4"></script>

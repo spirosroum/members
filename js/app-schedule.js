@@ -1,6 +1,6 @@
 // =====================================================================
 // app-schedule.js
-// App methods: addDraftSlot, renderDraftSlots, removeDraftSlot, editDraftSlot, saveClassSchedule, cancelScheduleEdit, editScheduleClass, deleteScheduleDirect, renderScheduleBin, restoreSchedule, deleteBinSchedule, renderSchedules, renderCalendarView
+// App methods: addDraftSlot, renderDraftSlots, removeDraftSlot, editDraftSlot, saveClassSchedule, cancelScheduleEdit, editScheduleClass, deleteScheduleDirect, renderScheduleBin, restoreSchedule, deleteBinSchedule, renderSchedules, renderCalendarView, getWeekDates, scheduleWeekNav, updateScheduleWeekLabels
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -311,11 +311,14 @@ Object.assign(App, {
                 const schedules = (DB.getSchedules() || []).filter(cls => isAdminView || cls.isPublic !== false);
                 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
                 const container = document.getElementById(containerId);
+                if (!container) return;
 
-                // Build each day column HTML first so we can count how many are rendered (weekends may be omitted)
+                // Real dates for the displayed week (Mon-first, honoring the week offset),
+                // so the schedule reflects actual dates and stays in sync with cancellations.
+                const weekDates = App.getWeekDates(App._scheduleWeekOffset || 0);
                 const renderedDayColumns = [];
 
-                days.forEach(day => {
+                days.forEach((day, i) => {
                     let daySlots = [];
                     schedules.forEach(cls => {
                         (cls.slots || []).filter(s => s.day === day).forEach(slot => {
@@ -328,21 +331,34 @@ Object.assign(App, {
                     // Hide Saturday or Sunday columns only when they have no classes
                     if ((day === 'Saturday' || day === 'Sunday') && daySlots.length === 0) return;
 
+                    const dateObj = weekDates[i];
+                    const dateIso = Utils.dateToLocalIso(dateObj);
                     const visibleDay = (containerId === 'kiosk-schedule-container' && App.currentKioskLang && App.KIOSK_I18N[App.currentKioskLang])
                         ? App.KIOSK_I18N[App.currentKioskLang].days[day] || day
                         : day;
+                    const dateLabel = `${dateObj.getDate()} ${App._shortMonth(dateObj.getMonth())}`;
                     let colHtml = `<div class="calendar-day-col">
-                        <div class="calendar-day-header">${visibleDay}</div>`;
+                        <div class="calendar-day-header">
+                            <div>${visibleDay}</div>
+                            <div class="calendar-day-date">${dateLabel}</div>
+                        </div>`;
 
                     if (daySlots.length === 0) {
                         colHtml += `<div class="text-gray" style="text-align:center; padding: 1rem; font-size: 0.85rem;">No classes</div>`;
                     } else {
-                        colHtml += daySlots.map(slot => `
-                            <div class="sched-card cursor-pointer" ${isAdminView ? `onclick="App.editScheduleClass('${slot.classId}')" title="Click to edit this class"` : `onclick="App.openClassDetails('${slot.classId}','${slot.day}','${slot.start}','${slot.end}')" title="Click to view class details"`} style="border-left: 6px solid ${slot.color};">
+                        colHtml += daySlots.map(slot => {
+                            const ov = App.getOverrideFor(slot.classId, dateIso);
+                            if (ov && ov.cancelled) {
+                                return `<div class="sched-card sched-card-cancelled" style="border-left: 6px solid var(--gray);">
+                                    <div class="sched-time">${Utils.convertTo12Hour(slot.start)} - ${Utils.convertTo12Hour(slot.end)}</div>
+                                    <div class="sched-name"><s>${Utils.escapeHTML(slot.className)}</s> <span class="badge badge-inactive">Cancelled</span></div>
+                                </div>`;
+                            }
+                            return `<div class="sched-card cursor-pointer" ${isAdminView ? `onclick="App.editScheduleClass('${slot.classId}')" title="Click to edit this class"` : `onclick="App.openClassDetails('${slot.classId}','${slot.day}','${slot.start}','${slot.end}')" title="Click to view class details"`} style="border-left: 6px solid ${slot.color};">
                                 <div class="sched-time">${Utils.convertTo12Hour(slot.start)} - ${Utils.convertTo12Hour(slot.end)}</div>
                                 <div class="sched-name">${Utils.escapeHTML(slot.className)}</div>
-                            </div>
-                        `).join('');
+                            </div>`;
+                        }).join('');
                     }
 
                     colHtml += `</div>`;
@@ -356,9 +372,49 @@ Object.assign(App, {
                 if (containerId === 'kiosk-schedule-container') {
                     const badge = document.getElementById('kiosk-schedule-badge');
                     if (badge) {
-                        const count = schedules.reduce((sum, cls) => sum + (cls.slots || []).length, 0);
+                        let count = 0;
+                        days.forEach((day, i) => {
+                            const dateIso = Utils.dateToLocalIso(weekDates[i]);
+                            schedules.forEach(cls => {
+                                (cls.slots || []).forEach(slot => {
+                                    if (slot.day !== day) return;
+                                    const ov = App.getOverrideFor(cls.id, dateIso);
+                                    if (!ov || !ov.cancelled) count++;
+                                });
+                            });
+                        });
                         badge.innerText = `📅 ${count}`;
                     }
                 }
-            }
+                App.updateScheduleWeekLabels();
+            },
+
+            // Monday-first dates for the week at a given offset (0 = current week).
+            getWeekDates: (offset = 0) => {
+                const now = new Date();
+                const daysSinceMonday = (now.getDay() + 6) % 7;
+                const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday + offset * 7);
+                const arr = [];
+                for (let i = 0; i < 7; i++) arr.push(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i));
+                return arr;
+            },
+
+            _shortMonth: (m) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] || '',
+
+            scheduleWeekNav: (delta) => {
+                App._scheduleWeekOffset = (App._scheduleWeekOffset || 0) + delta;
+                App.renderCalendarView('kiosk-schedule-container', false);
+                if (App.isAdminAuthed()) App.renderCalendarView('master-schedule-container', true);
+                App.updateScheduleWeekLabels();
+            },
+
+            updateScheduleWeekLabels: () => {
+                const dates = App.getWeekDates(App._scheduleWeekOffset || 0);
+                const start = dates[0], end = dates[6];
+                const label = `${start.getDate()} ${App._shortMonth(start.getMonth())} – ${end.getDate()} ${App._shortMonth(end.getMonth())} ${end.getFullYear()}`;
+                ['kiosk-schedule-week-label','master-schedule-week-label'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = label;
+                });
+            },
 });
