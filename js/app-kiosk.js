@@ -547,10 +547,11 @@ Object.assign(App, {
 
             renderKioskLeaderboard: () => {
                 const standings = App.getLeaderboardStandings();
-                let top = standings.slice(0, 10);
+                const size = DB.getLeaderboardSize();
+                let top = standings.slice(0, size);
                 if (top.length > 0) {
                     const lastRank = top[top.length - 1].rank;
-                    top = top.concat(standings.slice(10).filter(entry => entry.rank === lastRank));
+                    top = top.concat(standings.slice(size).filter(entry => entry.rank === lastRank));
                 }
                 const container = document.getElementById('kiosk-leaderboard-container');
                 if (!container) return;
@@ -561,6 +562,8 @@ Object.assign(App, {
                     container.innerHTML = `<p class="text-gray" style="padding: 1rem 0; text-align:center;">${Utils.escapeHTML(map.leaderboardNoTrainings || 'No trainings recorded in the last 3 months yet.')}</p>`;
                     return;
                 }
+                const badge = document.getElementById('kiosk-leaderboard-badge');
+                if (badge) badge.innerText = `Top ${size}`;
 
                 const groups = [];
                 top.forEach(entry => {

@@ -1626,6 +1626,18 @@ Object.assign(App, {
                 `).join('');
                 App.renderAttendanceFeedbackConfig();
                 App.renderLeaderboardMedalConfig();
+                const sizeInput = document.getElementById('setting-leaderboard-size');
+                if (sizeInput) sizeInput.value = DB.getLeaderboardSize();
+            },
+
+            saveLeaderboardSize: () => {
+                const input = document.getElementById('setting-leaderboard-size');
+                if (!input) return;
+                const n = parseInt(input.value, 10);
+                if (isNaN(n) || n < 1 || n > 50) return alert('Enter a number between 1 and 50.');
+                DB.setLeaderboardSize(n);
+                App.renderKioskLeaderboard();
+                alert(`Leaderboard now shows the top ${n} members.`);
             },
 
             // Admin editor for the leaderboard top-3 medal emojis.

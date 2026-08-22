@@ -112,6 +112,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         const DEFAULT_ATTENDANCE_EMOJIS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.emoji]));
         const DEFAULT_ATTENDANCE_COLORS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.color]));
         const DEFAULT_LEADERBOARD_EMOJIS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+        const DEFAULT_LEADERBOARD_SIZE = 10;
 
         // Hydrate attendance ranges from localStorage, migrating the legacy
         // keyed maps (threshold -> emoji/color) into the ordered range array.
@@ -151,7 +152,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             showClassCheckins: JSON.parse(localStorage.getItem('gym_show_class_checkins') ?? 'true'),
             memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}'),
             attendanceRanges: loadAttendanceRanges(),
-            leaderboardEmojis: Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, JSON.parse(localStorage.getItem('gym_leaderboard_emojis') || '{}'))
+            leaderboardEmojis: Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, JSON.parse(localStorage.getItem('gym_leaderboard_emojis') || '{}')),
+            leaderboardSize: parseInt(localStorage.getItem('gym_leaderboard_size') || '10', 10)
         };
 
         function fallbackToLocal() {
@@ -179,6 +181,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_member_stats_visibility', JSON.stringify(STATE.memberStatsVisibility || {}));
                 localStorage.setItem('gym_attendance_ranges', JSON.stringify(STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES));
                 localStorage.setItem('gym_leaderboard_emojis', JSON.stringify(STATE.leaderboardEmojis || {}));
+                localStorage.setItem('gym_leaderboard_size', String(STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -194,7 +197,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 showClassCheckins: STATE.showClassCheckins !== false,
                 memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true },
                 attendanceRanges: STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES,
-                leaderboardEmojis: STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS
+                leaderboardEmojis: STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS,
+                leaderboardSize: STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE
             };
         }
 
@@ -473,6 +477,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     STATE.attendanceRanges = Object.keys(colors).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b).map(t => ({ threshold: t, emoji: emojis[t] || '', color: colors[t] || '#000000' }));
                 }
                 if (s.leaderboard_emojis) STATE.leaderboardEmojis = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, s.leaderboard_emojis);
+                if (s.leaderboard_size != null) STATE.leaderboardSize = parseInt(s.leaderboard_size, 10) || DEFAULT_LEADERBOARD_SIZE;
                 this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
             },
@@ -626,7 +631,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'show_class_checkins', value: p.showClassCheckins },
                     { key: 'member_stats_visibility', value: p.memberStatsVisibility },
                     { key: 'attendance_ranges', value: p.attendanceRanges },
-                    { key: 'leaderboard_emojis', value: p.leaderboardEmojis }
+                    { key: 'leaderboard_emojis', value: p.leaderboardEmojis },
+                    { key: 'leaderboard_size', value: p.leaderboardSize }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
                 this.settingsMirror = json;
@@ -983,6 +989,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getCheckinNoticeColor: () => STATE.checkinNoticeColor || '#fde68a',
             getShowClassCheckins: () => STATE.showClassCheckins !== false,
             getMemberStatsVisibility: () => Object.assign({ totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true }, STATE.memberStatsVisibility || {}),
+            getLeaderboardSize: () => parseInt(STATE.leaderboardSize, 10) || DEFAULT_LEADERBOARD_SIZE,
 
             // setters (update state and persist)
             saveMembers: (data) => {
@@ -1025,6 +1032,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             setCurrency: (c) => { STATE.currency = c; return saveToCloud(); },
             setShowClassCheckins: (v) => { STATE.showClassCheckins = !!v; return saveToCloud(); },
             setMemberStatsVisibility: (v) => { STATE.memberStatsVisibility = v || {}; return saveToCloud(); },
+            setLeaderboardSize: (n) => { STATE.leaderboardSize = parseInt(n, 10) || DEFAULT_LEADERBOARD_SIZE; return saveToCloud(); },
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 

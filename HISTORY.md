@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.67 (00:30) — Configurable Training Leaderboard size
+- Admin can now choose how many members the public Training Leaderboard shows (default 10) via a new "Leaderboard Size" card in Member Settings
+- The kiosk leaderboard renders the top N (still keeping same-rank ties), the badge shows "Top N", and the value syncs to Supabase settings + localStorage like the other member settings
+
 ## 2026-08-20 — v0.66 (01:10) — Open-gym visits count in Total Trainings & Hours
 - `getMemberTrainingCount` now also counts open-gym visits (a visit with no class check-in) as one training each, so Total Trainings and the averages match the Total Hours Trained behaviour
 - `getMemberLeaderboardCount` now delegates to `getMemberTrainingCount` (identical semantics: class sessions + open-gym visits) — leaderboard ranking is unchanged
