@@ -1634,33 +1634,66 @@ Object.assign(App, {
                 const input = document.getElementById('setting-leaderboard-size');
                 if (!input) return;
                 const n = parseInt(input.value, 10);
-                if (isNaN(n) || n < 1 || n > 50) return alert('Enter a number between 1 and 50.');
+                if (isNaN(n) || n < 0 || n > 50) return alert('Enter a number between 0 and 50 (0 = show everyone).');
                 DB.setLeaderboardSize(n);
                 App.renderKioskLeaderboard();
-                alert(`Leaderboard now shows the top ${n} members.`);
+                alert(n > 0 ? `Leaderboard now shows the top ${n} members.` : 'Leaderboard now shows everyone.');
             },
 
-            // Admin editor for the leaderboard top-3 medal emojis.
+            // Admin editor for the leaderboard medal emojis. Places are dynamic:
+            // 1st..Nth get their own emoji, and "last" covers every rank past the
+            // highest configured place (default poop).
             renderLeaderboardMedalConfig: () => {
                 const el = document.getElementById('leaderboard-medal-config');
                 if (!el) return;
-                const medals = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
+                const medals = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, STATE.leaderboardEmojis || {});
                 const suffix = { 1: 'st', 2: 'nd', 3: 'rd' };
-                el.innerHTML = [1, 2, 3].map(p => `
-                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
-                        <span class="text-gray" style="width:64px; font-weight:600;">${p}${suffix[p]}</span>
-                        <input type="text" class="search-bar" data-place="${p}" value="${Utils.escapeHTML(medals[p] || '')}" maxlength="8" style="width:84px; text-align:center;">
-                        <span style="width:70px; text-align:center; font-size:1.25rem;">${Utils.escapeHTML(medals[p] || '')}</span>
-                    </div>`).join('');
+                const places = Object.keys(medals).map(Number).filter(n => !isNaN(n) && n >= 1).sort((a, b) => a - b);
+                el.innerHTML = `
+                    <div id="leaderboard-medal-rows">
+                        ${places.map(p => `
+                            <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
+                                <span class="text-gray" style="width:64px; font-weight:600;">${p}${suffix[p] || 'th'}</span>
+                                <input type="text" class="search-bar" data-place="${p}" value="${Utils.escapeHTML(medals[p] || '')}" maxlength="8" style="width:84px; text-align:center;">
+                                ${p > 3 ? `<button class="btn-danger btn-small" onclick="App.removeLeaderboardMedalPlace(${p})">Remove</button>` : ''}
+                            </div>`).join('')}
+                        <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
+                            <span class="text-gray" style="width:64px; font-weight:600;">Last</span>
+                            <input type="text" class="search-bar" data-place="last" value="${Utils.escapeHTML(medals.last || '')}" maxlength="8" style="width:84px; text-align:center;">
+                        </div>
+                    </div>
+                    <button class="btn-outline btn-small mt-1" onclick="App.addLeaderboardMedalPlace()">+ Add Place</button>
+                `;
+            },
+
+            addLeaderboardMedalPlace: () => {
+                const medals = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, STATE.leaderboardEmojis || {});
+                const places = Object.keys(medals).map(Number).filter(n => !isNaN(n) && n >= 1).sort((a, b) => a - b);
+                const next = (places[places.length - 1] || 0) + 1;
+                medals[next] = '';
+                STATE.leaderboardEmojis = medals;
+                App.renderLeaderboardMedalConfig();
+            },
+
+            removeLeaderboardMedalPlace: (p) => {
+                const medals = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, STATE.leaderboardEmojis || {});
+                delete medals[p];
+                STATE.leaderboardEmojis = medals;
+                App.renderLeaderboardMedalConfig();
             },
 
             saveLeaderboardMedals: () => {
-                const medals = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS);
-                document.querySelectorAll('#leaderboard-medal-config input').forEach(inp => {
-                    const place = parseInt(inp.dataset.place, 10);
-                    if (place && inp.value.trim()) medals[place] = inp.value.trim();
+                const medals = {};
+                document.querySelectorAll('#leaderboard-medal-rows input').forEach(inp => {
+                    if (inp.dataset.place === 'last') {
+                        if (inp.value.trim()) medals.last = inp.value.trim();
+                        else delete medals.last;
+                    } else {
+                        const place = parseInt(inp.dataset.place, 10);
+                        if (place && inp.value.trim()) medals[place] = inp.value.trim();
+                    }
                 });
-                STATE.leaderboardEmojis = medals;
+                STATE.leaderboardEmojis = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, medals);
                 fallbackToLocal();
                 saveToCloud();
                 App.renderLeaderboardMedalConfig();

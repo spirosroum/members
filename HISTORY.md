@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.68 (00:45) — Infinite leaderboard + dynamic medal places
+- Leaderboard Size accepts 0 = show everyone on the Training Leaderboard (badge shows "Everyone" / "Όλοι")
+- Leaderboard Medals are now dynamic: admin can add/remove extra places (each with its own emoji) plus a "Last" row that covers every rank past the highest configured place (default 💩)
+- Removed the redundant emoji preview column to the right of the medal inputs (the emojis are already inside the boxes)
+- i18n: new `leaderboardAllBadge` key (EN+EL)
+
 ## 2026-08-21 — v0.67 (00:30) — Configurable Training Leaderboard size
 - Admin can now choose how many members the public Training Leaderboard shows (default 10) via a new "Leaderboard Size" card in Member Settings
 - The kiosk leaderboard renders the top N (still keeping same-rank ties), the badge shows "Top N", and the value syncs to Supabase settings + localStorage like the other member settings

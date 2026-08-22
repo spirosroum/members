@@ -1181,9 +1181,9 @@
                 </div>
                 <div class="card mt-2">
                     <h3>Leaderboard Size</h3>
-                    <p class="text-gray mb-1">How many members are shown on the public Training Leaderboard (Top N).</p>
+                    <p class="text-gray mb-1">How many members are shown on the public Training Leaderboard (Top N). Set to 0 to show everyone.</p>
                     <div class="flex gap-1 align-center" style="flex-wrap: wrap;">
-                        <input type="number" id="setting-leaderboard-size" min="1" max="50" style="width:90px; padding:0.5rem; border:1px solid var(--gray-light); border-radius:var(--border-radius);">
+                        <input type="number" id="setting-leaderboard-size" min="0" max="50" style="width:90px; padding:0.5rem; border:1px solid var(--gray-light); border-radius:var(--border-radius);">
                         <button class="btn-primary btn-small" onclick="App.saveLeaderboardSize()">Save Size</button>
                     </div>
                 </div>
@@ -1668,9 +1668,9 @@
     <!-- Supabase JS client (UMD build exposes window.supabase) -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="js/app-core.js?v=20260821-2"></script>
+    <script src="js/app-core.js?v=20260821-3"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260821-2"></script>
+    <script src="js/app-kiosk.js?v=20260821-3"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1678,8 +1678,8 @@
     <script src="js/app-plans.js?v=20260815-1"></script>
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
-    <script src="js/app-admin.js?v=20260821-2"></script>
-    <script src="js/app-i18n.js?v=20260820-8"></script>
+    <script src="js/app-admin.js?v=20260821-3"></script>
+    <script src="js/app-i18n.js?v=20260821-3"></script>
 
 
 </body>

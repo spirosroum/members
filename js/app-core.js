@@ -111,7 +111,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         ];
         const DEFAULT_ATTENDANCE_EMOJIS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.emoji]));
         const DEFAULT_ATTENDANCE_COLORS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.color]));
-        const DEFAULT_LEADERBOARD_EMOJIS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+        const DEFAULT_LEADERBOARD_EMOJIS = { 1: '🥇', 2: '🥈', 3: '🥉', last: '💩' };
         const DEFAULT_LEADERBOARD_SIZE = 10;
 
         // Hydrate attendance ranges from localStorage, migrating the legacy

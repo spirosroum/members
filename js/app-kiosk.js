@@ -537,19 +537,21 @@ Object.assign(App, {
             },
 
             leaderboardRankCell: (rank) => {
-                // Top 3 show only their (admin-configurable) medal emoji — no rank number.
-                if (rank <= 3) {
-                    const m = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
-                    return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m[rank] || '')}</span>`;
-                }
+                // Ranks with a configured medal show the medal emoji (no rank number).
+                // Ranks past the highest configured place fall back to the "last" emoji
+                // (default poop), so everyone ranked shows something fun.
+                const m = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
+                if (m[rank]) return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m[rank])}</span>`;
+                if (m.last) return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m.last)}</span>`;
                 return `<span class="kiosk-lb-rank-num">${rank}</span>`;
             },
 
             renderKioskLeaderboard: () => {
                 const standings = App.getLeaderboardStandings();
                 const size = DB.getLeaderboardSize();
-                let top = standings.slice(0, size);
-                if (top.length > 0) {
+                // size 0 means "show everyone" (no limit).
+                let top = size > 0 ? standings.slice(0, size) : standings.slice();
+                if (size > 0 && top.length > 0) {
                     const lastRank = top[top.length - 1].rank;
                     top = top.concat(standings.slice(size).filter(entry => entry.rank === lastRank));
                 }
@@ -563,7 +565,7 @@ Object.assign(App, {
                     return;
                 }
                 const badge = document.getElementById('kiosk-leaderboard-badge');
-                if (badge) badge.innerText = `Top ${size}`;
+                if (badge) badge.innerText = size > 0 ? `Top ${size}` : (map.leaderboardAllBadge || 'Everyone');
 
                 const groups = [];
                 top.forEach(entry => {
