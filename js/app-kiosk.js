@@ -711,12 +711,48 @@ Object.assign(App, {
                 const allDates = new Set();
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
+
+                // Fill the full timeline per member: cumulative count carried
+                // forward (0 before their first training), so every line runs from
+                // the left edge to the far right and the tooltip can list every
+                // athlete at any date.
+                const countAt = {};
+                const pointMap = {};
+                series.forEach(s => {
+                    pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
+                    countAt[s.member.id] = {};
+                });
+                series.forEach(s => {
+                    let prev = 0;
+                    labels.forEach(date => {
+                        if (pointMap[s.member.id].has(date)) prev = pointMap[s.member.id].get(date);
+                        countAt[s.member.id][date] = prev;
+                    });
+                });
+
+                // Detect overtakes: on each date find the strict leader; when the
+                // leader changes to a different member with a higher count than the
+                // previous leader, that member earns a crown on that date.
+                const overtakes = {};
+                let prevLeaderId = null, prevLeaderCount = -1;
+                labels.forEach(date => {
+                    let leaderId = null, leaderCount = -1, tie = false;
+                    series.forEach(s => {
+                        const c = countAt[s.member.id][date];
+                        if (c > leaderCount) { leaderCount = c; leaderId = s.member.id; tie = false; }
+                        else if (c === leaderCount) tie = true;
+                    });
+                    if (!tie && leaderId && prevLeaderId && leaderId !== prevLeaderId && leaderCount > prevLeaderCount) {
+                        overtakes[date + '|' + leaderId] = true;
+                    }
+                    if (!tie) { prevLeaderId = leaderId; prevLeaderCount = leaderCount; }
+                });
+
+                const isDesktop = window.innerWidth >= 768;
                 const datasets = series.map((s, i) => ({
                     label: s.member.firstName + ' ' + s.member.lastName,
-                    data: labels.map(date => {
-                        const hit = s.points.find(p => p.date === date);
-                        return hit ? hit.count : null;
-                    }),
+                    _memberId: s.member.id,
+                    data: labels.map(date => countAt[s.member.id][date]),
                     borderColor: App.kioskChartColor(s.member.id, i),
                     backgroundColor: App.kioskChartColor(s.member.id, i),
                     borderWidth: 2,
@@ -728,26 +764,71 @@ Object.assign(App, {
 
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
+
+                // Draw each athlete's name at the far right, aligned with their
+                // line's final value (PC only). On mobile the bottom legend is used.
+                const rightLabelsPlugin = {
+                    id: 'kioskRightLabels',
+                    afterDatasetsDraw(chart) {
+                        if (!isDesktop) return;
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.font = '600 11px system-ui, sans-serif';
+                        ctx.textBaseline = 'middle';
+                        ctx.textAlign = 'left';
+                        chart.data.datasets.forEach((ds, di) => {
+                            const meta = chart.getDatasetMeta(di);
+                            if (!meta.visible) return;
+                            const lastPt = meta.data[meta.data.length - 1];
+                            if (!lastPt || !isFinite(lastPt.x) || !isFinite(lastPt.y)) return;
+                            ctx.fillStyle = ds.borderColor;
+                            ctx.fillText(ds.label, chart.chartArea.right + 6, lastPt.y);
+                        });
+                        ctx.restore();
+                    }
+                };
+
+                // Crown emoji on the date a member overtakes the current leader.
+                const crownPlugin = {
+                    id: 'kioskCrowns',
+                    afterDatasetsDraw(chart) {
+                        if (!Object.keys(overtakes).length) return;
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.font = '14px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        chart.data.datasets.forEach((ds, di) => {
+                            const meta = chart.getDatasetMeta(di);
+                            if (!meta.visible) return;
+                            ds.data.forEach((val, idx) => {
+                                if (overtakes[labels[idx] + '|' + ds._memberId]) {
+                                    const pt = meta.data[idx];
+                                    if (pt) ctx.fillText('👑', pt.x, pt.y - 8);
+                                }
+                            });
+                        });
+                        ctx.restore();
+                    }
+                };
 
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
+                    plugins: [rightLabelsPlugin, crownPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
+                        layout: { padding: { right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
                         plugins: {
-                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                            legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
                             tooltip: {
                                 callbacks: {
                                     title: items => items.length ? dateFmt(items[0].label) : '',
-                                    label: ctx => {
-                                        const s = series.find(x => x.member.firstName + ' ' + x.member.lastName === ctx.dataset.label);
-                                        const p = s && s.points.find(p => p.date === ctx.label);
-                                        const count = p ? p.count : ctx.parsed.y;
-                                        return ` ${ctx.dataset.label}: ${count} ${map.chartTooltipTrainings || 'trainings'}`;
-                                    }
+                                    label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} ${map.chartTooltipTrainings || 'trainings'}`
                                 }
                             }
                         },

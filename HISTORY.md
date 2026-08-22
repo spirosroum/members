@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.71 (01:10) — Training Progress chart: full lines, right labels, all-athlete tooltips, crowns
+- Each member line now runs the full timeline (cumulative count carried forward, flat from their last training to the far right)
+- On PC (≥768px) each athlete's name is drawn at the far right aligned to their line's final value; the bottom legend is used on mobile only
+- Hovering any date now shows ALL athletes in the tooltip (with their cumulative count at that date), not just those who trained that day
+- A 👑 crown is drawn on the date a member overtakes the current leader (strict leader change with a higher count)
+
 ## 2026-08-21 — v0.70 (01:00) — Training Progress line chart on Check-in Portal
 - Added a "Training Progress" multi-line chart below the Training Leaderboard showing each member's cumulative training count over time (class check-ins + open-gym visits, mirroring the leaderboard count)
 - Timeframe pills: Last 3 months (default), Last month, All-time, and a Custom date range; persisted per device (kiosk_chart_range)
