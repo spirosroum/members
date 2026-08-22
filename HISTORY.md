@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.80 (01:21) — Align Crown History strictly with chart king resolution
+- Aligned `resolveKings` in Crown History to evaluate the full series date history, exactly matching the chart's crown assignment
+- Ensures only 1 king exists at any given time (unless multiple members share the exact same training count on every single date)
+- Prevents initial same-day check-in ties from falsely granting crown days to members who never actually owned the crown
+
 ## 2026-08-23 — v0.79 (01:18) — Fix Crown History day calculation
 - Fixed Crown History day tracking so it strictly follows the gym's crown rules: the crown is held continuously by the record holder(s) until the record is strictly broken
 - Ties during later dates do not steal or dilute the crown; the crown stays with whoever led first (`resolveKings`), matching the chart's 👑 logic

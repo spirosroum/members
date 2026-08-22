@@ -950,48 +950,55 @@ Object.assign(App, {
                 const holder = document.getElementById('kiosk-crown-history-container');
                 if (!container || !holder) return;
 
-                const allMembers = DB.getMembers().filter(m => !m.hideFromLeaderboard);
-                if (!allMembers.length) { holder.classList.add('hidden'); return; }
+                const members = (App._kioskLeaderboardMembers && App._kioskLeaderboardMembers.length)
+                    ? App._kioskLeaderboardMembers
+                    : DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                if (!members.length) { holder.classList.add('hidden'); return; }
 
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
                 const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
                 since.setHours(0, 0, 0, 0);
 
-                const series = App.getCumulativeTrainingSeries(allMembers, since, until);
+                const series = App.getCumulativeTrainingSeries(members, since, until);
                 if (!series.length) { holder.classList.add('hidden'); return; }
 
-                const allDates = [];
+                const allDates = new Set();
+                series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
+                const labels = [...allDates].sort();
+                if (!labels.length) { holder.classList.add('hidden'); return; }
+
+                const calendarDates = [];
                 const d = new Date(since);
                 while (d <= until) {
-                    allDates.push(Utils.dateToLocalIso(d));
+                    calendarDates.push(Utils.dateToLocalIso(d));
                     d.setDate(d.getDate() + 1);
                 }
 
                 const pointMap = {};
-                series.forEach(s => {
-                    pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
-                });
                 const countAt = {};
                 series.forEach(s => {
-                    let prev = null;
+                    pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
+                    const pm = pointMap[s.member.id];
                     countAt[s.member.id] = {};
-                    allDates.forEach(date => {
-                        const pm = pointMap[s.member.id];
+                    let prev = null;
+                    calendarDates.forEach(date => {
                         if (pm.has(date)) prev = pm.get(date);
                         countAt[s.member.id][date] = prev;
                     });
                 });
 
-                const resolveKings = (ids, upToLabels) => {
+                // Resolve which of the given member ids hold the crown: one unless
+                // all share exactly the same training history (identical count on
+                // every date); otherwise the one(s) who led longest (reached the top
+                // first), found by walking backwards keeping members tied at the max.
+                const resolveKings = (ids) => {
                     if (ids.length <= 1) return ids.slice();
-                    const identical = ids.every(id =>
-                        upToLabels.map(x => countAt[id][x] ?? 0).join(',') === upToLabels.map(x => countAt[ids[0]][x] ?? 0).join(',')
-                    );
+                    const identical = ids.every(id => labels.map(x => countAt[id][x] ?? 0).join(',') === labels.map(x => countAt[ids[0]][x] ?? 0).join(','));
                     if (identical) return ids.slice();
                     let candidates = ids.slice();
-                    for (let idx = upToLabels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
-                        const dateKey = upToLabels[idx];
+                    for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
+                        const dateKey = labels[idx];
                         const maxHere = Math.max(...candidates.map(c => countAt[c][dateKey] ?? -Infinity));
                         candidates = candidates.filter(c => (countAt[c][dateKey] ?? -Infinity) === maxHere);
                     }
@@ -1005,13 +1012,12 @@ Object.assign(App, {
                 let record = 0;
                 let currentKings = [];
 
-                allDates.forEach((date, idx) => {
-                    const upToLabels = allDates.slice(0, idx + 1);
-                    let maxToday = 0;
+                calendarDates.forEach(date => {
+                    let maxToday = -1;
                     const holders = [];
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
-                        if (c == null || c <= 0) return;
+                        if (c == null) return;
                         if (c > maxToday) {
                             maxToday = c;
                             holders.length = 0;
@@ -1024,7 +1030,7 @@ Object.assign(App, {
                     if (maxToday <= 0) return;
 
                     if (maxToday > record) {
-                        currentKings = resolveKings(holders, upToLabels);
+                        currentKings = resolveKings(holders);
                         record = maxToday;
                     }
 
