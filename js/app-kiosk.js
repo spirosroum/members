@@ -712,40 +712,60 @@ Object.assign(App, {
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
 
-                // Per member: a value exists only on their training dates (cumulative
-                // count); every other date is null so `spanGaps` connects consecutive
-                // trainings with a straight diagonal line instead of a flat fill-forward
-                // segment. This removes the parallel/hidden overlapping lines.
+                // Per member: no line before their first training (null), then the
+                // cumulative count carried forward flat to the far right.
                 const countAt = {};
-                const firstTrainIdx = {};
                 const pointMap = {};
                 series.forEach(s => {
                     pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
-                    countAt[s.member.id] = labels.map(date => pointMap[s.member.id].has(date) ? pointMap[s.member.id].get(date) : null);
-                    firstTrainIdx[s.member.id] = labels.findIndex(date => pointMap[s.member.id].has(date));
+                    countAt[s.member.id] = {};
+                });
+                series.forEach(s => {
+                    let started = false;
+                    let prev = 0;
+                    labels.forEach(date => {
+                        if (pointMap[s.member.id].has(date)) { started = true; prev = pointMap[s.member.id].get(date); }
+                        countAt[s.member.id][date] = started ? prev : null;
+                    });
                 });
 
-                // Crown: exactly one king holds the crown. It changes hands only when a
-                // member BREAKS the record (strictly exceeds the current max); merely
-                // matching the record does not take the crown.
-                let kingId = null, kingCount = 0;
-                labels.forEach((date, idx) => {
+                // Crown when a member overtakes the leader: they were already active (had
+                // trained on a previous date) and now enter the leadership group that
+                // they had been behind. Members already leading who simply extend the
+                // record together get no crown (that's not an overtake).
+                const overtakes = {};
+                let prevLeaders = null;
+                let prevActive = new Set();
+                labels.forEach(date => {
+                    let maxToday = -1;
+                    const leadersToday = [];
+                    const activeToday = new Set();
                     series.forEach(s => {
-                        const c = countAt[s.member.id][idx];
+                        const c = countAt[s.member.id][date];
                         if (c == null) return;
-                        if (c > kingCount) { kingCount = c; kingId = s.member.id; }
+                        activeToday.add(s.member.id);
+                        if (c > maxToday) { maxToday = c; leadersToday.length = 0; leadersToday.push(s.member.id); }
+                        else if (c === maxToday) leadersToday.push(s.member.id);
                     });
+                    if (prevLeaders) {
+                        leadersToday.forEach(id => {
+                            if (!prevLeaders.has(id) && prevActive.has(id)) overtakes[date + '|' + id] = true;
+                        });
+                    }
+                    prevLeaders = new Set(leadersToday);
+                    prevActive = activeToday;
                 });
 
                 const isDesktop = window.innerWidth >= 768;
                 const datasets = series.map((s, i) => ({
-                    label: s.member.firstName + ' ' + s.member.lastName + (s.member.id === kingId ? ' 👑' : ''),
-                    data: countAt[s.member.id],
+                    label: s.member.firstName + ' ' + s.member.lastName,
+                    _memberId: s.member.id,
+                    data: labels.map(date => countAt[s.member.id][date]),
                     borderColor: App.kioskChartColor(s.member.id, i),
                     backgroundColor: App.kioskChartColor(s.member.id, i),
                     borderWidth: 2,
-                    pointRadius: labels.map((_, idx) => idx === firstTrainIdx[s.member.id] ? 4 : 0),
-                    pointHoverRadius: 5,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
                     tension: 0,
                     spanGaps: true
                 }));
@@ -756,8 +776,7 @@ Object.assign(App, {
 
                 // Spread right-side labels so members tied on the same final count
                 // don't stack on top of one another (centered around the shared line).
-                // The final value is the last non-null (last training) count.
-                const finalCounts = datasets.map(d => { for (let j = d.data.length - 1; j >= 0; j--) if (d.data[j] != null) return d.data[j]; return null; });
+                const finalCounts = datasets.map(d => d.data[d.data.length - 1]);
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
@@ -767,7 +786,7 @@ Object.assign(App, {
                 });
 
                 // Draw each athlete's name at the far right, aligned with their
-                // line's last training value (PC only). On mobile the bottom legend is used.
+                // line's final value (PC only). On mobile the bottom legend is used.
                 const rightLabelsPlugin = {
                     id: 'kioskRightLabels',
                     afterDatasetsDraw(chart) {
@@ -780,13 +799,35 @@ Object.assign(App, {
                         chart.data.datasets.forEach((ds, di) => {
                             const meta = chart.getDatasetMeta(di);
                             if (!meta.visible) return;
-                            let lastPt = null;
-                            for (let j = meta.data.length - 1; j >= 0; j--) {
-                                if (meta.data[j] && isFinite(meta.data[j].y)) { lastPt = meta.data[j]; break; }
-                            }
-                            if (!lastPt || !isFinite(lastPt.x)) return;
+                            const lastPt = meta.data[meta.data.length - 1];
+                            if (!lastPt || !isFinite(lastPt.x) || !isFinite(lastPt.y)) return;
                             ctx.fillStyle = ds.borderColor;
                             ctx.fillText(ds.label, chart.chartArea.right + 6, lastPt.y + (labelOffsets[di] || 0));
+                        });
+                        ctx.restore();
+                    }
+                };
+
+                // Crown emoji on the date a member overtakes the current leader.
+                const crownPlugin = {
+                    id: 'kioskCrowns',
+                    afterDatasetsDraw(chart) {
+                        if (!Object.keys(overtakes).length) return;
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.font = '16px system-ui, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        chart.data.datasets.forEach((ds, di) => {
+                            const meta = chart.getDatasetMeta(di);
+                            if (!meta.visible) return;
+                            ds.data.forEach((val, idx) => {
+                                if (val == null) return;
+                                if (overtakes[labels[idx] + '|' + ds._memberId]) {
+                                    const pt = meta.data[idx];
+                                    if (pt) ctx.fillText('👑', pt.x, pt.y - 10);
+                                }
+                            });
                         });
                         ctx.restore();
                     }
@@ -804,18 +845,17 @@ Object.assign(App, {
                 const chartH = Math.max(280, series.length * 30 + topPad + bottomPad);
                 const wrap = canvas.parentElement;
                 if (wrap) wrap.style.height = chartH + 'px';
-                const xFmt = d => { const dt = new Date(d + 'T12:00:00'); return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }); };
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [rightLabelsPlugin],
+                    plugins: [rightLabelsPlugin, crownPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
-                        layout: { padding: { top: topPad, bottom: bottomPad, right: isDesktop ? maxNameLen * 6 + 14 : 8 } },
+                        layout: { padding: { top: topPad, bottom: bottomPad, right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
                         plugins: {
-                            legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8, font: { size: 11 } } },
+                            legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
                             tooltip: {
                                 filter: item => item.parsed.y != null,
                                 callbacks: {
@@ -825,11 +865,8 @@ Object.assign(App, {
                             }
                         },
                         scales: {
-                            x: {
-                                ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: isDesktop ? 12 : 5, font: { size: isDesktop ? 11 : 9 }, callback: (value) => xFmt(value) },
-                                grid: { display: false }
-                            },
-                            y: { suggestedMin: 1, ticks: { precision: 0, font: { size: isDesktop ? 11 : 9 } }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                            x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
+                            y: { suggestedMin: 1, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
                         }
                     }
                 });

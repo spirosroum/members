@@ -2,12 +2,6 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
-## 2026-08-21 — v0.74 (01:40) — Chart: single crown (broken not matched), direct lines, first-training dots
-- Crown is now held by exactly ONE member (the current record holder), shown as a 👑 next to their name; it changes hands only when the record is strictly BROKEN (exceeded), never on a mere match — so 19 Aug no longer shows a crown
-- Lines now connect training sessions directly with straight diagonal segments (spanGaps) instead of flat fill-forward — the only horizontal state is before a member's first training, eliminating the overlapping "parallel lines on the same number" problem
-- A dot is drawn at the bottom on each member's first training of the period (point radius 4 at first training, 0 elsewhere)
-- X-axis now shows short dates ("18 Aug") instead of full dates; mobile gets fewer ticks, smaller fonts, and tighter right padding
-
 ## 2026-08-21 — v0.73 (01:30) — Chart: real overtakes only, straight lines, y from 1, dynamic height
 - Crowns now appear only on a genuine overtake: a member who was already active and behind the leader newly enters the leadership group (verified: no crown on 2026-08-10, where the co-leaders merely extended their own record)
 - Lines are now straight (tension 0) instead of curved between points
