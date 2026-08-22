@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.82 (01:43) — Timestamp-precise king resolution & suppressed initial crowns
+- Integrated check-in event timestamps into `getCumulativeTrainingSeries` and `resolveKings`: on August 20, Μάνος checked in at 16:40 before Reynaldo at 16:43, ensuring only Μάνος is proclaimed king and receives king days
+- Suppressed premature crowns on August 5 and 6: initial shared opening sessions (counts 1→3) do not generate crowns; the first king is proclaimed on August 10 when the record of 3 was broken to 4 (Μαρία & Δημοσθένης)
+
 ## 2026-08-23 — v0.81 (01:34) — Rename to Crown Hunt & unify Proclaimed King Days
 - Renamed "Training Progress" to "Crown Hunt" («Κυνηγητό Στέμματος») with description: "There can be only one King, break his record to steal his crown!"
 - Renamed "Crown History" to "Proclaimed King Days" («Ημέρες Ανακηρυγμένου Βασιλιά») with description: "Days as King in the last 90 days."

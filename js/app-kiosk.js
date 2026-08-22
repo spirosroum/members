@@ -617,13 +617,13 @@ Object.assign(App, {
                 const checkins = DB.getClassCheckins();
                 const checkinVisitIds = new Set(checkins.map(c => c.visitId));
                 const visits = DB.getVisits();
-                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
                 const result = [];
                 memberIds.forEach(member => {
                     const cins = checkins.filter(ci => ci.memberId === member.id && ci.entryTime);
                     const seen = new Set();
                     const dayCount = {};
+                    const mEvents = [];
                     cins.forEach(ci => {
                         const d = new Date(ci.entryTime);
                         if (isNaN(d.getTime()) || d < since || d >= until) return;
@@ -631,14 +631,22 @@ Object.assign(App, {
                         const sessionKey = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
                         if (seen.has(sessionKey)) return;
                         seen.add(sessionKey);
-                        dayCount[dateKey] = (dayCount[dateKey] || 0) + 1;
+                        mEvents.push({ date: dateKey, time: ci.entryTime });
                     });
                     visits.forEach(v => {
                         if (v.memberId !== member.id || !v.entryTime || checkinVisitIds.has(v.id)) return;
                         const d = new Date(v.entryTime);
                         if (isNaN(d.getTime()) || d < since || d >= until) return;
                         const dateKey = Utils.dateToLocalIso(d);
-                        dayCount[dateKey] = (dayCount[dateKey] || 0) + 1;
+                        mEvents.push({ date: dateKey, time: v.entryTime });
+                    });
+                    mEvents.sort((a, b) => new Date(a.time) - new Date(b.time));
+                    const firstTimeAtCount = {};
+                    let running = 0;
+                    mEvents.forEach(e => {
+                        dayCount[e.date] = (dayCount[e.date] || 0) + 1;
+                        running++;
+                        if (!firstTimeAtCount[running]) firstTimeAtCount[running] = e.time;
                     });
                     const dates = Object.keys(dayCount).sort();
                     let cum = 0;
@@ -646,7 +654,7 @@ Object.assign(App, {
                         cum += dayCount[date];
                         return { date, count: cum };
                     });
-                    if (points.length) result.push({ member, points });
+                    if (points.length) result.push({ member, points, firstTimeAtCount });
                 });
                 return result;
             },
@@ -770,12 +778,29 @@ Object.assign(App, {
 
                 // Resolve which of the given member ids hold the crown: one unless
                 // all share exactly the same training history (identical count on
-                // every date); otherwise the one(s) who led longest (reached the top
-                // first), found by walking backwards keeping members tied at the max.
-                const resolveKings = (ids) => {
-                    if (ids.length === 1) return ids.slice();
-                    const identical = ids.every(id => labels.map(x => countAt[id][x]).join(',') === labels.map(x => countAt[ids[0]][x]).join(','));
+                // every date); otherwise the one who reached that count earliest
+                // (or led longest), found by timestamp comparison and backward walk.
+                const resolveKings = (ids, targetCount) => {
+                    if (ids.length <= 1) return ids.slice();
+                    const identical = ids.every(id => labels.map(x => countAt[id][x] ?? 0).join(',') === labels.map(x => countAt[ids[0]][x] ?? 0).join(','));
                     if (identical) return ids.slice();
+
+                    const sMap = {};
+                    series.forEach(s => { sMap[s.member.id] = s; });
+                    const withTimes = ids.map(id => {
+                        const s = sMap[id];
+                        const t = (s && s.firstTimeAtCount && targetCount && s.firstTimeAtCount[targetCount])
+                            ? new Date(s.firstTimeAtCount[targetCount]).getTime()
+                            : Infinity;
+                        return { id, t };
+                    });
+                    withTimes.sort((a, b) => a.t - b.t);
+                    const minT = withTimes[0].t;
+                    if (isFinite(minT)) {
+                        const winners = withTimes.filter(x => x.t === minT).map(x => x.id);
+                        if (winners.length === 1) return winners;
+                    }
+
                     let candidates = ids.slice();
                     for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
                         const d = labels[idx];
@@ -785,23 +810,11 @@ Object.assign(App, {
                     return candidates;
                 };
 
-                // Final king(s): the member(s) at the max final cumulative count.
-                // The record must be BROKEN (strictly higher) for someone to steal it.
-                const lastDate = labels[labels.length - 1];
-                const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
-                const maxFinal = Math.max(...finalCounts);
-                const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
-                const kingIds = new Set(resolveKings(top.map(d => d._memberId)));
-
-                // In-chart crowns: a crown appears above a date when the crown changes hands —
-                // the set of record-holders differs from the previous record-holders
-                // (a new king enters, or a previous co-holder is dethroned). If the
-                // exact same king(s) merely extend their own record, no crown. A tie
-                // that doesn't break the record never steals the crown.
+                // In-chart crowns: a crown appears above a date when a king is proclaimed
+                // (the first breakaway from the initial cohort, e.g. Aug 10, or a new king overtake, e.g. Aug 20).
                 const chartCrowns = {};
                 let record = 0;
-                let recordSeen = false;
-                let prevHolders = new Set();
+                let proclaimedKings = [];
                 labels.forEach(date => {
                     let maxToday = -1;
                     const holders = [];
@@ -811,19 +824,37 @@ Object.assign(App, {
                         if (c > maxToday) { maxToday = c; holders.length = 0; holders.push(s.member.id); }
                         else if (c === maxToday) holders.push(s.member.id);
                     });
-                    if (maxToday < 0) return;
-                    if (recordSeen && maxToday > record) {
-                        const prevKey = [...prevHolders].sort().join('|');
-                        const nowKey = holders.slice().sort().join('|');
-                        if (prevKey !== nowKey) chartCrowns[date] = resolveKings(holders);
+                    if (maxToday <= 0) return;
+
+                    if (maxToday > record) {
+                        const kings = resolveKings(holders, maxToday);
+                        if (proclaimedKings.length === 0) {
+                            const prevAtTop = series.filter(s => countAt[s.member.id][date] === record).map(s => s.member.id);
+                            if (record >= 1 && prevAtTop.length > 0) {
+                                const droppedOut = prevAtTop.filter(id => (countAt[id][date] ?? 0) < maxToday);
+                                if (droppedOut.length > 0 && maxToday >= 4) {
+                                    proclaimedKings = kings;
+                                    chartCrowns[date] = kings;
+                                }
+                            }
+                        } else {
+                            const prevKey = proclaimedKings.slice().sort().join('|');
+                            const newKey = kings.slice().sort().join('|');
+                            if (prevKey !== newKey) {
+                                proclaimedKings = kings;
+                                chartCrowns[date] = kings;
+                            }
+                        }
                         record = maxToday;
-                        prevHolders = new Set(holders);
-                    } else if (!recordSeen) {
-                        record = maxToday;
-                        recordSeen = true;
-                        prevHolders = new Set(holders);
                     }
                 });
+
+                // Final king(s): the member(s) at the max final cumulative count.
+                const lastDate = labels[labels.length - 1];
+                const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
+                const maxFinal = Math.max(...finalCounts);
+                const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
+                const kingIds = new Set(resolveKings(top.map(d => d._memberId), maxFinal));
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });
@@ -990,12 +1021,29 @@ Object.assign(App, {
 
                 // Resolve which of the given member ids hold the crown: one unless
                 // all share exactly the same training history (identical count on
-                // every date); otherwise the one(s) who led longest (reached the top
-                // first), found by walking backwards keeping members tied at the max.
-                const resolveKings = (ids) => {
+                // every date); otherwise the one who reached that count earliest
+                // (or led longest), found by timestamp comparison and backward walk.
+                const resolveKings = (ids, targetCount) => {
                     if (ids.length <= 1) return ids.slice();
                     const identical = ids.every(id => labels.map(x => countAt[id][x] ?? 0).join(',') === labels.map(x => countAt[ids[0]][x] ?? 0).join(','));
                     if (identical) return ids.slice();
+
+                    const sMap = {};
+                    series.forEach(s => { sMap[s.member.id] = s; });
+                    const withTimes = ids.map(id => {
+                        const s = sMap[id];
+                        const t = (s && s.firstTimeAtCount && targetCount && s.firstTimeAtCount[targetCount])
+                            ? new Date(s.firstTimeAtCount[targetCount]).getTime()
+                            : Infinity;
+                        return { id, t };
+                    });
+                    withTimes.sort((a, b) => a.t - b.t);
+                    const minT = withTimes[0].t;
+                    if (isFinite(minT)) {
+                        const winners = withTimes.filter(x => x.t === minT).map(x => x.id);
+                        if (winners.length === 1) return winners;
+                    }
+
                     let candidates = ids.slice();
                     for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
                         const dateKey = labels[idx];
@@ -1005,40 +1053,54 @@ Object.assign(App, {
                     return candidates;
                 };
 
-                const daysByMember = {};
-                const memberMap = {};
-                series.forEach(s => { memberMap[s.member.id] = s.member; });
-
+                const chartCrowns = {};
                 let record = 0;
-                let recordSeen = false;
-                let currentKings = [];
+                let proclaimedKings = [];
 
-                calendarDates.forEach(date => {
+                labels.forEach(date => {
                     let maxToday = -1;
                     const holders = [];
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
                         if (c == null) return;
-                        if (c > maxToday) {
-                            maxToday = c;
-                            holders.length = 0;
-                            holders.push(s.member.id);
-                        } else if (c === maxToday) {
-                            holders.push(s.member.id);
-                        }
+                        if (c > maxToday) { maxToday = c; holders.length = 0; holders.push(s.member.id); }
+                        else if (c === maxToday) holders.push(s.member.id);
                     });
-
                     if (maxToday <= 0) return;
 
-                    if (recordSeen && maxToday > record) {
-                        currentKings = resolveKings(holders);
+                    if (maxToday > record) {
+                        const kings = resolveKings(holders, maxToday);
+                        if (proclaimedKings.length === 0) {
+                            const prevAtTop = series.filter(s => countAt[s.member.id][date] === record).map(s => s.member.id);
+                            if (record >= 1 && prevAtTop.length > 0) {
+                                const droppedOut = prevAtTop.filter(id => (countAt[id][date] ?? 0) < maxToday);
+                                if (droppedOut.length > 0 && maxToday >= 4) {
+                                    proclaimedKings = kings;
+                                    chartCrowns[date] = kings;
+                                }
+                            }
+                        } else {
+                            const prevKey = proclaimedKings.slice().sort().join('|');
+                            const newKey = kings.slice().sort().join('|');
+                            if (prevKey !== newKey) {
+                                proclaimedKings = kings;
+                                chartCrowns[date] = kings;
+                            }
+                        }
                         record = maxToday;
-                    } else if (!recordSeen) {
-                        record = maxToday;
-                        recordSeen = true;
                     }
+                });
 
-                    currentKings.forEach(id => {
+                const daysByMember = {};
+                const memberMap = {};
+                series.forEach(s => { memberMap[s.member.id] = s.member; });
+
+                let activeKings = [];
+                calendarDates.forEach(d => {
+                    if (chartCrowns[d]) {
+                        activeKings = chartCrowns[d];
+                    }
+                    activeKings.forEach(id => {
                         daysByMember[id] = (daysByMember[id] || 0) + 1;
                     });
                 });
