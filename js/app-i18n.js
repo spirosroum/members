@@ -35,16 +35,16 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Most trainings last 3 months.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Everyone',
-        chartTitle: 'Training Progress',
-        chartSubtitle: 'Cumulative trainings per member.',
+        chartTitle: 'Crown Hunt',
+        chartSubtitle: 'There can be only one King, break his record to steal his crown!',
         chartRange3m: '3 months',
         chartRange1m: 'Last month',
         chartRangeAll: 'All-time',
         chartRangeCustom: 'Custom',
         chartNoTrainings: 'No trainings recorded in this period.',
         chartTooltipTrainings: 'trainings',
-        crownHistoryTitle: '👑 Crown History',
-        crownHistorySubtitle: 'Days as #1 in the last 90 days.',
+        crownHistoryTitle: 'Proclaimed King Days',
+        crownHistorySubtitle: 'Days as King in the last 90 days.',
         crownHistoryDay: 'day',
         crownHistoryDays: 'days',
         leaderboardRankColumn: 'Rank',
@@ -229,16 +229,16 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Οι περισσότερες προπονήσεις των τελευταίων 3 μηνών.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Όλοι',
-        chartTitle: 'Πρόοδος Προπονήσεων',
-        chartSubtitle: 'Αθροιστικές προπονήσεις ανά μέλος.',
+        chartTitle: 'Κυνηγητό Στέμματος',
+        chartSubtitle: 'Μόνο ένας μπορεί να είναι Βασιλιάς, σπάσε το ρεκόρ του για να του κλέψεις το στέμμα!',
         chartRange3m: '3 μήνες',
         chartRange1m: 'Τελευταίος μήνας',
         chartRangeAll: 'Από την αρχή',
         chartRangeCustom: 'Προσαρμογή',
         chartNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         chartTooltipTrainings: 'προπονήσεις',
-        crownHistoryTitle: '👑 Ιστορικό Στέμματος',
-        crownHistorySubtitle: 'Ημέρες ως #1 τις τελευταίες 90 ημέρες.',
+        crownHistoryTitle: 'Ημέρες Ανακηρυγμένου Βασιλιά',
+        crownHistorySubtitle: 'Ημέρες ως Βασιλιάς τις τελευταίες 90 ημέρες.',
         crownHistoryDay: 'ημέρα',
         crownHistoryDays: 'ημέρες',
         leaderboardRankColumn: 'Θέση',
@@ -504,16 +504,16 @@ App.applyKioskTranslations = function() {
         const leaderboardSubtitle = document.getElementById('kiosk-leaderboard-subtitle'); if (leaderboardSubtitle) leaderboardSubtitle.innerText = map.leaderboardSubtitle || 'Most trainings last 3 months.';
         const leaderboardBadge = document.getElementById('kiosk-leaderboard-badge'); if (leaderboardBadge) leaderboardBadge.innerText = map.leaderboardBadge || 'Top 10';
 
-        const chartTitle = document.getElementById('kiosk-chart-title'); if (chartTitle) chartTitle.innerText = map.chartTitle || 'Training Progress';
-        const chartSubtitle = document.getElementById('kiosk-chart-subtitle'); if (chartSubtitle) chartSubtitle.innerText = map.chartSubtitle || 'Cumulative trainings per member.';
+        const chartTitle = document.getElementById('kiosk-chart-title'); if (chartTitle) chartTitle.innerText = map.chartTitle || 'Crown Hunt';
+        const chartSubtitle = document.getElementById('kiosk-chart-subtitle'); if (chartSubtitle) chartSubtitle.innerText = map.chartSubtitle || 'There can be only one King, break his record to steal his crown!';
         const chartNoTrainings = document.getElementById('kiosk-training-chart-empty'); if (chartNoTrainings) chartNoTrainings.innerText = map.chartNoTrainings || 'No trainings recorded in this period.';
         document.querySelectorAll('.kiosk-chart-range-btn').forEach(btn => {
             const key = btn.dataset.range;
             const text = key === '3m' ? map.chartRange3m : key === '1m' ? map.chartRange1m : key === 'all' ? map.chartRangeAll : map.chartRangeCustom;
             if (text) btn.innerText = text;
         });
-        const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || '👑 Crown History';
-        const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days as #1 in the last 90 days.';
+        const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || 'Proclaimed King Days';
+        const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days as King in the last 90 days.';
         App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';

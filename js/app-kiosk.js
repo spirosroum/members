@@ -947,13 +947,13 @@ Object.assign(App, {
 
             renderCrownHistory: () => {
                 const container = document.getElementById('kiosk-crown-history-list');
-                const holder = document.getElementById('kiosk-crown-history-container');
-                if (!container || !holder) return;
+                const section = document.getElementById('kiosk-crown-history-section');
+                if (!container || !section) return;
 
                 const members = (App._kioskLeaderboardMembers && App._kioskLeaderboardMembers.length)
                     ? App._kioskLeaderboardMembers
                     : DB.getMembers().filter(m => !m.hideFromLeaderboard);
-                if (!members.length) { holder.classList.add('hidden'); return; }
+                if (!members.length) { section.classList.add('hidden'); return; }
 
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
@@ -961,12 +961,12 @@ Object.assign(App, {
                 since.setHours(0, 0, 0, 0);
 
                 const series = App.getCumulativeTrainingSeries(members, since, until);
-                if (!series.length) { holder.classList.add('hidden'); return; }
+                if (!series.length) { section.classList.add('hidden'); return; }
 
                 const allDates = new Set();
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
-                if (!labels.length) { holder.classList.add('hidden'); return; }
+                if (!labels.length) { section.classList.add('hidden'); return; }
 
                 const calendarDates = [];
                 const d = new Date(since);
@@ -1010,6 +1010,7 @@ Object.assign(App, {
                 series.forEach(s => { memberMap[s.member.id] = s.member; });
 
                 let record = 0;
+                let recordSeen = false;
                 let currentKings = [];
 
                 calendarDates.forEach(date => {
@@ -1029,9 +1030,12 @@ Object.assign(App, {
 
                     if (maxToday <= 0) return;
 
-                    if (maxToday > record) {
+                    if (recordSeen && maxToday > record) {
                         currentKings = resolveKings(holders);
                         record = maxToday;
+                    } else if (!recordSeen) {
+                        record = maxToday;
+                        recordSeen = true;
                     }
 
                     currentKings.forEach(id => {
@@ -1044,8 +1048,8 @@ Object.assign(App, {
                     .filter(e => e.member && e.days > 0)
                     .sort((a, b) => b.days - a.days || a.member.lastName.localeCompare(b.member.lastName));
 
-                if (!entries.length) { holder.classList.add('hidden'); return; }
-                holder.classList.remove('hidden');
+                if (!entries.length) { section.classList.add('hidden'); return; }
+                section.classList.remove('hidden');
 
                 let prevDays = null;
                 let prevRank = 0;
@@ -1066,10 +1070,9 @@ Object.assign(App, {
                     <div class="kiosk-leaderboard">
                         ${entries.map(e => {
                             const dayLabel = e.days === 1 ? (map.crownHistoryDay || 'day') : (map.crownHistoryDays || 'days');
-                            const rankDisplay = e.rank === 1 ? '👑' : e.rank;
                             return `
                                 <div class="kiosk-lb-card">
-                                    <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${rankDisplay}</span></div>
+                                    <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${e.rank}</span></div>
                                     <strong class="kiosk-lb-name">${Utils.escapeHTML(e.member.firstName)} ${Utils.escapeHTML(e.member.lastName)}</strong>
                                     <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
                                     <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>

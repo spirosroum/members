@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.81 (01:34) — Rename to Crown Hunt & unify Proclaimed King Days
+- Renamed "Training Progress" to "Crown Hunt" («Κυνηγητό Στέμματος») with description: "There can be only one King, break his record to steal his crown!"
+- Renamed "Crown History" to "Proclaimed King Days" («Ημέρες Ανακηρυγμένου Βασιλιά») with description: "Days as King in the last 90 days."
+- Merged the chart and Proclaimed King Days list into a single unified card
+- Removed emojis from the Proclaimed King Days leaderboard rank column
+- Proclaimed king days now only begin counting once a king is officially proclaimed on a record-break (starting from August 10 in live data)
+
 ## 2026-08-23 — v0.80 (01:21) — Align Crown History strictly with chart king resolution
 - Aligned `resolveKings` in Crown History to evaluate the full series date history, exactly matching the chart's crown assignment
 - Ensures only 1 king exists at any given time (unless multiple members share the exact same training count on every single date)
