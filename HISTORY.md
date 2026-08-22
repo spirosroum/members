@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-20 — v0.66 (01:10) — Open-gym visits count in Total Trainings & Hours
+- `getMemberTrainingCount` now also counts open-gym visits (a visit with no class check-in) as one training each, so Total Trainings and the averages match the Total Hours Trained behaviour
+- `getMemberLeaderboardCount` now delegates to `getMemberTrainingCount` (identical semantics: class sessions + open-gym visits) — leaderboard ranking is unchanged
+- `getMemberTotalHours` now also adds entry→exit duration for open-gym visits when the member has class check-ins (previously those open-gym minutes were only counted in the no-class-checkins fallback), keeping Total Hours aligned with Total Trainings
+
 ## 2026-08-21 — v0.65 (00:16) — Don't show "still inside" for expired visit windows
 - Added `App.getVisitEffectiveExit` (returns `exit_time`, or `expected_exit_time` if that window has passed, else null) and applied it in Day Details, the Visit Log, and `calcVisitDuration`
 - A check-in whose expected window (class end + 15 min) has passed but that the auto-checkout cron hasn't closed no longer shows "still inside"/"In Progress" — it shows the expected checkout time and a real duration

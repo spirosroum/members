@@ -187,9 +187,8 @@ Object.assign(App, {
             },
 
             // Training count used by the member stats (Total Trainings, averages).
-            // Counts only actual class sessions (unique class/date/time-slot check-ins).
-            // Open-gym visits (no class selected) are intentionally excluded here — they
-            // appear only on the leaderboard via getMemberLeaderboardCount.
+            // Counts unique class sessions plus open-gym visits (a visit with no class
+            // check-in), each open-gym visit counting once.
             getMemberTrainingCount: (memberId, sinceDate = null, untilDate = null) => {
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
                 let filtered = checkins;
@@ -203,21 +202,22 @@ Object.assign(App, {
                     uniqueSessionKeys.add(sessionKey);
                 });
 
+                // Open-gym visits (no class check-in) also count as a training session.
+                const checkinVisitIds = new Set(checkins.map(c => c.visitId));
+                let openGymVisits = DB.getVisits().filter(v => v.memberId === memberId
+                    && v.entryTime && !checkinVisitIds.has(v.id));
+                if (sinceDate) openGymVisits = openGymVisits.filter(v => new Date(v.entryTime) >= sinceDate);
+                if (untilDate) openGymVisits = openGymVisits.filter(v => new Date(v.entryTime) < untilDate);
+                openGymVisits.forEach(v => uniqueSessionKeys.add('visit|' + v.id));
+
                 return uniqueSessionKeys.size;
             },
 
-            // Leaderboard count = class sessions + open-gym visits (a visit with no class
-            // check-in). This is what ranks members on the leaderboard; Total Trainings in
-            // the member stats deliberately excludes open gym.
+            // Leaderboard count = class sessions + open-gym visits. Same as
+            // getMemberTrainingCount (which now includes open gym) but kept for callers
+            // that need the leaderboard semantics explicitly.
             getMemberLeaderboardCount: (memberId, sinceDate = null) => {
-                const classCount = App.getMemberTrainingCount(memberId, sinceDate);
-                const checkinVisitIds = new Set(DB.getClassCheckins()
-                    .filter(c => c.memberId === memberId)
-                    .map(c => c.visitId));
-                const visits = DB.getVisits().filter(v => v.memberId === memberId
-                    && (!sinceDate || new Date(v.entryTime) >= sinceDate));
-                const openGym = visits.filter(v => !checkinVisitIds.has(v.id)).length;
-                return classCount + openGym;
+                return App.getMemberTrainingCount(memberId, sinceDate);
             },
 
             getMemberLeaderboardRank: (memberId) => {
@@ -226,11 +226,13 @@ Object.assign(App, {
             },
 
             // Total minutes trained: sums the duration of each unique class session
-            // (date/class/slot), falling back to visit entry→exit duration for legacy
-            // records logged before class-level check-ins. Mirrors getMemberTrainingCount
-            // so "Total Hours Trained" counts the same sessions as "Total Trainings".
+            // (date/class/slot) plus open-gym visits (entry→exit), falling back to visit
+            // durations for legacy records logged before class-level check-ins. Mirrors
+            // getMemberTrainingCount so "Total Hours Trained" counts the same sessions
+            // as "Total Trainings".
             getMemberTotalHours: (memberId) => {
                 const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                const checkinVisitIds = new Set(checkins.map(c => c.visitId));
                 if (checkins.length > 0) {
                     const seen = new Set();
                     let totalMins = 0;
@@ -247,6 +249,10 @@ Object.assign(App, {
                             if (dur > 0 && dur < 24 * 60) mins = dur;
                         }
                         totalMins += mins;
+                    });
+                    DB.getVisits().forEach(v => {
+                        if (v.memberId !== memberId || !v.entryTime || checkinVisitIds.has(v.id)) return;
+                        if (v.exitTime) totalMins += Math.max(0, Math.round((new Date(v.exitTime) - new Date(v.entryTime)) / 60000));
                     });
                     return totalMins;
                 }
