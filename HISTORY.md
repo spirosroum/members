@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.74 (01:40) — Single king crown, first-training dots, direct session connectors
+- The crown is now a single "king" badge shown next to the current record-holder's name (right labels on PC, legend on mobile). The record must be strictly broken for someone to steal it; when two members tie at the top with different histories, the crown stays with whoever led longest (reached the top first). It is shared only by members with exactly the same training history
+- A visible dot is drawn at the bottom of the chart on each member's very first training of the period (their cumulative count always starts at 1)
+- Line rendering changed: sessions are connected directly (straight connectors), so the line is parallel to the x-axis only after a member's last training, extending flat to the far right — no more flat plateaus between every session
+
 ## 2026-08-21 — v0.73 (01:30) — Chart: real overtakes only, straight lines, y from 1, dynamic height
 - Crowns now appear only on a genuine overtake: a member who was already active and behind the leader newly enters the leadership group (verified: no crown on 2026-08-10, where the co-leaders merely extended their own record)
 - Lines are now straight (tension 0) instead of curved between points

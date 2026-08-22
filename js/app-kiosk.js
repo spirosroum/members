@@ -712,59 +712,54 @@ Object.assign(App, {
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
 
-                // Per member: no line before their first training (null), then the
-                // cumulative count carried forward flat to the far right.
-                const countAt = {};
+                // Two timelines per member:
+                //  - lineData: for rendering — null before first training and between
+                //    trainings (spanGaps draws straight connectors between sessions),
+                //    then the final count flat from the last training to the far right.
+                //  - countAt: carry-forward cumulative for every date (tooltip + king).
                 const pointMap = {};
+                const countAt = {};
+                const lineData = {};
+                const firstIdx = {};
                 series.forEach(s => {
                     pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
+                    const pm = pointMap[s.member.id];
+                    const trainDates = labels.filter(d => pm.has(d));
+                    const fIdx = trainDates.length ? labels.indexOf(trainDates[0]) : -1;
+                    const lIdx = trainDates.length ? labels.indexOf(trainDates[trainDates.length - 1]) : -1;
+                    const finalCount = trainDates.length ? pm.get(trainDates[trainDates.length - 1]) : null;
+                    firstIdx[s.member.id] = fIdx;
                     countAt[s.member.id] = {};
-                });
-                series.forEach(s => {
-                    let started = false;
-                    let prev = 0;
-                    labels.forEach(date => {
-                        if (pointMap[s.member.id].has(date)) { started = true; prev = pointMap[s.member.id].get(date); }
-                        countAt[s.member.id][date] = started ? prev : null;
+                    lineData[s.member.id] = [];
+                    let prev = null;
+                    labels.forEach((date, idx) => {
+                        if (pm.has(date)) {
+                            prev = pm.get(date);
+                            countAt[s.member.id][date] = prev;
+                            lineData[s.member.id][idx] = prev;
+                        } else {
+                            countAt[s.member.id][date] = prev;
+                            lineData[s.member.id][idx] = (lIdx >= 0 && idx > lIdx) ? finalCount : null;
+                        }
                     });
                 });
 
-                // Crown when a member overtakes the leader: they were already active (had
-                // trained on a previous date) and now enter the leadership group that
-                // they had been behind. Members already leading who simply extend the
-                // record together get no crown (that's not an overtake).
-                const overtakes = {};
-                let prevLeaders = null;
-                let prevActive = new Set();
-                labels.forEach(date => {
-                    let maxToday = -1;
-                    const leadersToday = [];
-                    const activeToday = new Set();
-                    series.forEach(s => {
-                        const c = countAt[s.member.id][date];
-                        if (c == null) return;
-                        activeToday.add(s.member.id);
-                        if (c > maxToday) { maxToday = c; leadersToday.length = 0; leadersToday.push(s.member.id); }
-                        else if (c === maxToday) leadersToday.push(s.member.id);
-                    });
-                    if (prevLeaders) {
-                        leadersToday.forEach(id => {
-                            if (!prevLeaders.has(id) && prevActive.has(id)) overtakes[date + '|' + id] = true;
-                        });
-                    }
-                    prevLeaders = new Set(leadersToday);
-                    prevActive = activeToday;
-                });
-
+                // Current king(s): the member(s) at the max final cumulative count.
+                // Only one holds the crown; it is shared only by members with exactly
+                // the same training history (identical count on every date).
                 const isDesktop = window.innerWidth >= 768;
                 const datasets = series.map((s, i) => ({
                     label: s.member.firstName + ' ' + s.member.lastName,
                     _memberId: s.member.id,
-                    data: labels.map(date => countAt[s.member.id][date]),
+                    data: lineData[s.member.id],
                     borderColor: App.kioskChartColor(s.member.id, i),
                     backgroundColor: App.kioskChartColor(s.member.id, i),
                     borderWidth: 2,
-                    pointRadius: 0,
+                    // A visible dot at the bottom marks the member's very first
+                    // training of the period; all other points stay hidden.
+                    pointRadius: labels.map((_, idx) => (idx === firstIdx[s.member.id] ? 5 : 0)),
+                    pointBackgroundColor: App.kioskChartColor(s.member.id, i),
+                    pointBorderWidth: 0,
                     pointHoverRadius: 4,
                     tension: 0,
                     spanGaps: true
@@ -772,11 +767,43 @@ Object.assign(App, {
 
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+                // King = member(s) at the max final cumulative count. The record must be
+                // BROKEN (strictly higher) for someone to steal the crown: when two
+                // members tie at the top with different histories, the crown stays
+                // with whoever led longest (reached the top first). It is shared
+                // only by members with exactly the same training history.
+                const lastDate = labels[labels.length - 1];
+                const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
+                const maxFinal = Math.max(...finalCounts);
+                const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
+                const kingIds = new Set();
+                if (top.length === 1) {
+                    kingIds.add(top[0]._memberId);
+                } else {
+                    const identical = top.every(d => labels.map(x => countAt[d._memberId][x]).join(',') === labels.map(x => countAt[top[0]._memberId][x]).join(','));
+                    if (identical) {
+                        top.forEach(d => kingIds.add(d._memberId));
+                    } else {
+                        // Walk backwards from the last date, keeping only members tied
+                        // at the current running max; the survivors led longest.
+                        let candidates = top.slice();
+                        for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
+                            const d = labels[idx];
+                            const maxHere = Math.max(...candidates.map(c => countAt[c._memberId][d] ?? -Infinity));
+                            candidates = candidates.filter(c => (countAt[c._memberId][d] ?? -Infinity) === maxHere);
+                        }
+                        candidates.forEach(c => kingIds.add(c._memberId));
+                    }
+                }
+                datasets.forEach(d => {
+                    if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
+                });
+
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
 
                 // Spread right-side labels so members tied on the same final count
                 // don't stack on top of one another (centered around the shared line).
-                const finalCounts = datasets.map(d => d.data[d.data.length - 1]);
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
@@ -808,31 +835,6 @@ Object.assign(App, {
                     }
                 };
 
-                // Crown emoji on the date a member overtakes the current leader.
-                const crownPlugin = {
-                    id: 'kioskCrowns',
-                    afterDatasetsDraw(chart) {
-                        if (!Object.keys(overtakes).length) return;
-                        const ctx = chart.ctx;
-                        ctx.save();
-                        ctx.font = '16px system-ui, sans-serif';
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'bottom';
-                        chart.data.datasets.forEach((ds, di) => {
-                            const meta = chart.getDatasetMeta(di);
-                            if (!meta.visible) return;
-                            ds.data.forEach((val, idx) => {
-                                if (val == null) return;
-                                if (overtakes[labels[idx] + '|' + ds._memberId]) {
-                                    const pt = meta.data[idx];
-                                    if (pt) ctx.fillText('👑', pt.x, pt.y - 10);
-                                }
-                            });
-                        });
-                        ctx.restore();
-                    }
-                };
-
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
                 // Make the chart tall enough to fit every member's line + labels,
                 // even with 50 athletes. Top/bottom padding reserve room for the
@@ -848,7 +850,7 @@ Object.assign(App, {
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [rightLabelsPlugin, crownPlugin],
+                    plugins: [rightLabelsPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -857,16 +859,23 @@ Object.assign(App, {
                         plugins: {
                             legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
                             tooltip: {
-                                filter: item => item.parsed.y != null,
+                                filter: item => {
+                                    const d = datasets.find(x => x._memberId === item.dataset._memberId);
+                                    const v = d && countAt[d._memberId][item.label];
+                                    return v != null;
+                                },
                                 callbacks: {
                                     title: items => items.length ? dateFmt(items[0].label) : '',
-                                    label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} ${map.chartTooltipTrainings || 'trainings'}`
+                                    label: ctx => {
+                                        const v = countAt[ctx.dataset._memberId][ctx.label];
+                                        return ` ${ctx.dataset.label}: ${v} ${map.chartTooltipTrainings || 'trainings'}`;
+                                    }
                                 }
                             }
                         },
                         scales: {
                             x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
-                            y: { suggestedMin: 1, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                            y: { min: 1, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
                         }
                     }
                 });
