@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.72 (01:20) — Chart polish: lines from first training, no 0 tick, staggered labels, working crowns, no dots
+- Member lines now only start at their first training (no flat 0 line before it); the y-axis no longer shows the 0 tick
+- Right-side names for members tied on the same final count are staggered vertically so they no longer stack on top of one another
+- Crowns now appear whenever a member sets a new all-time high cumulative count (previous rule required a strict leader change, which never fired because the leader is usually tied); verified against live data
+- Hidden the line dots (points only show on hover), reducing visual clutter
+
 ## 2026-08-21 — v0.71 (01:10) — Training Progress chart: full lines, right labels, all-athlete tooltips, crowns
 - Each member line now runs the full timeline (cumulative count carried forward, flat from their last training to the far right)
 - On PC (≥768px) each athlete's name is drawn at the far right aligned to their line's final value; the bottom legend is used on mobile only

@@ -712,10 +712,8 @@ Object.assign(App, {
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
 
-                // Fill the full timeline per member: cumulative count carried
-                // forward (0 before their first training), so every line runs from
-                // the left edge to the far right and the tooltip can list every
-                // athlete at any date.
+                // Per member: no line before their first training (null), then the
+                // cumulative count carried forward flat to the far right.
                 const countAt = {};
                 const pointMap = {};
                 series.forEach(s => {
@@ -723,29 +721,34 @@ Object.assign(App, {
                     countAt[s.member.id] = {};
                 });
                 series.forEach(s => {
+                    let started = false;
                     let prev = 0;
                     labels.forEach(date => {
-                        if (pointMap[s.member.id].has(date)) prev = pointMap[s.member.id].get(date);
-                        countAt[s.member.id][date] = prev;
+                        if (pointMap[s.member.id].has(date)) { started = true; prev = pointMap[s.member.id].get(date); }
+                        countAt[s.member.id][date] = started ? prev : null;
                     });
                 });
 
-                // Detect overtakes: on each date find the strict leader; when the
-                // leader changes to a different member with a higher count than the
-                // previous leader, that member earns a crown on that date.
+                // Crown when a member sets a new all-time high cumulative count (overtakes
+                // the previous leader's number). Everyone tied at the new record on
+                // that date earns a crown; the very first record is skipped since
+                // there is no prior leader to overtake.
                 const overtakes = {};
-                let prevLeaderId = null, prevLeaderCount = -1;
+                let globalMax = 0, hasRecord = false;
                 labels.forEach(date => {
-                    let leaderId = null, leaderCount = -1, tie = false;
+                    let maxToday = -1;
+                    const atMax = [];
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
-                        if (c > leaderCount) { leaderCount = c; leaderId = s.member.id; tie = false; }
-                        else if (c === leaderCount) tie = true;
+                        if (c == null) return;
+                        if (c > maxToday) { maxToday = c; atMax.length = 0; atMax.push(s.member.id); }
+                        else if (c === maxToday) atMax.push(s.member.id);
                     });
-                    if (!tie && leaderId && prevLeaderId && leaderId !== prevLeaderId && leaderCount > prevLeaderCount) {
-                        overtakes[date + '|' + leaderId] = true;
+                    if (maxToday > globalMax) {
+                        if (hasRecord) atMax.forEach(id => { overtakes[date + '|' + id] = true; });
+                        globalMax = maxToday;
+                        hasRecord = true;
                     }
-                    if (!tie) { prevLeaderId = leaderId; prevLeaderCount = leaderCount; }
                 });
 
                 const isDesktop = window.innerWidth >= 768;
@@ -756,8 +759,8 @@ Object.assign(App, {
                     borderColor: App.kioskChartColor(s.member.id, i),
                     backgroundColor: App.kioskChartColor(s.member.id, i),
                     borderWidth: 2,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
                     tension: 0.3,
                     spanGaps: true
                 }));
@@ -765,6 +768,17 @@ Object.assign(App, {
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
+
+                // Spread right-side labels so members tied on the same final count
+                // don't stack on top of one another (centered around the shared line).
+                const finalCounts = datasets.map(d => d.data[d.data.length - 1]);
+                const yGroups = {};
+                finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
+                const labelOffsets = {};
+                Object.values(yGroups).forEach(indices => {
+                    const n = indices.length;
+                    indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 14; });
+                });
 
                 // Draw each athlete's name at the far right, aligned with their
                 // line's final value (PC only). On mobile the bottom legend is used.
@@ -783,7 +797,7 @@ Object.assign(App, {
                             const lastPt = meta.data[meta.data.length - 1];
                             if (!lastPt || !isFinite(lastPt.x) || !isFinite(lastPt.y)) return;
                             ctx.fillStyle = ds.borderColor;
-                            ctx.fillText(ds.label, chart.chartArea.right + 6, lastPt.y);
+                            ctx.fillText(ds.label, chart.chartArea.right + 6, lastPt.y + (labelOffsets[di] || 0));
                         });
                         ctx.restore();
                     }
@@ -796,16 +810,17 @@ Object.assign(App, {
                         if (!Object.keys(overtakes).length) return;
                         const ctx = chart.ctx;
                         ctx.save();
-                        ctx.font = '14px sans-serif';
+                        ctx.font = '16px system-ui, sans-serif';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'bottom';
                         chart.data.datasets.forEach((ds, di) => {
                             const meta = chart.getDatasetMeta(di);
                             if (!meta.visible) return;
                             ds.data.forEach((val, idx) => {
+                                if (val == null) return;
                                 if (overtakes[labels[idx] + '|' + ds._memberId]) {
                                     const pt = meta.data[idx];
-                                    if (pt) ctx.fillText('👑', pt.x, pt.y - 8);
+                                    if (pt) ctx.fillText('👑', pt.x, pt.y - 10);
                                 }
                             });
                         });
@@ -826,6 +841,7 @@ Object.assign(App, {
                         plugins: {
                             legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
                             tooltip: {
+                                filter: item => item.parsed.y != null,
                                 callbacks: {
                                     title: items => items.length ? dateFmt(items[0].label) : '',
                                     label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} ${map.chartTooltipTrainings || 'trainings'}`
@@ -834,7 +850,7 @@ Object.assign(App, {
                         },
                         scales: {
                             x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
-                            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                            y: { beginAtZero: true, ticks: { precision: 0, callback: (v) => v === 0 ? '' : v }, grid: { color: 'rgba(0,0,0,0.06)' } }
                         }
                     }
                 });
