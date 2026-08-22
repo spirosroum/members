@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.73 (01:30) — Chart: real overtakes only, straight lines, y from 1, dynamic height
+- Crowns now appear only on a genuine overtake: a member who was already active and behind the leader newly enters the leadership group (verified: no crown on 2026-08-10, where the co-leaders merely extended their own record)
+- Lines are now straight (tension 0) instead of curved between points
+- Y-axis starts at 1 at the very bottom (no 0 tick)
+- Chart height is dynamic: scales with member count (series.length × 30 + padding) so all athletes fit comfortably even at 50, with top/bottom padding reserved for staggered names and crowns so the top ones are no longer clipped
+
 ## 2026-08-21 — v0.72 (01:20) — Chart polish: lines from first training, no 0 tick, staggered labels, working crowns, no dots
 - Member lines now only start at their first training (no flat 0 line before it); the y-axis no longer shows the 0 tick
 - Right-side names for members tied on the same final count are staggered vertically so they no longer stack on top of one another

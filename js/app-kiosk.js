@@ -729,26 +729,31 @@ Object.assign(App, {
                     });
                 });
 
-                // Crown when a member sets a new all-time high cumulative count (overtakes
-                // the previous leader's number). Everyone tied at the new record on
-                // that date earns a crown; the very first record is skipped since
-                // there is no prior leader to overtake.
+                // Crown when a member overtakes the leader: they were already active (had
+                // trained on a previous date) and now enter the leadership group that
+                // they had been behind. Members already leading who simply extend the
+                // record together get no crown (that's not an overtake).
                 const overtakes = {};
-                let globalMax = 0, hasRecord = false;
+                let prevLeaders = null;
+                let prevActive = new Set();
                 labels.forEach(date => {
                     let maxToday = -1;
-                    const atMax = [];
+                    const leadersToday = [];
+                    const activeToday = new Set();
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
                         if (c == null) return;
-                        if (c > maxToday) { maxToday = c; atMax.length = 0; atMax.push(s.member.id); }
-                        else if (c === maxToday) atMax.push(s.member.id);
+                        activeToday.add(s.member.id);
+                        if (c > maxToday) { maxToday = c; leadersToday.length = 0; leadersToday.push(s.member.id); }
+                        else if (c === maxToday) leadersToday.push(s.member.id);
                     });
-                    if (maxToday > globalMax) {
-                        if (hasRecord) atMax.forEach(id => { overtakes[date + '|' + id] = true; });
-                        globalMax = maxToday;
-                        hasRecord = true;
+                    if (prevLeaders) {
+                        leadersToday.forEach(id => {
+                            if (!prevLeaders.has(id) && prevActive.has(id)) overtakes[date + '|' + id] = true;
+                        });
                     }
+                    prevLeaders = new Set(leadersToday);
+                    prevActive = activeToday;
                 });
 
                 const isDesktop = window.innerWidth >= 768;
@@ -761,7 +766,7 @@ Object.assign(App, {
                     borderWidth: 2,
                     pointRadius: 0,
                     pointHoverRadius: 4,
-                    tension: 0.3,
+                    tension: 0,
                     spanGaps: true
                 }));
 
@@ -829,6 +834,17 @@ Object.assign(App, {
                 };
 
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
+                // Make the chart tall enough to fit every member's line + labels,
+                // even with 50 athletes. Top/bottom padding reserve room for the
+                // staggered right-side names (and crowns) of the highest/lowest groups.
+                const offs = Object.values(labelOffsets);
+                const upSpread = offs.length ? Math.max(0, ...offs.map(o => -o)) : 0;
+                const downSpread = offs.length ? Math.max(0, ...offs) : 0;
+                const topPad = Math.max(34, upSpread + 16);
+                const bottomPad = Math.max(12, downSpread + 16);
+                const chartH = Math.max(280, series.length * 30 + topPad + bottomPad);
+                const wrap = canvas.parentElement;
+                if (wrap) wrap.style.height = chartH + 'px';
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
@@ -837,7 +853,7 @@ Object.assign(App, {
                         responsive: true,
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
-                        layout: { padding: { right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
+                        layout: { padding: { top: topPad, bottom: bottomPad, right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
                         plugins: {
                             legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
                             tooltip: {
@@ -850,7 +866,7 @@ Object.assign(App, {
                         },
                         scales: {
                             x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
-                            y: { beginAtZero: true, ticks: { precision: 0, callback: (v) => v === 0 ? '' : v }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                            y: { suggestedMin: 1, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
                         }
                     }
                 });
