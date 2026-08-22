@@ -768,34 +768,53 @@ Object.assign(App, {
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
-                // King = member(s) at the max final cumulative count. The record must be
-                // BROKEN (strictly higher) for someone to steal the crown: when two
-                // members tie at the top with different histories, the crown stays
-                // with whoever led longest (reached the top first). It is shared
-                // only by members with exactly the same training history.
+                // Resolve which of the given member ids hold the crown: one unless
+                // all share exactly the same training history (identical count on
+                // every date); otherwise the one(s) who led longest (reached the top
+                // first), found by walking backwards keeping members tied at the max.
+                const resolveKings = (ids) => {
+                    if (ids.length === 1) return ids.slice();
+                    const identical = ids.every(id => labels.map(x => countAt[id][x]).join(',') === labels.map(x => countAt[ids[0]][x]).join(','));
+                    if (identical) return ids.slice();
+                    let candidates = ids.slice();
+                    for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
+                        const d = labels[idx];
+                        const maxHere = Math.max(...candidates.map(c => countAt[c][d] ?? -Infinity));
+                        candidates = candidates.filter(c => (countAt[c][d] ?? -Infinity) === maxHere);
+                    }
+                    return candidates;
+                };
+
+                // Final king(s): the member(s) at the max final cumulative count.
+                // The record must be BROKEN (strictly higher) for someone to steal it.
                 const lastDate = labels[labels.length - 1];
                 const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
                 const maxFinal = Math.max(...finalCounts);
                 const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
-                const kingIds = new Set();
-                if (top.length === 1) {
-                    kingIds.add(top[0]._memberId);
-                } else {
-                    const identical = top.every(d => labels.map(x => countAt[d._memberId][x]).join(',') === labels.map(x => countAt[top[0]._memberId][x]).join(','));
-                    if (identical) {
-                        top.forEach(d => kingIds.add(d._memberId));
-                    } else {
-                        // Walk backwards from the last date, keeping only members tied
-                        // at the current running max; the survivors led longest.
-                        let candidates = top.slice();
-                        for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
-                            const d = labels[idx];
-                            const maxHere = Math.max(...candidates.map(c => countAt[c._memberId][d] ?? -Infinity));
-                            candidates = candidates.filter(c => (countAt[c._memberId][d] ?? -Infinity) === maxHere);
-                        }
-                        candidates.forEach(c => kingIds.add(c._memberId));
+                const kingIds = new Set(resolveKings(top.map(d => d._memberId)));
+
+                // In-chart crowns: whenever an existing record is broken (a member's count
+                // strictly exceeds the previous all-time max), that date gets a crown
+                // emoji above it for the new king(s). The very first record is not
+                // crowned — there is no prior king to steal from.
+                const chartCrowns = {};
+                let record = 0;
+                let recordSeen = false;
+                labels.forEach(date => {
+                    let maxToday = -1;
+                    const breakers = [];
+                    series.forEach(s => {
+                        const c = countAt[s.member.id][date];
+                        if (c == null) return;
+                        if (c > maxToday) { maxToday = c; breakers.length = 0; breakers.push(s.member.id); }
+                        else if (c === maxToday) breakers.push(s.member.id);
+                    });
+                    if (maxToday < 0) return;
+                    if (recordSeen && maxToday > record) {
+                        chartCrowns[date] = resolveKings(breakers);
                     }
-                }
+                    if (!recordSeen || maxToday > record) { record = maxToday; recordSeen = true; }
+                });
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });
@@ -803,12 +822,18 @@ Object.assign(App, {
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
 
                 // Spread right-side labels so members tied on the same final count
-                // don't stack on top of one another (centered around the shared line).
+                // don't stack on top of one another. The king is placed at the top
+                // of its tied group so he always appears above his equals.
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
                 Object.values(yGroups).forEach(indices => {
                     const n = indices.length;
+                    indices.sort((a, b) => {
+                        const ak = kingIds.has(datasets[a]._memberId) ? 0 : 1;
+                        const bk = kingIds.has(datasets[b]._memberId) ? 0 : 1;
+                        return ak - bk;
+                    });
                     indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 14; });
                 });
 
@@ -835,6 +860,35 @@ Object.assign(App, {
                     }
                 };
 
+                // Crown emoji above the date a new king (or kings) breaks the record.
+                const crownPlugin = {
+                    id: 'kioskChartCrowns',
+                    afterDatasetsDraw(chart) {
+                        const dates = Object.keys(chartCrowns);
+                        if (!dates.length) return;
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.font = '16px system-ui, sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const xScale = chart.scales.x;
+                        dates.forEach(date => {
+                            const ids = chartCrowns[date];
+                            const x = xScale.getPixelForValue(date);
+                            ids.forEach(mid => {
+                                const di = datasets.findIndex(ds => ds._memberId === mid);
+                                const meta = di >= 0 ? chart.getDatasetMeta(di) : null;
+                                if (!meta || !meta.visible) return;
+                                const idx = labels.indexOf(date);
+                                const pt = meta.data[idx];
+                                if (!pt || !isFinite(pt.y)) return;
+                                ctx.fillText('👑', x, pt.y - 12);
+                            });
+                        });
+                        ctx.restore();
+                    }
+                };
+
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
                 // Make the chart tall enough to fit every member's line + labels,
                 // even with 50 athletes. Top/bottom padding reserve room for the
@@ -850,7 +904,7 @@ Object.assign(App, {
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [rightLabelsPlugin],
+                    plugins: [rightLabelsPlugin, crownPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,

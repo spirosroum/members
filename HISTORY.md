@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.75 (01:50) — King above tied names; crowns on record-break dates
+- In the right-side name section, when the king shares the same final training count with another member, his name is now placed above the tied member(s)
+- Crown emojis are drawn inside the chart above the date whenever an existing record is broken (a new king/kings takes the top); the very first record is not crowned since there is no prior king to steal from
+
 ## 2026-08-21 — v0.74 (01:40) — Single king crown, first-training dots, direct session connectors
 - The crown is now a single "king" badge shown next to the current record-holder's name (right labels on PC, legend on mobile). The record must be strictly broken for someone to steal it; when two members tie at the top with different histories, the crown stays with whoever led longest (reached the top first). It is shared only by members with exactly the same training history
 - A visible dot is drawn at the bottom of the chart on each member's very first training of the period (their cumulative count always starts at 1)
