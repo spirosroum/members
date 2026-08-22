@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.78 (01:10) — Crown History leaderboard on kiosk
+- Added a "Crown History" card below the Training Progress chart showing every member who has held the #1 crown and for how many days (always calculated over the last 90 days)
+- Uses the same cumulative training logic as the chart; on tied days all co-leaders get credit
+- Rank #1 gets a 👑 emoji; the rest are numbered
+- Full i18n support (English + Greek) with translations in `applyKioskTranslations`
+- Reuses existing `.kiosk-lb-card` layout for consistent styling
+
 ## 2026-08-21 — v0.77 (02:10) — Chart crown on any king change, not just record extension
 - A crown is now drawn above a date whenever the set of record-holders changes (a new king enters or a previous co-holder is dethroned), not only when a brand-new member breaks the record
 - This restores the missing 2026-08-10 crown (9018/19961998 took the lead from 6157) while still suppressing 2026-08-12 (the same two kings merely extended 4→5)

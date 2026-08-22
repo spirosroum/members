@@ -43,6 +43,9 @@ App.KIOSK_I18N = {
         chartRangeCustom: 'Custom',
         chartNoTrainings: 'No trainings recorded in this period.',
         chartTooltipTrainings: 'trainings',
+        crownHistoryTitle: '👑 Crown History',
+        crownHistorySubtitle: 'Days as #1 in the last 90 days.',
+        crownHistoryDays: 'days',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
         leaderboardMemberColumn: 'Name',
@@ -233,6 +236,9 @@ App.KIOSK_I18N = {
         chartRangeCustom: 'Προσαρμογή',
         chartNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         chartTooltipTrainings: 'προπονήσεις',
+        crownHistoryTitle: '👑 Ιστορικο Στεμματος',
+        crownHistorySubtitle: 'Ημερες ως #1 τις τελευταιες 90 ημερες.',
+        crownHistoryDays: 'ημερες',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
         leaderboardMemberColumn: 'Όνομα',
@@ -504,6 +510,9 @@ App.applyKioskTranslations = function() {
             const text = key === '3m' ? map.chartRange3m : key === '1m' ? map.chartRange1m : key === 'all' ? map.chartRangeAll : map.chartRangeCustom;
             if (text) btn.innerText = text;
         });
+        const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || '👑 Crown History';
+        const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days as #1 in the last 90 days.';
+        App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
         const classDetailsCloseBtn = document.querySelector('#modal-class-details .btn-primary'); if (classDetailsCloseBtn) classDetailsCloseBtn.innerText = map.classDetailsClose || 'Close';

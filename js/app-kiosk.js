@@ -942,6 +942,88 @@ Object.assign(App, {
                         }
                     }
                 });
+                App.renderCrownHistory && App.renderCrownHistory();
+            },
+
+            renderCrownHistory: () => {
+                const container = document.getElementById('kiosk-crown-history-list');
+                const holder = document.getElementById('kiosk-crown-history-container');
+                if (!container || !holder) return;
+
+                const allMembers = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                if (!allMembers.length) { holder.classList.add('hidden'); return; }
+
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
+                since.setHours(0, 0, 0, 0);
+
+                const series = App.getCumulativeTrainingSeries(allMembers, since, until);
+                if (!series.length) { holder.classList.add('hidden'); return; }
+
+                const allDates = [];
+                const d = new Date(since);
+                while (d <= until) {
+                    allDates.push(Utils.dateToLocalIso(d));
+                    d.setDate(d.getDate() + 1);
+                }
+
+                const pointMap = {};
+                series.forEach(s => {
+                    pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
+                });
+                const countAt = {};
+                series.forEach(s => {
+                    let prev = null;
+                    countAt[s.member.id] = {};
+                    allDates.forEach(date => {
+                        const pm = pointMap[s.member.id];
+                        if (pm.has(date)) prev = pm.get(date);
+                        countAt[s.member.id][date] = prev;
+                    });
+                });
+
+                const daysByMember = {};
+                const memberMap = {};
+                series.forEach(s => { memberMap[s.member.id] = s.member; });
+
+                allDates.forEach(date => {
+                    let maxCount = -1;
+                    const leaders = [];
+                    series.forEach(s => {
+                        const c = countAt[s.member.id][date];
+                        if (c == null) return;
+                        if (c > maxCount) { maxCount = c; leaders.length = 0; leaders.push(s.member.id); }
+                        else if (c === maxCount) leaders.push(s.member.id);
+                    });
+                    if (maxCount <= 0) return;
+                    leaders.forEach(id => { daysByMember[id] = (daysByMember[id] || 0) + 1; });
+                });
+
+                const entries = Object.entries(daysByMember)
+                    .map(([id, days]) => ({ member: memberMap[id], days }))
+                    .filter(e => e.member)
+                    .sort((a, b) => b.days - a.days || a.member.lastName.localeCompare(b.member.lastName));
+
+                if (!entries.length) { holder.classList.add('hidden'); return; }
+                holder.classList.remove('hidden');
+
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const dayLabel = map.crownHistoryDays || 'days';
+
+                container.innerHTML = `
+                    <div class="kiosk-leaderboard">
+                        ${entries.map((e, i) => `
+                            <div class="kiosk-lb-card">
+                                <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${i === 0 ? '👑' : i + 1}</span></div>
+                                <strong class="kiosk-lb-name">${Utils.escapeHTML(e.member.firstName)} ${Utils.escapeHTML(e.member.lastName)}</strong>
+                                <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
+                                <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
             },
 
             checkoutVisit: (visitId) => {
