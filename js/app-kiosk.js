@@ -793,26 +793,29 @@ Object.assign(App, {
                 const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
                 const kingIds = new Set(resolveKings(top.map(d => d._memberId)));
 
-                // In-chart crowns: whenever an existing record is broken (a member's count
-                // strictly exceeds the previous all-time max), that date gets a crown
-                // emoji above it for the new king(s). The very first record is not
-                // crowned — there is no prior king to steal from.
+                // In-chart crowns: a crown appears above a date only when a NEW king appears —
+                // a member who was NOT holding the record before now breaks the previous max.
+                // If the same king(s) merely extend their own record, no new king is crowned.
                 const chartCrowns = {};
                 let record = 0;
                 let recordSeen = false;
+                let prevHolders = new Set();
                 labels.forEach(date => {
                     let maxToday = -1;
-                    const breakers = [];
+                    const holders = [];
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
                         if (c == null) return;
-                        if (c > maxToday) { maxToday = c; breakers.length = 0; breakers.push(s.member.id); }
-                        else if (c === maxToday) breakers.push(s.member.id);
+                        if (c > maxToday) { maxToday = c; holders.length = 0; holders.push(s.member.id); }
+                        else if (c === maxToday) holders.push(s.member.id);
                     });
                     if (maxToday < 0) return;
                     if (recordSeen && maxToday > record) {
-                        chartCrowns[date] = resolveKings(breakers);
+                        // Only crown holders who were not holding the record before.
+                        const newKings = holders.filter(id => !prevHolders.has(id));
+                        if (newKings.length) chartCrowns[date] = resolveKings(newKings);
                     }
+                    prevHolders = new Set(holders);
                     if (!recordSeen || maxToday > record) { record = maxToday; recordSeen = true; }
                 });
                 datasets.forEach(d => {

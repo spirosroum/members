@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.76 (02:00) — Chart crown only when a NEW king appears
+- In-chart crowns no longer appear when the same king(s) merely extend their own record (e.g. 2026-08-12, where the co-leaders who already held the record went 4→5)
+- A crown is drawn only when a member who was NOT holding the record before breaks the previous max — a genuinely new king/kings
+
 ## 2026-08-21 — v0.75 (01:50) — King above tied names; crowns on record-break dates
 - In the right-side name section, when the king shares the same final training count with another member, his name is now placed above the tied member(s)
 - Crown emojis are drawn inside the chart above the date whenever an existing record is broken (a new king/kings takes the top); the very first record is not crowned since there is no prior king to steal from
