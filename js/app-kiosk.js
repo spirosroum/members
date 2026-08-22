@@ -983,45 +983,93 @@ Object.assign(App, {
                     });
                 });
 
+                const resolveKings = (ids, upToLabels) => {
+                    if (ids.length <= 1) return ids.slice();
+                    const identical = ids.every(id =>
+                        upToLabels.map(x => countAt[id][x] ?? 0).join(',') === upToLabels.map(x => countAt[ids[0]][x] ?? 0).join(',')
+                    );
+                    if (identical) return ids.slice();
+                    let candidates = ids.slice();
+                    for (let idx = upToLabels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
+                        const dateKey = upToLabels[idx];
+                        const maxHere = Math.max(...candidates.map(c => countAt[c][dateKey] ?? -Infinity));
+                        candidates = candidates.filter(c => (countAt[c][dateKey] ?? -Infinity) === maxHere);
+                    }
+                    return candidates;
+                };
+
                 const daysByMember = {};
                 const memberMap = {};
                 series.forEach(s => { memberMap[s.member.id] = s.member; });
 
-                allDates.forEach(date => {
-                    let maxCount = -1;
-                    const leaders = [];
+                let record = 0;
+                let currentKings = [];
+
+                allDates.forEach((date, idx) => {
+                    const upToLabels = allDates.slice(0, idx + 1);
+                    let maxToday = 0;
+                    const holders = [];
                     series.forEach(s => {
                         const c = countAt[s.member.id][date];
-                        if (c == null) return;
-                        if (c > maxCount) { maxCount = c; leaders.length = 0; leaders.push(s.member.id); }
-                        else if (c === maxCount) leaders.push(s.member.id);
+                        if (c == null || c <= 0) return;
+                        if (c > maxToday) {
+                            maxToday = c;
+                            holders.length = 0;
+                            holders.push(s.member.id);
+                        } else if (c === maxToday) {
+                            holders.push(s.member.id);
+                        }
                     });
-                    if (maxCount <= 0) return;
-                    leaders.forEach(id => { daysByMember[id] = (daysByMember[id] || 0) + 1; });
+
+                    if (maxToday <= 0) return;
+
+                    if (maxToday > record) {
+                        currentKings = resolveKings(holders, upToLabels);
+                        record = maxToday;
+                    }
+
+                    currentKings.forEach(id => {
+                        daysByMember[id] = (daysByMember[id] || 0) + 1;
+                    });
                 });
 
                 const entries = Object.entries(daysByMember)
                     .map(([id, days]) => ({ member: memberMap[id], days }))
-                    .filter(e => e.member)
+                    .filter(e => e.member && e.days > 0)
                     .sort((a, b) => b.days - a.days || a.member.lastName.localeCompare(b.member.lastName));
 
                 if (!entries.length) { holder.classList.add('hidden'); return; }
                 holder.classList.remove('hidden');
 
+                let prevDays = null;
+                let prevRank = 0;
+                entries.forEach((entry, index) => {
+                    if (index === 0 || entry.days !== prevDays) {
+                        entry.rank = index + 1;
+                    } else {
+                        entry.rank = prevRank;
+                    }
+                    prevDays = entry.days;
+                    prevRank = entry.rank;
+                });
+
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
-                const dayLabel = map.crownHistoryDays || 'days';
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${entries.map((e, i) => `
-                            <div class="kiosk-lb-card">
-                                <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${i === 0 ? '👑' : i + 1}</span></div>
-                                <strong class="kiosk-lb-name">${Utils.escapeHTML(e.member.firstName)} ${Utils.escapeHTML(e.member.lastName)}</strong>
-                                <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
-                                <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
-                            </div>
-                        `).join('')}
+                        ${entries.map(e => {
+                            const dayLabel = e.days === 1 ? (map.crownHistoryDay || 'day') : (map.crownHistoryDays || 'days');
+                            const rankDisplay = e.rank === 1 ? '👑' : e.rank;
+                            return `
+                                <div class="kiosk-lb-card">
+                                    <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${rankDisplay}</span></div>
+                                    <strong class="kiosk-lb-name">${Utils.escapeHTML(e.member.firstName)} ${Utils.escapeHTML(e.member.lastName)}</strong>
+                                    <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
+                                    <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 `;
             },

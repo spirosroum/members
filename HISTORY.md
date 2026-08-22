@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.79 (01:18) — Fix Crown History day calculation
+- Fixed Crown History day tracking so it strictly follows the gym's crown rules: the crown is held continuously by the record holder(s) until the record is strictly broken
+- Ties during later dates do not steal or dilute the crown; the crown stays with whoever led first (`resolveKings`), matching the chart's 👑 logic
+- Singular/plural support added for days count (day vs days / ημέρα vs ημέρες)
+
 ## 2026-08-23 — v0.78 (01:10) — Crown History leaderboard on kiosk
 - Added a "Crown History" card below the Training Progress chart showing every member who has held the #1 crown and for how many days (always calculated over the last 90 days)
 - Uses the same cumulative training logic as the chart; on tied days all co-leaders get credit
