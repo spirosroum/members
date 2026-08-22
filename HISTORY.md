@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.70 (01:00) — Training Progress line chart on Check-in Portal
+- Added a "Training Progress" multi-line chart below the Training Leaderboard showing each member's cumulative training count over time (class check-ins + open-gym visits, mirroring the leaderboard count)
+- Timeframe pills: Last 3 months (default), Last month, All-time, and a Custom date range; persisted per device (kiosk_chart_range)
+- Deterministic per-member colors (stable hash → distinct palette), hover tooltips show member name, exact date, and cumulative count
+- Uses Chart.js 4.4.3 UMD from CDN (guarded: chart hides gracefully if the library or data is unavailable, leaving the rest of the kiosk untouched)
+- i18n: new `chart*` keys (EN+EL) applied via applyKioskTranslations
+
 ## 2026-08-21 — v0.69 (00:50) — Fix "Last" medal only on the final rank
 - The "Last" leaderboard emoji (default 💩) was applied to every member past the highest configured place; it now only shows on the last displayed rank (all members tied at that rank), with everyone else falling back to their rank number
 

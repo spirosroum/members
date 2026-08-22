@@ -1,6 +1,6 @@
 // =====================================================================
 // app-kiosk.js
-// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, checkoutVisit
+// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, kioskChartColor, getCumulativeTrainingSeries, setKioskChartRange, renderKioskChart, checkoutVisit
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -577,6 +577,7 @@ Object.assign(App, {
                     }
                 });
                 const lastRank = top.length ? top[top.length - 1].rank : null;
+                App._kioskLeaderboardMembers = top.map(e => e.member);
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
@@ -590,6 +591,172 @@ Object.assign(App, {
                         `).join('')}
                     </div>
                 `;
+                App.renderKioskChart && App.renderKioskChart();
+            },
+
+            // Deterministic per-member color from a distinct palette (stable across
+            // renders/devices). Cycle past the palette length, re-hashing the id.
+            kioskChartColor: (memberId, index) => {
+                const palette = [
+                    '#0ea5e9', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6',
+                    '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+                    '#14b8a6', '#a855f7', '#22c55e', '#ef4444', '#3b82f6'
+                ];
+                if (index != null) return palette[index % palette.length];
+                let h = 0;
+                const s = String(memberId);
+                for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+                return palette[h % palette.length];
+            },
+
+            // Per-member cumulative training series over [since, until].
+            // Counting rule mirrors getMemberLeaderboardCount: one point per class
+            // check-in (date/class/slot) plus one per open-gym visit (visit with no
+            // class check-in). Returns [{ member, points: [{ date, count }] }].
+            getCumulativeTrainingSeries: (memberIds, since, until) => {
+                const checkins = DB.getClassCheckins();
+                const checkinVisitIds = new Set(checkins.map(c => c.visitId));
+                const visits = DB.getVisits();
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+                const result = [];
+                memberIds.forEach(member => {
+                    const cins = checkins.filter(ci => ci.memberId === member.id && ci.entryTime);
+                    const seen = new Set();
+                    const dayCount = {};
+                    cins.forEach(ci => {
+                        const d = new Date(ci.entryTime);
+                        if (isNaN(d.getTime()) || d < since || d >= until) return;
+                        const dateKey = ci.slotDate || Utils.dateToLocalIso(d);
+                        const sessionKey = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
+                        if (seen.has(sessionKey)) return;
+                        seen.add(sessionKey);
+                        dayCount[dateKey] = (dayCount[dateKey] || 0) + 1;
+                    });
+                    visits.forEach(v => {
+                        if (v.memberId !== member.id || !v.entryTime || checkinVisitIds.has(v.id)) return;
+                        const d = new Date(v.entryTime);
+                        if (isNaN(d.getTime()) || d < since || d >= until) return;
+                        const dateKey = Utils.dateToLocalIso(d);
+                        dayCount[dateKey] = (dayCount[dateKey] || 0) + 1;
+                    });
+                    const dates = Object.keys(dayCount).sort();
+                    let cum = 0;
+                    const points = dates.map(date => {
+                        cum += dayCount[date];
+                        return { date, count: cum };
+                    });
+                    if (points.length) result.push({ member, points });
+                });
+                return result;
+            },
+
+            setKioskChartRange: (range) => {
+                App.chartRange = range;
+                localStorage.setItem('kiosk_chart_range', range);
+                const isCustom = range === 'custom';
+                document.querySelectorAll('.kiosk-chart-range-btn').forEach(b => {
+                    const matches = isCustom ? b.dataset.range === 'custom' : b.dataset.range === range;
+                    b.classList.toggle('active', !!matches);
+                });
+                const rangeEl = document.getElementById('kiosk-chart-custom-range');
+                if (rangeEl) rangeEl.classList.toggle('hidden', !isCustom);
+                App.renderKioskChart();
+            },
+
+            renderKioskChart: () => {
+                const canvas = document.getElementById('kiosk-training-chart');
+                if (!canvas) return;
+                if (typeof Chart === 'undefined') {
+                    const holder = document.getElementById('kiosk-training-chart-container');
+                    if (holder) holder.classList.add('hidden');
+                    return;
+                }
+                const members = App._kioskLeaderboardMembers || [];
+                if (!members.length) {
+                    const holder = document.getElementById('kiosk-training-chart-container');
+                    if (holder) holder.classList.add('hidden');
+                    return;
+                }
+
+                const range = App.chartRange || '3m';
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                let since;
+                if (range === 'all') {
+                    since = new Date(0);
+                } else if (range === 'custom') {
+                    const s = document.getElementById('kiosk-chart-custom-start').value;
+                    const e = document.getElementById('kiosk-chart-custom-end').value;
+                    since = s ? new Date(s + 'T00:00:00') : new Date(until.getTime() - 89 * 24 * 3600 * 1000);
+                    if (e) until = new Date(e + 'T23:59:59');
+                } else {
+                    const days = range === '1m' ? 30 : 90;
+                    since = new Date(until.getTime() - (days - 1) * 24 * 3600 * 1000);
+                    since.setHours(0, 0, 0, 0);
+                }
+
+                const series = App.getCumulativeTrainingSeries(members, since, until);
+                const holder = document.getElementById('kiosk-training-chart-container');
+                if (holder) holder.classList.remove('hidden');
+                const empty = document.getElementById('kiosk-training-chart-empty');
+                if (empty) empty.classList.toggle('hidden', series.length > 0);
+                if (!series.length) {
+                    if (App._kioskChartInstance) { App._kioskChartInstance.destroy(); App._kioskChartInstance = null; }
+                    canvas.style.display = 'none';
+                    return;
+                }
+                canvas.style.display = 'block';
+
+                const allDates = new Set();
+                series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
+                const labels = [...allDates].sort();
+                const datasets = series.map((s, i) => ({
+                    label: s.member.firstName + ' ' + s.member.lastName,
+                    data: labels.map(date => {
+                        const hit = s.points.find(p => p.date === date);
+                        return hit ? hit.count : null;
+                    }),
+                    borderColor: App.kioskChartColor(s.member.id, i),
+                    backgroundColor: App.kioskChartColor(s.member.id, i),
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                    tension: 0.3,
+                    spanGaps: true
+                }));
+
+                const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
+                const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+
+                if (App._kioskChartInstance) App._kioskChartInstance.destroy();
+                App._kioskChartInstance = new Chart(canvas, {
+                    type: 'line',
+                    data: { labels, datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: true, position: 'bottom', labels: { boxWidth: 12, padding: 12 } },
+                            tooltip: {
+                                callbacks: {
+                                    title: items => items.length ? dateFmt(items[0].label) : '',
+                                    label: ctx => {
+                                        const s = series.find(x => x.member.firstName + ' ' + x.member.lastName === ctx.dataset.label);
+                                        const p = s && s.points.find(p => p.date === ctx.label);
+                                        const count = p ? p.count : ctx.parsed.y;
+                                        return ` ${ctx.dataset.label}: ${count} ${map.chartTooltipTrainings || 'trainings'}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
+                            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
+                        }
+                    }
+                });
             },
 
             checkoutVisit: (visitId) => {

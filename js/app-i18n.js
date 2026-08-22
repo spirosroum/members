@@ -35,6 +35,14 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Most trainings last 3 months.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Everyone',
+        chartTitle: 'Training Progress',
+        chartSubtitle: 'Cumulative trainings per member.',
+        chartRange3m: '3 months',
+        chartRange1m: 'Last month',
+        chartRangeAll: 'All-time',
+        chartRangeCustom: 'Custom',
+        chartNoTrainings: 'No trainings recorded in this period.',
+        chartTooltipTrainings: 'trainings',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
         leaderboardMemberColumn: 'Name',
@@ -217,6 +225,14 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Οι περισσότερες προπονήσεις των τελευταίων 3 μηνών.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Όλοι',
+        chartTitle: 'Πρόοδος Προπονήσεων',
+        chartSubtitle: 'Αθροιστικές προπονήσεις ανά μέλος.',
+        chartRange3m: '3 μήνες',
+        chartRange1m: 'Τελευταίος μήνας',
+        chartRangeAll: 'Από την αρχή',
+        chartRangeCustom: 'Προσαρμογή',
+        chartNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
+        chartTooltipTrainings: 'προπονήσεις',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
         leaderboardMemberColumn: 'Όνομα',
@@ -479,6 +495,15 @@ App.applyKioskTranslations = function() {
         const leaderboardTitle = document.getElementById('kiosk-leaderboard-title'); if (leaderboardTitle) leaderboardTitle.innerText = map.leaderboardTitle || 'Training Leaderboard';
         const leaderboardSubtitle = document.getElementById('kiosk-leaderboard-subtitle'); if (leaderboardSubtitle) leaderboardSubtitle.innerText = map.leaderboardSubtitle || 'Most trainings last 3 months.';
         const leaderboardBadge = document.getElementById('kiosk-leaderboard-badge'); if (leaderboardBadge) leaderboardBadge.innerText = map.leaderboardBadge || 'Top 10';
+
+        const chartTitle = document.getElementById('kiosk-chart-title'); if (chartTitle) chartTitle.innerText = map.chartTitle || 'Training Progress';
+        const chartSubtitle = document.getElementById('kiosk-chart-subtitle'); if (chartSubtitle) chartSubtitle.innerText = map.chartSubtitle || 'Cumulative trainings per member.';
+        const chartNoTrainings = document.getElementById('kiosk-training-chart-empty'); if (chartNoTrainings) chartNoTrainings.innerText = map.chartNoTrainings || 'No trainings recorded in this period.';
+        document.querySelectorAll('.kiosk-chart-range-btn').forEach(btn => {
+            const key = btn.dataset.range;
+            const text = key === '3m' ? map.chartRange3m : key === '1m' ? map.chartRange1m : key === 'all' ? map.chartRangeAll : map.chartRangeCustom;
+            if (text) btn.innerText = text;
+        });
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
         const classDetailsCloseBtn = document.querySelector('#modal-class-details .btn-primary'); if (classDetailsCloseBtn) classDetailsCloseBtn.innerText = map.classDetailsClose || 'Close';
