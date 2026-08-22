@@ -793,9 +793,11 @@ Object.assign(App, {
                 const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
                 const kingIds = new Set(resolveKings(top.map(d => d._memberId)));
 
-                // In-chart crowns: a crown appears above a date only when a NEW king appears —
-                // a member who was NOT holding the record before now breaks the previous max.
-                // If the same king(s) merely extend their own record, no new king is crowned.
+                // In-chart crowns: a crown appears above a date when the crown changes hands —
+                // the set of record-holders differs from the previous record-holders
+                // (a new king enters, or a previous co-holder is dethroned). If the
+                // exact same king(s) merely extend their own record, no crown. A tie
+                // that doesn't break the record never steals the crown.
                 const chartCrowns = {};
                 let record = 0;
                 let recordSeen = false;
@@ -811,12 +813,16 @@ Object.assign(App, {
                     });
                     if (maxToday < 0) return;
                     if (recordSeen && maxToday > record) {
-                        // Only crown holders who were not holding the record before.
-                        const newKings = holders.filter(id => !prevHolders.has(id));
-                        if (newKings.length) chartCrowns[date] = resolveKings(newKings);
+                        const prevKey = [...prevHolders].sort().join('|');
+                        const nowKey = holders.slice().sort().join('|');
+                        if (prevKey !== nowKey) chartCrowns[date] = resolveKings(holders);
+                        record = maxToday;
+                        prevHolders = new Set(holders);
+                    } else if (!recordSeen) {
+                        record = maxToday;
+                        recordSeen = true;
+                        prevHolders = new Set(holders);
                     }
-                    prevHolders = new Set(holders);
-                    if (!recordSeen || maxToday > record) { record = maxToday; recordSeen = true; }
                 });
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;

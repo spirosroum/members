@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.77 (02:10) — Chart crown on any king change, not just record extension
+- A crown is now drawn above a date whenever the set of record-holders changes (a new king enters or a previous co-holder is dethroned), not only when a brand-new member breaks the record
+- This restores the missing 2026-08-10 crown (9018/19961998 took the lead from 6157) while still suppressing 2026-08-12 (the same two kings merely extended 4→5)
+
 ## 2026-08-21 — v0.76 (02:00) — Chart crown only when a NEW king appears
 - In-chart crowns no longer appear when the same king(s) merely extend their own record (e.g. 2026-08-12, where the co-leaders who already held the record went 4→5)
 - A crown is drawn only when a member who was NOT holding the record before breaks the previous max — a genuinely new king/kings
