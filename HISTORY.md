@@ -2,6 +2,9 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-21 — v0.69 (00:50) — Fix "Last" medal only on the final rank
+- The "Last" leaderboard emoji (default 💩) was applied to every member past the highest configured place; it now only shows on the last displayed rank (all members tied at that rank), with everyone else falling back to their rank number
+
 ## 2026-08-21 — v0.68 (00:45) — Infinite leaderboard + dynamic medal places
 - Leaderboard Size accepts 0 = show everyone on the Training Leaderboard (badge shows "Everyone" / "Όλοι")
 - Leaderboard Medals are now dynamic: admin can add/remove extra places (each with its own emoji) plus a "Last" row that covers every rank past the highest configured place (default 💩)

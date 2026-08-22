@@ -536,13 +536,13 @@ Object.assign(App, {
                 return standings;
             },
 
-            leaderboardRankCell: (rank) => {
+            leaderboardRankCell: (rank, isLast) => {
                 // Ranks with a configured medal show the medal emoji (no rank number).
-                // Ranks past the highest configured place fall back to the "last" emoji
-                // (default poop), so everyone ranked shows something fun.
+                // Only the last displayed rank gets the "last" emoji (default poop);
+                // everyone else falls back to their rank number.
                 const m = STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS;
                 if (m[rank]) return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m[rank])}</span>`;
-                if (m.last) return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m.last)}</span>`;
+                if (isLast && m.last) return `<span class="kiosk-lb-rank-num">${Utils.escapeHTML(m.last)}</span>`;
                 return `<span class="kiosk-lb-rank-num">${rank}</span>`;
             },
 
@@ -576,12 +576,13 @@ Object.assign(App, {
                         groups.push({ rank: entry.rank, members: [entry] });
                     }
                 });
+                const lastRank = top.length ? top[top.length - 1].rank : null;
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
                         ${top.map(entry => `
                             <div class="kiosk-lb-card">
-                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank)}</div>
+                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
                                 <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
                                 <span class="kiosk-lb-belt">${Utils.getBeltBox(entry.member.belt)}</span>
                                 <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
