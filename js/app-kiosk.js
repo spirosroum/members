@@ -1,6 +1,6 @@
 // =====================================================================
 // app-kiosk.js
-// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, kioskChartColor, getCumulativeTrainingSeries, setKioskChartRange, renderKioskChart, checkoutVisit, setBountyLeaderboardDate
+// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, kioskChartColor, getCumulativeTrainingSeries, setKioskChartRange, renderKioskChart, checkoutVisit, setBountyLeaderboardDate, bountyLbDateNav
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -624,11 +624,12 @@ Object.assign(App, {
             },
 
             // Crown Bounty leaderboard for the current period, scoped to any
-            // date via the built-in picker: neutral (belt-free) cards, strict
-            // standard competition ranking (1-2-2-4 by training count), only
-            // members with at least one workout, ▲/▼ movement vs 7 days
-            // earlier (clamped to the period start), and a gold box for the
-            // reigning Crown Holder.
+            // date via the built-in picker (+/- day arrows): neutral
+            // (belt-free) cards, strict places (ties broken by who reached the
+            // score first; only identical training histories share a place),
+            // only members with at least one workout, ▲/▼ movement vs 7 days
+            // earlier (clamped to the period start), a gold box for the
+            // reigning Crown Holder, and FLIP slide animation on reorder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
@@ -662,15 +663,24 @@ Object.assign(App, {
                     }
                     return c;
                 };
-                const rankOf = (list) => {
+                const sameHistory = (pa, pb) => pa.map(pt => pt.date + '=' + pt.count).join('|') === pb.map(pt => pt.date + '=' + pt.count).join('|');
+                const assignPlaces = (list) => {
                     list.sort((a, b) => {
                         if (b.count !== a.count) return b.count - a.count;
-                        const ta = (a.series && a.series.firstTimeAtCount[a.count]) ? new Date(a.series.firstTimeAtCount[a.count]).getTime() : Infinity;
-                        const tb = (b.series && b.series.firstTimeAtCount[b.count]) ? new Date(b.series.firstTimeAtCount[b.count]).getTime() : Infinity;
+                        const ta = (a.firstTimeAtCount && a.firstTimeAtCount[a.count]) ? new Date(a.firstTimeAtCount[a.count]).getTime() : Infinity;
+                        const tb = (b.firstTimeAtCount && b.firstTimeAtCount[b.count]) ? new Date(b.firstTimeAtCount[b.count]).getTime() : Infinity;
                         return ta - tb;
                     });
-                    list.forEach((e, i) => {
-                        e.rank = (i > 0 && list[i - 1].count === e.count) ? list[i - 1].rank : i + 1;
+                    let place = 0;
+                    let prev = null;
+                    list.forEach(e => {
+                        if (prev && prev.count === e.count && sameHistory(prev.points, e.points)) {
+                            e.place = prev.place;
+                        } else {
+                            place++;
+                            e.place = place;
+                        }
+                        prev = e;
                     });
                 };
 
@@ -680,20 +690,26 @@ Object.assign(App, {
 
                 const entries = members.map(m => {
                     const s = sMap[m.id];
-                    return { member: m, count: countAt(s, selIso), refCount: countAt(s, refIso), series: s };
+                    return { member: m, id: m.id, count: countAt(s, selIso), series: s, points: (s && s.points) ? s.points : [], firstTimeAtCount: s ? s.firstTimeAtCount : null };
                 });
                 const active = entries.filter(e => e.count > 0);
-                rankOf(active);
+                assignPlaces(active);
 
                 const refRanks = {};
                 if (refIso !== selIso) {
-                    const refActive = active.map(e => ({ member: e.member, count: e.refCount, series: e.series })).filter(e => e.count > 0);
-                    rankOf(refActive);
-                    refActive.forEach(e => { refRanks[e.member.id] = e.rank; });
+                    const refActive = active.filter(e => countAt(e.series, refIso) > 0)
+                        .map(e => ({ member: e.member, id: e.id, count: countAt(e.series, refIso), points: e.points.filter(pt => pt.date <= refIso), firstTimeAtCount: e.firstTimeAtCount }));
+                    assignPlaces(refActive);
+                    refActive.forEach(e => { refRanks[e.id] = e.place; });
                 }
 
                 const result = App.getCrownEvents(series);
                 const kingIds = new Set(result.currentKing ? [result.currentKing.id].concat(result.currentKing.alsoIds || []) : []);
+
+                const prevTops = {};
+                container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
+                    prevTops[el.getAttribute('data-member-id')] = el.getBoundingClientRect().top;
+                });
 
                 section.classList.remove('hidden');
                 if (!active.length) {
@@ -703,7 +719,7 @@ Object.assign(App, {
                     return;
                 }
                 const displayNames = App.kioskDisplayNames(active.map(e => e.member));
-                const lastRank = active[active.length - 1].rank;
+                const lastPlace = active[active.length - 1].place;
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
@@ -712,13 +728,13 @@ Object.assign(App, {
                             const refRank = refRanks[entry.member.id];
                             let nameColor = 'var(--dark)';
                             let arrow = '';
-                            if (refRank != null && refRank !== entry.rank) {
-                                if (entry.rank < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
+                            if (refRank != null && refRank !== entry.place) {
+                                if (entry.place < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
                             return `
-                                <div class="kiosk-lb-card" style="${isKing ? 'background:#d4af37;' : ''}">
-                                    <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
+                                <div class="kiosk-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}" style="${isKing ? 'background:#d4af37;' : ''}">
+                                    <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.place, entry.place === lastPlace)}</div>
                                     <strong class="kiosk-lb-name" style="color:${isKing ? '#000000' : nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${isKing ? '#000000' : nameColor};">${arrow}</span></strong>
                                     <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
                                 </div>
@@ -726,10 +742,36 @@ Object.assign(App, {
                         }).join('')}
                     </div>
                 `;
+                container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
+                    const oldTop = prevTops[el.getAttribute('data-member-id')];
+                    if (oldTop == null) return;
+                    const dy = oldTop - el.getBoundingClientRect().top;
+                    if (!dy) return;
+                    el.style.transition = 'none';
+                    el.style.transform = `translateY(${dy}px)`;
+                    void el.offsetHeight;
+                    el.style.transition = 'transform 0.45s ease';
+                    el.style.transform = '';
+                });
             },
 
             setBountyLeaderboardDate: (value) => {
                 App._bountyLbDate = value || null;
+                App.renderBountyLeaderboard();
+            },
+
+            bountyLbDateNav: (dir) => {
+                const bp = App.getCurrentBountyPeriod();
+                const minDate = new Date(bp.start.getTime());
+                minDate.setHours(0, 0, 0, 0);
+                const minIso = Utils.dateToLocalIso(minDate);
+                const todayIso = Utils.dateToLocalIso(new Date());
+                const base = App._bountyLbDate || todayIso;
+                const d = new Date(base + 'T00:00:00');
+                d.setDate(d.getDate() + dir);
+                const iso = Utils.dateToLocalIso(d);
+                if (iso < minIso || iso > todayIso) return;
+                App._bountyLbDate = iso;
                 App.renderBountyLeaderboard();
             },
 

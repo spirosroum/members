@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.03 (20:45) — Bounty Leaderboard: date arrows, slide animation, correct places
+
+- Added ‹ › arrows next to the leaderboard date picker to step day-by-day (clamped to period start / today)
+- Rows now slide smoothly above/below each other (FLIP animation) when the standings reorder on date change
+- Restored the correct leaderboard ranking: strict places — one person per place, tie on score broken by who reached it first, only members with identical training histories share a place (reverts the mistaken 1224 change)
+
 ## 2026-08-23 — v1.02 (20:15) — Bounty Leaderboard: in-card placement, date picker, 1-2-2-4 ranking
 
 - Moved the «Crown Bounty Leaderboard» inside the Crown Bounty card, directly above the 🏆 Hall of Kings

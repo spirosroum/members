@@ -184,7 +184,9 @@
                             <p id="bounty-leaderboard-subtitle" class="text-gray" style="margin: 0; font-size: 0.85rem;">Every training counts — hold your place until someone breaks it!</p>
                         </div>
                         <div class="flex gap-1 align-center" style="flex-shrink:0;">
+                            <button class="btn-outline btn-small" onclick="App.bountyLbDateNav(-1)" title="Previous day" aria-label="Previous day">‹</button>
                             <input type="date" id="bounty-leaderboard-date" class="btn-outline btn-small" style="padding: 0.35rem 0.6rem;" onchange="App.setBountyLeaderboardDate(this.value)">
+                            <button class="btn-outline btn-small" onclick="App.bountyLbDateNav(1)" title="Next day" aria-label="Next day">›</button>
                             <span id="bounty-leaderboard-badge" class="badge badge-inside" style="background: #fef3c7; color: #92400e;">👑 Bounty</span>
                         </div>
                     </div>
@@ -1760,7 +1762,7 @@
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260823-21"></script>
-    <script src="js/app-i18n.js?v=20260823-29"></script>
+    <script src="js/app-i18n.js?v=20260823-30"></script>
 
 
 </body>
