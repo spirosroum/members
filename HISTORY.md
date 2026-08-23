@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.89 (15:08) — Fix: co-kings with identical histories no longer trigger ⚔️/👑 against each other
+- When Μαρία & Δημοσθένης (shared Crown since Aug 10) extended the record together on Aug 12, the engine emitted 👑 + ⚔️ as if they were rivals
+- Members whose training history is identical to the current King's (same cumulative count on every date) are treated as co-kings: their extensions are silent, no challenge/takeover markers
+- The initial proclamation event now lists all identical-history co-breakers («Μαρία & Δημοσθένης became King») in the Hunt Log and marker tooltip
+
 ## 2026-08-23 — v0.88 (14:52) — Fix: Crown events never fired when record was broken by co-breakers
 - First-proclamation pass required a unique end-of-day leader, but real data often had two members breaking the record the same day (Μαρία & Δημοσθένης on Aug 10) so no King was ever proclaimed — chart markers and Hunt Log stayed empty
 - Proclamation now uses timestamp tie-break among same-day co-breakers (earliest check-in takes the Crown), matching the existing resolveKings behavior

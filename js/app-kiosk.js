@@ -710,6 +710,26 @@ Object.assign(App, {
 
                 const INITIAL_KING_MIN_COUNT = 4;
 
+                // Two members share the Crown only while their training histories
+                // are identical (same cumulative count on every date up to `limit`).
+                const ptMap = {};
+                series.forEach(s => { ptMap[s.member.id] = s.points; });
+                const countOn = (id, date) => {
+                    const pts = ptMap[id];
+                    let c = null;
+                    for (let i = 0; i < pts.length && pts[i].date <= date; i++) c = pts[i].count;
+                    return c;
+                };
+                const identicalThrough = (a, b, limit) => {
+                    const dates = new Set();
+                    ptMap[a].forEach(p => { if (p.date <= limit) dates.add(p.date); });
+                    ptMap[b].forEach(p => { if (p.date <= limit) dates.add(p.date); });
+                    for (const d of dates) {
+                        if (countOn(a, d) !== countOn(b, d)) return false;
+                    }
+                    return true;
+                };
+
                 // Pass A: find the first proclamation via end-of-day snapshots.
                 // Several members may break the record the same day; the one who
                 // reached the new record first (check-in timestamp) takes the Crown.
@@ -718,6 +738,7 @@ Object.assign(App, {
                 let kingId = null;
                 let kingCount = 0;
                 let proclaimDate = null;
+                let coBreakers = [];
                 let record = 0;
                 let prevTopIds = [];
                 const countsEndOfDay = {};
@@ -751,6 +772,7 @@ Object.assign(App, {
                                 kingId = best;
                                 kingCount = maxC;
                                 proclaimDate = date;
+                                coBreakers = holders.filter(id => id !== best && identicalThrough(id, best, date));
                             }
                         }
                     }
@@ -762,6 +784,7 @@ Object.assign(App, {
                 const events = [{
                     type: 'king',
                     memberId: kingId,
+                    alsoIds: coBreakers,
                     count: kingCount,
                     date: proclaimDate,
                     ts: ((byDate[proclaimDate] || []).find(ev => ev.memberId === kingId && ev.count === kingCount) || {}).ts || proclaimDate,
@@ -770,9 +793,14 @@ Object.assign(App, {
                 }];
 
                 // Pass B: challenges and takeovers from the proclamation onward.
+                // Co-kings with identical histories extending the record together
+                // are silent — only genuine rivals produce ⚔️/👑 events.
                 stream.forEach(ev => {
                     if (ev.date <= proclaimDate) return;
-                    if (ev.memberId === kingId) { kingCount = ev.count; return; }
+                    if (ev.memberId === kingId || identicalThrough(ev.memberId, kingId, ev.date)) {
+                        if (ev.count > kingCount) kingCount = ev.count;
+                        return;
+                    }
                     if (ev.count === kingCount) {
                         events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingCount: kingCount });
                     } else if (ev.count > kingCount) {
@@ -797,7 +825,7 @@ Object.assign(App, {
                 const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 
                 container.innerHTML = events.slice().reverse().map(ev => {
-                    const name = nameById[ev.memberId] || '?';
+                    const name = [ev.memberId].concat(ev.alsoIds || []).map(id => nameById[id] || '?').join(' & ');
                     const emoji = ev.type === 'king' ? '👑' : '⚔️';
                     const action = ev.type === 'king' ? (map.huntNewKing || 'became King') : (map.huntChallenge || 'challenged the Crown');
                     let detail;
@@ -1129,7 +1157,7 @@ Object.assign(App, {
                 const fmtFullDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
                 const showTip = hit => {
                     const ev = hit.ev;
-                    const who = displayNameById[ev.memberId] || '?';
+                    const who = [ev.memberId].concat(ev.alsoIds || []).map(id => displayNameById[id] || '?').join(' & ');
                     const emoji = ev.type === 'king' ? '👑' : '⚔️';
                     let title;
                     let detail;
