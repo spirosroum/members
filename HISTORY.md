@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.13 (03:30) — Ranking audit: strict holders, identical-history sharing only
+
+- Re-audited and enforced the core ranking rules: each position has a single holder; a position is shared ONLY by players whose entire workout history is exactly identical
+- Record-breaking rule applied at every position: matching a holder's workout count does NOT take their spot — the holder keeps it until strictly surpassed, and the challenger lands below (position = number of players ahead + 1, so a first check-in a day after four founders lands 5th)
+- Yesterday-reference places for ▲/▼ use the same grouping rules, so indicators stay consistent with the displayed ranking
+
 ## 2026-08-23 — v1.12 (02:50) — Shared-place arrows fixed; Hall of Kings temporarily removed
 
 - Leaderboard places now use competition ranking (1224): equal counts share a place, listed by who reached it first — this is the ranking the ▲/▼ indicators compare against

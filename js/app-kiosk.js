@@ -628,14 +628,15 @@ Object.assign(App, {
 
             // Crown Bounty leaderboard for the current period, scoped to any
             // date via the built-in picker (+/- day arrows): neutral
-            // (belt-free) cards with belt-colored accent bars and competition
-            // ranking (equal counts share a place; ordered by who reached it
-            // first). 👑 goes to everyone tied at the top count whose training
-            // history is exactly identical to the earliest top holder; 💩
+            // (belt-free) cards with belt-colored accent bars. Each position
+            // has a single holder; only members whose entire workout history
+            // is exactly identical share a position, and matching a holder's
+            // score never takes their spot (position = players ahead + 1).
+            // 👑 goes to the identical-history holders of the top group; 💩
             // marks the very last place. Only members with at least one
-            // workout appear. ▲/▼ compare yesterday's shared place: climbing
-            // shows green, being displaced shows red, holding steady shows
-            // nothing. FLIP slide animation runs on reorder.
+            // workout appear. ▲/▼ compare yesterday's position under the same
+            // rules: climbing shows green, being displaced shows red,
+            // holding steady shows nothing. FLIP slide animation on reorder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
@@ -684,6 +685,7 @@ Object.assign(App, {
                     return c;
                 };
                 const firstTs = (e) => (e.firstTimeAtCount && e.firstTimeAtCount[e.count]) ? new Date(e.firstTimeAtCount[e.count]).getTime() : Infinity;
+                const ptsKeyOf = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
                 const assignPlaces = (list) => {
                     list.sort((a, b) => {
                         if (b.count !== a.count) return b.count - a.count;
@@ -697,9 +699,23 @@ Object.assign(App, {
                         if (na !== 0) return na;
                         return String(a.id).localeCompare(String(b.id));
                     });
+                    // One holder per position. Only members whose entire
+                    // workout history (cumulative count on every date up to
+                    // the selected day) is exactly identical share a position.
+                    // Matching a holder's count without the same history is
+                    // NOT enough — the holder keeps the spot until surpassed,
+                    // and the newcomer lands below (position = players ahead + 1).
+                    const groupPlace = {};
                     list.forEach((e, i) => {
-                        e.place = (i > 0 && list[i - 1].count === e.count) ? list[i - 1].place : i + 1;
+                        const k = ptsKeyOf(e.points);
+                        if (groupPlace[k] != null) {
+                            e.place = groupPlace[k];
+                        } else {
+                            e.place = i + 1;
+                            groupPlace[k] = e.place;
+                        }
                     });
+                    list.sort((a, b) => a.place - b.place);
                 };
 
                 const refDate = new Date(selIso + 'T00:00:00');
@@ -713,36 +729,32 @@ Object.assign(App, {
                 const active = entries.filter(e => e.count > 0);
                 assignPlaces(active);
 
-                // ▲/▼ compare the member's PLACE (competition ranking: equal
-                // counts share a place) against yesterday's — climbing any
-                // position shows ▲, being displaced shows ▼, holding steady
-                // (e.g. a king who keeps training with his co-kings) shows
-                // nothing.
+                // ▲/▼ compare the member's PLACE against yesterday's, using
+                // the exact same grouping rules (single holders; shared only
+                // for identical histories): climbing shows ▲ green, being
+                // displaced shows ▼ red, holding steady shows nothing.
                 const refPlaces = {};
                 if (refIso !== selIso) {
-                    const refEntries = active.map(e => ({ id: e.id, c: countAt(e.series, refIso) }))
+                    const refEntries = active.map(e => ({ id: e.id, c: countAt(e.series, refIso), points: e.points.filter(pt => pt.date <= refIso) }))
                         .filter(x => x.c > 0)
                         .sort((a, b) => b.c - a.c);
-                    let prevC = null;
-                    let prevP = 0;
+                    const refGroupPlace = {};
                     refEntries.forEach((x, i) => {
-                        const p = (i > 0 && x.c === prevC) ? prevP : i + 1;
-                        refPlaces[x.id] = p;
-                        prevC = x.c;
-                        prevP = p;
+                        const k = ptsKeyOf(x.points);
+                        if (refGroupPlace[k] != null) {
+                            refPlaces[x.id] = refGroupPlace[k];
+                        } else {
+                            refPlaces[x.id] = i + 1;
+                            refGroupPlace[k] = i + 1;
+                        }
                     });
                 }
 
-                // The Crown belongs to everyone tied at the top training count
-                // WHOSE TRAINING HISTORY is exactly identical to that of the
-                // earliest top holder — later joiners with the same score but
-                // a different history are challengers, not kings.
-                const ptsKey = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
                 const topCount = active.reduce((m, e) => Math.max(m, e.count), 0);
                 const topMembers = active.filter(e => e.count === topCount);
                 const primaryTop = topMembers.reduce((b, e) => (firstTs(e) < firstTs(b) ? e : b), topMembers[0]);
                 const kingSet = new Set(topMembers
-                    .filter(e => ptsKey(e.points) === ptsKey(primaryTop.points))
+                    .filter(e => ptsKeyOf(e.points) === ptsKeyOf(primaryTop.points))
                     .map(e => e.member.id));
 
                 const prevTops = {};
