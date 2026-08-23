@@ -146,16 +146,6 @@
                 </div>
                 <div id="kiosk-leaderboard-container" class="kiosk-card-body" style="max-height: 330px; overflow-y: auto;"></div>
             </div>
-            <div class="kiosk-card hidden" id="bounty-leaderboard-section" style="grid-column: 1 / -1;">
-                <div class="kiosk-card-header">
-                    <div>
-                        <h3 id="bounty-leaderboard-title" style="margin: 0;">Crown Bounty Leaderboard</h3>
-                        <p id="bounty-leaderboard-subtitle" class="text-gray" style="margin: 0;">Every training counts — hold your place until someone breaks it!</p>
-                    </div>
-                    <span id="bounty-leaderboard-badge" class="badge badge-inside" style="background: #fef3c7; color: #92400e;">👑 Bounty</span>
-                </div>
-                <div id="bounty-leaderboard-container" class="kiosk-card-body" style="max-height: 330px; overflow-y: auto;"></div>
-            </div>
             <div class="kiosk-card hidden" id="kiosk-training-chart-container" style="grid-column: 1 / -1;">
                 <div id="bounty-countdown" class="hidden" style="background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 55%, #6d28d9 100%); color:#ffffff; padding:0.8rem 1.5rem; font-weight:800; font-size:1.05rem; text-align:center; letter-spacing:0.3px; border-radius: var(--border-radius) var(--border-radius) 0 0;"></div>
                 <div class="kiosk-card-header">
@@ -185,6 +175,20 @@
                     </div>
                     <div id="hunt-log-alert" class="hidden" style="margin-bottom: 0.6rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:0.5rem 0.75rem; font-size:0.9rem; font-weight:700;"></div>
                     <div id="hunt-log-list" style="max-height: 330px; overflow-y: auto;"></div>
+                </div>
+
+                <div id="bounty-leaderboard-section" class="hidden" style="border-top: 1px solid var(--gray-light); padding: 1.25rem 1.5rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+                        <div>
+                            <h3 id="bounty-leaderboard-title" style="margin: 0; font-size: 1.05rem; font-weight: 800; color: var(--dark);">Crown Bounty Leaderboard</h3>
+                            <p id="bounty-leaderboard-subtitle" class="text-gray" style="margin: 0; font-size: 0.85rem;">Every training counts — hold your place until someone breaks it!</p>
+                        </div>
+                        <div class="flex gap-1 align-center" style="flex-shrink:0;">
+                            <input type="date" id="bounty-leaderboard-date" class="btn-outline btn-small" style="padding: 0.35rem 0.6rem;" onchange="App.setBountyLeaderboardDate(this.value)">
+                            <span id="bounty-leaderboard-badge" class="badge badge-inside" style="background: #fef3c7; color: #92400e;">👑 Bounty</span>
+                        </div>
+                    </div>
+                    <div id="bounty-leaderboard-container" style="max-height: 330px; overflow-y: auto;"></div>
                 </div>
 
                 <div id="hall-of-kings-section" class="hidden" style="border-top: 1px solid var(--gray-light); padding: 1.25rem 1.5rem;">
@@ -1747,7 +1751,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="js/app-core.js?v=20260823-23"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260823-27"></script>
+    <script src="js/app-kiosk.js?v=20260823-29"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1756,7 +1760,7 @@
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260823-21"></script>
-    <script src="js/app-i18n.js?v=20260823-27"></script>
+    <script src="js/app-i18n.js?v=20260823-29"></script>
 
 
 </body>

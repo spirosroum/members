@@ -2,6 +2,15 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.02 (20:15) — Bounty Leaderboard: in-card placement, date picker, 1-2-2-4 ranking
+
+- Moved the «Crown Bounty Leaderboard» inside the Crown Bounty card, directly above the 🏆 Hall of Kings
+- Removed belt colors from the leaderboard rows (neutral white cards; gold reserved for the Crown Holder)
+- Strict standard competition ranking (1224): tied counts share a place and the next place skips (two 3rds → next is 5th)
+- New date picker inside the leaderboard header: standings recompute for any date within the current period (min = period start, max = today), with ▲ green / ▼ red movement vs 7 days earlier (clamped to period start)
+- Zero-workout members are excluded — a member appears only after their first workout of the period
+- 💩 appears only on the very last active place; removed the old localStorage rank-snapshot logic (movement is now deterministic)
+
 ## 2026-08-23 — v1.01 (19:29) — Fix broken portal; separate Crown Bounty Leaderboard
 - Fixed the broken check-in portal: the chart's period label referenced the i18n map before its declaration, crashing the whole render chain (empty chart, broken check-in)
 - Reverted the general Training Leaderboard to its original logic (last 3 months, shared ranks)

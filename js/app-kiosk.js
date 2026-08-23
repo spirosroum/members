@@ -1,6 +1,6 @@
 // =====================================================================
 // app-kiosk.js
-// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, kioskChartColor, getCumulativeTrainingSeries, setKioskChartRange, renderKioskChart, checkoutVisit
+// App methods: numpadPress, updateKioskInputMode, openClassDetails, cancelKioskClassSelection, showKioskAlert, kioskSubmit, openCheckinClassModal, toggleCheckinClass, cleanupClassCheckins, confirmKioskClassSelection, showKioskMessage, renderLivePresent, getLeaderboardStandings, leaderboardRankCell, renderKioskLeaderboard, kioskChartColor, getCumulativeTrainingSeries, setKioskChartRange, renderKioskChart, checkoutVisit, setBountyLeaderboardDate
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -623,100 +623,114 @@ Object.assign(App, {
                 App.renderKioskChart && App.renderKioskChart();
             },
 
-            // Separate Crown Bounty leaderboard for the current period: strict
-            // places (ties broken by who reached the score first; identical
-            // training histories share a place), ▲/▼ movement since the last
-            // snapshot, and a gold box for the reigning Crown Holder.
+            // Crown Bounty leaderboard for the current period, scoped to any
+            // date via the built-in picker: neutral (belt-free) cards, strict
+            // standard competition ranking (1-2-2-4 by training count), only
+            // members with at least one workout, ▲/▼ movement vs 7 days
+            // earlier (clamped to the period start), and a gold box for the
+            // reigning Crown Holder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
                 if (!container || !section) return;
                 const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
                 if (!members.length) { section.classList.add('hidden'); return; }
-                const until = new Date();
-                until.setHours(23, 59, 59, 999);
                 const bp = App.getCurrentBountyPeriod();
                 const since = new Date(bp.start.getTime());
                 since.setHours(0, 0, 0, 0);
+                const todayIso = Utils.dateToLocalIso(new Date());
+                const minIso = Utils.dateToLocalIso(since);
+
+                let selIso = App._bountyLbDate || todayIso;
+                if (selIso > todayIso || selIso < minIso) { selIso = todayIso; App._bountyLbDate = selIso; }
+                const dateInput = document.getElementById('bounty-leaderboard-date');
+                if (dateInput) {
+                    dateInput.min = minIso;
+                    dateInput.max = todayIso;
+                    if (dateInput.value !== selIso) dateInput.value = selIso;
+                }
+
+                const until = new Date(selIso + 'T23:59:59.999');
                 const series = App.getCumulativeTrainingSeries(members, since, until);
                 const sMap = {};
                 series.forEach(s => { sMap[s.member.id] = s; });
+                const countAt = (s, iso) => {
+                    if (!s || !s.points.length) return 0;
+                    let c = 0;
+                    for (let i = 0; i < s.points.length; i++) {
+                        if (s.points[i].date <= iso) c = s.points[i].count; else break;
+                    }
+                    return c;
+                };
+                const rankOf = (list) => {
+                    list.sort((a, b) => {
+                        if (b.count !== a.count) return b.count - a.count;
+                        const ta = (a.series && a.series.firstTimeAtCount[a.count]) ? new Date(a.series.firstTimeAtCount[a.count]).getTime() : Infinity;
+                        const tb = (b.series && b.series.firstTimeAtCount[b.count]) ? new Date(b.series.firstTimeAtCount[b.count]).getTime() : Infinity;
+                        return ta - tb;
+                    });
+                    list.forEach((e, i) => {
+                        e.rank = (i > 0 && list[i - 1].count === e.count) ? list[i - 1].rank : i + 1;
+                    });
+                };
+
+                const refDate = new Date(selIso + 'T00:00:00');
+                refDate.setDate(refDate.getDate() - 7);
+                const refIso = refDate < since ? minIso : Utils.dateToLocalIso(refDate);
 
                 const entries = members.map(m => {
                     const s = sMap[m.id];
-                    return { member: m, count: (s && s.points.length) ? s.points[s.points.length - 1].count : 0, series: s };
+                    return { member: m, count: countAt(s, selIso), refCount: countAt(s, refIso), series: s };
                 });
                 const active = entries.filter(e => e.count > 0);
-                const inactive = entries.filter(e => e.count === 0)
-                    .sort((a, b) => (a.member.lastName || '').localeCompare(b.member.lastName || ''));
-                const sameHistory = (a, b) => {
-                    if (!a || !b) return false;
-                    return a.points.map(pt => pt.date + '=' + pt.count).join('|') === b.points.map(pt => pt.date + '=' + pt.count).join('|');
-                };
-                active.sort((a, b) => {
-                    if (b.count !== a.count) return b.count - a.count;
-                    const ta = (a.series && a.series.firstTimeAtCount[a.count]) ? new Date(a.series.firstTimeAtCount[a.count]).getTime() : Infinity;
-                    const tb = (b.series && b.series.firstTimeAtCount[b.count]) ? new Date(b.series.firstTimeAtCount[b.count]).getTime() : Infinity;
-                    return ta - tb;
-                });
-                let place = 0;
-                let prev = null;
-                active.forEach(e => {
-                    if (prev && prev.count === e.count && sameHistory(prev.series, e.series)) {
-                        e.rank = prev.rank;
-                    } else {
-                        place++;
-                        e.rank = place;
-                    }
-                    prev = e;
-                });
-                inactive.forEach((e, i) => { e.rank = place + i + 1; });
-                const standings = active.concat(inactive);
+                rankOf(active);
 
-                const periodKey = 'P' + bp.n + '-' + bp.start.getFullYear() + '-' + (bp.start.getMonth() + 1);
-                let savedRanks = { period: periodKey, ranks: {} };
-                try {
-                    const parsed = JSON.parse(localStorage.getItem('gym_bounty_ranks') || 'null');
-                    if (parsed && parsed.period === periodKey && parsed.ranks) savedRanks = parsed;
-                } catch (err) {}
-                const prevRanks = savedRanks.ranks || {};
+                const refRanks = {};
+                if (refIso !== selIso) {
+                    const refActive = active.map(e => ({ member: e.member, count: e.refCount, series: e.series })).filter(e => e.count > 0);
+                    rankOf(refActive);
+                    refActive.forEach(e => { refRanks[e.member.id] = e.rank; });
+                }
 
                 const result = App.getCrownEvents(series);
                 const kingIds = new Set(result.currentKing ? [result.currentKing.id].concat(result.currentKing.alsoIds || []) : []);
 
-                const displayNames = App.kioskDisplayNames(standings.map(e => e.member));
-                const lastRank = standings.length ? standings[standings.length - 1].rank : null;
+                section.classList.remove('hidden');
+                if (!active.length) {
+                    const lang = App.currentKioskLang || 'en';
+                    const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                    container.innerHTML = `<p class="text-gray" style="padding: 1rem 0; text-align:center;">${Utils.escapeHTML(map.bountyLeaderboardNoTrainings || 'No trainings recorded for this date.')}</p>`;
+                    return;
+                }
+                const displayNames = App.kioskDisplayNames(active.map(e => e.member));
+                const lastRank = active[active.length - 1].rank;
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${standings.map((entry, idx) => {
-                            const beltText = ((entry.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
+                        ${active.map((entry, idx) => {
                             const isKing = kingIds.has(entry.member.id);
-                            const prevRank = prevRanks[entry.member.id];
-                            let boxBg = Utils.getBeltColor(entry.member.belt);
-                            let nameColor = beltText;
+                            const refRank = refRanks[entry.member.id];
+                            let nameColor = 'var(--dark)';
                             let arrow = '';
-                            if (isKing) {
-                                boxBg = '#d4af37';
-                                nameColor = '#000000';
-                            } else if (prevRank != null && prevRank !== entry.rank) {
-                                if (entry.rank < prevRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
+                            if (refRank != null && refRank !== entry.rank) {
+                                if (entry.rank < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
                             return `
-                                <div class="kiosk-lb-card" style="background:${boxBg};">
+                                <div class="kiosk-lb-card" style="${isKing ? 'background:#d4af37;' : ''}">
                                     <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
-                                    <strong class="kiosk-lb-name" style="color:${nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${nameColor};">${arrow}</span></strong>
+                                    <strong class="kiosk-lb-name" style="color:${isKing ? '#000000' : nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${isKing ? '#000000' : nameColor};">${arrow}</span></strong>
                                     <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
                                 </div>
                             `;
                         }).join('')}
                     </div>
                 `;
-                section.classList.remove('hidden');
-                const newRanks = {};
-                standings.forEach(e => { newRanks[e.member.id] = e.rank; });
-                try { localStorage.setItem('gym_bounty_ranks', JSON.stringify({ period: periodKey, ranks: newRanks })); } catch (err) {}
+            },
+
+            setBountyLeaderboardDate: (value) => {
+                App._bountyLbDate = value || null;
+                App.renderBountyLeaderboard();
             },
 
             // Deterministic per-member color from a distinct palette (stable across
