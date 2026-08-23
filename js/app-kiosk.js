@@ -546,6 +546,24 @@ Object.assign(App, {
                 return `<span class="kiosk-lb-rank-num">${rank}</span>`;
             },
 
+            // First names only; when two members share a first name, append the
+            // leading letters of the last name just enough to disambiguate.
+            kioskDisplayNames: (members) => {
+                const list = members.map(m => ({ first: (m.firstName || '').trim(), last: (m.lastName || '').trim() }));
+                return list.map((m, i) => {
+                    let name = m.first || m.last || '';
+                    if (m.first && m.last) {
+                        const rivals = list.filter((x, j) => j !== i && x.first === m.first);
+                        if (rivals.length) {
+                            let k = 1;
+                            while (k < m.last.length && rivals.some(r => r.last.slice(0, k) === m.last.slice(0, k))) k++;
+                            name = m.first + ' ' + m.last.slice(0, k);
+                        }
+                    }
+                    return name;
+                });
+            },
+
             renderKioskLeaderboard: () => {
                 const standings = App.getLeaderboardStandings();
                 const size = DB.getLeaderboardSize();
@@ -578,13 +596,14 @@ Object.assign(App, {
                 });
                 const lastRank = top.length ? top[top.length - 1].rank : null;
                 App._kioskLeaderboardMembers = top.map(e => e.member);
+                const displayNames = App.kioskDisplayNames(top.map(e => e.member));
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${top.map(entry => `
+                        ${top.map((entry, idx) => `
                             <div class="kiosk-lb-card">
                                 <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
-                                <strong class="kiosk-lb-name">${Utils.escapeHTML(entry.member.firstName)} ${Utils.escapeHTML(entry.member.lastName)}</strong>
+                                <strong class="kiosk-lb-name">${Utils.escapeHTML(displayNames[idx])}</strong>
                                 <span class="kiosk-lb-belt">${Utils.getBeltBox(entry.member.belt)}</span>
                                 <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
                             </div>
@@ -756,8 +775,9 @@ Object.assign(App, {
                 // Only one holds the crown; it is shared only by members with exactly
                 // the same training history (identical count on every date).
                 const isDesktop = window.innerWidth >= 768;
+                const displayNames = App.kioskDisplayNames(series.map(s => s.member));
                 const datasets = series.map((s, i) => ({
-                    label: s.member.firstName + ' ' + s.member.lastName,
+                    label: displayNames[i],
                     _memberId: s.member.id,
                     data: lineData[s.member.id],
                     borderColor: App.kioskChartColor(s.member.id, i),
@@ -1128,14 +1148,15 @@ Object.assign(App, {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
 
+                const crownNames = App.kioskDisplayNames(entries.map(x => x.member));
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${entries.map(e => {
+                        ${entries.map((e, idx) => {
                             const dayLabel = e.days === 1 ? (map.crownHistoryDay || 'day') : (map.crownHistoryDays || 'days');
                             return `
                                 <div class="kiosk-lb-card">
                                     <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${e.rank}</span></div>
-                                    <strong class="kiosk-lb-name">${Utils.escapeHTML(e.member.firstName)} ${Utils.escapeHTML(e.member.lastName)}</strong>
+                                    <strong class="kiosk-lb-name">${Utils.escapeHTML(crownNames[idx])}</strong>
                                     <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
                                     <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
                                 </div>

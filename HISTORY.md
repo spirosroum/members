@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.83 (12:50) — First-name display on kiosk leaderboard & Crown Hunt
+- Kiosk Training Leaderboard, Crown Hunt chart labels (right-side names, mobile legend, tooltips) and Proclaimed King Days list now show the member's first name only
+- When two displayed members share a first name, just enough leading letters of the last name are appended to disambiguate («Νίκος Παπα» vs «Νίκος Παπ»); fully identical names fall back to the full last name
+- Added shared `App.kioskDisplayNames()` helper in `app-kiosk.js`
+
 ## 2026-08-23 — v0.82 (01:43) — Timestamp-precise king resolution & suppressed initial crowns
 - Integrated check-in event timestamps into `getCumulativeTrainingSeries` and `resolveKings`: on August 20, Μάνος checked in at 16:40 before Reynaldo at 16:43, ensuring only Μάνος is proclaimed king and receives king days
 - Suppressed premature crowns on August 5 and 6: initial shared opening sessions (counts 1→3) do not generate crowns; the first king is proclaimed on August 10 when the record of 3 was broken to 4 (Μαρία & Δημοσθένης)
