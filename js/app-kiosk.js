@@ -702,6 +702,11 @@ Object.assign(App, {
                     refActive.forEach(e => { refRanks[e.id] = e.place; });
                 }
 
+                const crownResult = App.getCrownEvents(series);
+                const kingSet = new Set(crownResult.currentKing
+                    ? [crownResult.currentKing.id].concat(crownResult.currentKing.alsoIds || [])
+                    : []);
+
                 const prevTops = {};
                 container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
                     prevTops[el.getAttribute('data-member-id')] = el.getBoundingClientRect().top;
@@ -727,7 +732,7 @@ Object.assign(App, {
                                 if (entry.place < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
-                            const rankCell = entry.place === 1
+                            const rankCell = (kingSet.has(entry.member.id) || entry.place === 1)
                                 ? '<span class="kiosk-lb-rank-num">👑</span>'
                                 : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                             return `
@@ -850,12 +855,13 @@ Object.assign(App, {
             // Single source of truth for Crown events — the Hunt Log and the
             // chart markers both render from this. Replays every training
             // increment in chronological order:
-            //  - The Crown is claimable from the very first workout: the
-            //    end-of-day leader is King from that day on.
-            //  - Members with identical training histories share the Crown.
-            //  - Reaching exactly the King's record -> ⚔️ challenge.
-            //  - Exceeding it -> 👑 new King takes the Crown.
-            //  - The King extending his own record stays King without an event.
+            //  - The Crown is claimable from the very first workout: everyone
+            //    tied at the end-of-day top claims it together.
+            //  - The reigning group holds the Crown while tied at its record;
+            //    a rival matching the record issues a ⚔️ challenge (once per
+            //    reign), exceeding it steals the Crown 👑.
+            //  - The group extending its record during an active challenge is
+            //    a 🛡️ defense.
             getCrownEvents: (series) => {
                 const stream = [];
                 series.forEach(s => {
@@ -866,30 +872,9 @@ Object.assign(App, {
                 if (!stream.length) return [];
                 stream.sort((a, b) => new Date(a.ts) - new Date(b.ts));
 
-                // Two members share the Crown only while their training histories
-                // are identical (same cumulative count on every date up to `limit`).
-                const ptMap = {};
-                series.forEach(s => { ptMap[s.member.id] = s.points; });
-                const countOn = (id, date) => {
-                    const pts = ptMap[id];
-                    let c = null;
-                    for (let i = 0; i < pts.length && pts[i].date <= date; i++) c = pts[i].count;
-                    return c;
-                };
-                const identicalThrough = (a, b, limit) => {
-                    const dates = new Set();
-                    ptMap[a].forEach(p => { if (p.date <= limit) dates.add(p.date); });
-                    ptMap[b].forEach(p => { if (p.date <= limit) dates.add(p.date); });
-                    for (const d of dates) {
-                        if (countOn(a, d) !== countOn(b, d)) return false;
-                    }
-                    return true;
-                };
-
-                // Pass A: proclamation on the first active day. The end-of-day
-                // leader takes the Crown immediately; several members may share
-                // it when their histories are identical; otherwise the one who
-                // reached the top count first (check-in timestamp) wins it.
+                // Two members share the Crown while they are tied at the top:
+                // the reigning group is proclaimed together and every member
+                // still tied at the group's record keeps holding it.
                 const sMap = {};
                 series.forEach(s => { sMap[s.member.id] = s; });
                 let kingId = null;
@@ -923,7 +908,7 @@ Object.assign(App, {
                     kingId = best;
                     kingCount = maxC;
                     proclaimDate = date;
-                    coBreakers = holders.filter(id => id !== best && identicalThrough(id, best, date));
+                    coBreakers = holders.filter(id => id !== best);
                     break;
                 }
                 if (kingId === null) return [];
@@ -940,13 +925,14 @@ Object.assign(App, {
                 }];
 
                 // Pass B: challenges and takeovers from the proclamation onward.
-                // Co-kings with identical histories extending the record together
-                // are silent — only genuine rivals produce ⚔️/👑 events. Challenges
-                // and takeovers reference the whole reigning King group. A 🛡️
-                // defense is recorded when the King retakes the lead (+1 or more)
-                // over an active Challenger who had previously tied his record.
+                // The reigning group extends the record silently — unless a
+                // challenger is pending, which turns the extension into a 🛡️
+                // defense. A rival reaching exactly the record issues ONE ⚔️
+                // challenge per reign; exceeding it steals the Crown 👑 and
+                // starts a new reigning group.
                 let kingGroup = [kingId].concat(coBreakers);
                 let challengers = [];
+                const challengedInReign = new Set();
                 let coronation = { date: proclaimDate, memberId: kingId };
                 let lastActivity = proclaimDate;
                 const latestCounts = {};
@@ -954,35 +940,44 @@ Object.assign(App, {
                     latestCounts[ev.memberId] = ev.count;
                     if (ev.date > lastActivity) lastActivity = ev.date;
                     if (ev.date <= proclaimDate) return;
-                    if (ev.memberId === kingId || identicalThrough(ev.memberId, kingId, ev.date)) {
+                    if (kingGroup.includes(ev.memberId)) {
                         if (ev.count > kingCount) {
                             if (challengers.length > 0) {
                                 events.push({ type: 'defense', memberId: ev.memberId, alsoIds: kingGroup.filter(i => i !== ev.memberId), count: ev.count, date: ev.date, ts: ev.ts, challengerIds: challengers.slice(), challengerCount: kingCount });
                                 challengers = [];
+                                challengedInReign.clear();
                             }
                             kingCount = ev.count;
                         }
                         return;
                     }
                     if (ev.count === kingCount) {
-                        if (!challengers.includes(ev.memberId)) challengers.push(ev.memberId);
-                        events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
+                        if (!challengedInReign.has(ev.memberId)) {
+                            challengedInReign.add(ev.memberId);
+                            challengers.push(ev.memberId);
+                            events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
+                        } else if (!challengers.includes(ev.memberId)) {
+                            challengers.push(ev.memberId);
+                        }
                     } else if (ev.count > kingCount) {
                         events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                         kingId = ev.memberId;
                         kingCount = ev.count;
                         kingGroup = [ev.memberId];
                         challengers = [];
+                        challengedInReign.clear();
                         coronation = { date: ev.date, memberId: ev.memberId };
                     }
                 });
+
+                kingGroup = kingGroup.filter(id => (latestCounts[id] ?? 0) >= kingCount);
 
                 let defenses = 0;
                 for (let i = events.length - 1; i >= 0; i--) {
                     if (events[i].type === 'king') break;
                     if (events[i].type === 'defense') defenses++;
                 }
-                const alsoNow = series.map(s => s.member.id).filter(id => id !== kingId && identicalThrough(id, kingId, lastActivity));
+                const alsoNow = kingGroup.filter(id => id !== kingId);
                 const todayMid = new Date();
                 todayMid.setHours(0, 0, 0, 0);
                 const throneDays = coronation && coronation.date ? Math.max(1, Math.round((todayMid - new Date(coronation.date + 'T00:00:00')) / 86400000) + 1) : 0;
@@ -1109,11 +1104,13 @@ Object.assign(App, {
                 });
 
                 const kingEvents = events.filter(e => e.type === 'king');
+                const todayMid = new Date();
+                todayMid.setHours(0, 0, 0, 0);
                 let longest = null;
                 kingEvents.forEach((ke, i) => {
                     const start = new Date(ke.date + 'T00:00:00');
-                    const end = i + 1 < kingEvents.length ? new Date(kingEvents[i + 1].date + 'T00:00:00') : new Date(new Date().setHours(0, 0, 0, 0));
-                    const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+                    const endExcl = i + 1 < kingEvents.length ? new Date(kingEvents[i + 1].date + 'T00:00:00') : new Date(todayMid.getTime() + 86400000);
+                    const days = Math.max(1, Math.round((endExcl - start) / 86400000));
                     if (!longest || days > longest.days) longest = { id: ke.memberId, alsoIds: ke.alsoIds || [], days };
                 });
 
@@ -1200,12 +1197,19 @@ Object.assign(App, {
                     const ongoing = endExcl >= todayMid;
                     if (ongoing && !lastHolder) return;
                     if (!lastHolder) return;
-                    const names = [lastHolder.memberId].concat(lastHolder.alsoIds || []).map(id => ctx.nameById[id] || '?').join(' & ');
                     const label = `${Utils.escapeHTML(map.periodWord || 'Period')} ${p.n} · ${monthFmt(p.start)} – ${monthFmt(new Date(endExcl))}`;
+                    let rightSide;
+                    if (ongoing) {
+                        const daysLeft = Math.max(0, Math.ceil((p.end.getTime() - todayMid.getTime()) / 86400000));
+                        rightSide = `⏳ ${daysLeft} ${Utils.escapeHTML(map.periodDaysLeft || 'days left')}`;
+                    } else {
+                        const names = [lastHolder.memberId].concat(lastHolder.alsoIds || []).map(id => ctx.nameById[id] || '?').join(' & ');
+                        rightSide = `👑 ${Utils.escapeHTML(names)}`;
+                    }
                     rows.push(`
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.5rem 0; border-bottom:1px solid var(--gray-light); flex-wrap:wrap;">
                             <span class="text-gray" style="font-size:0.9rem;">${label}${ongoing ? ` · ${Utils.escapeHTML(map.periodOngoing || 'ongoing')}` : ''}</span>
-                            <span style="font-weight:700;">👑 ${Utils.escapeHTML(names)}</span>
+                            <span style="font-weight:700;">${rightSide}</span>
                         </div>
                     `);
                 });
@@ -1412,40 +1416,6 @@ Object.assign(App, {
                     }
                 }
 
-                // Resolve which of the given member ids hold the crown: one unless
-                // all share exactly the same training history (identical count on
-                // every date); otherwise the one who reached that count earliest
-                // (or led longest), found by timestamp comparison and backward walk.
-                const resolveKings = (ids, targetCount) => {
-                    if (ids.length <= 1) return ids.slice();
-                    const identical = ids.every(id => labels.map(x => countAt[id][x] ?? 0).join(',') === labels.map(x => countAt[ids[0]][x] ?? 0).join(','));
-                    if (identical) return ids.slice();
-
-                    const sMap = {};
-                    series.forEach(s => { sMap[s.member.id] = s; });
-                    const withTimes = ids.map(id => {
-                        const s = sMap[id];
-                        const t = (s && s.firstTimeAtCount && targetCount && s.firstTimeAtCount[targetCount])
-                            ? new Date(s.firstTimeAtCount[targetCount]).getTime()
-                            : Infinity;
-                        return { id, t };
-                    });
-                    withTimes.sort((a, b) => a.t - b.t);
-                    const minT = withTimes[0].t;
-                    if (isFinite(minT)) {
-                        const winners = withTimes.filter(x => x.t === minT).map(x => x.id);
-                        if (winners.length === 1) return winners;
-                    }
-
-                    let candidates = ids.slice();
-                    for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
-                        const d = labels[idx];
-                        const maxHere = Math.max(...candidates.map(c => countAt[c][d] ?? -Infinity));
-                        candidates = candidates.filter(c => (countAt[c][d] ?? -Infinity) === maxHere);
-                    }
-                    return candidates;
-                };
-
                 // Crown Hunt event markers (⚔️ challenges / 👑 takeovers / 🛡️
                 // defenses) share a single source of truth with the Hunt Log.
                 const crownResult = App.getCrownEvents(series);
@@ -1453,12 +1423,13 @@ Object.assign(App, {
                 const displayNameById = {};
                 series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
-                // Final king(s): the member(s) at the max final cumulative count.
+                // Final king(s): the reigning group from getCrownEvents — the
+                // proclaimed lineage members still tied at the top record.
                 const lastDate = labels[labels.length - 1];
                 const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
-                const maxFinal = Math.max(...finalCounts);
-                const top = datasets.filter(d => countAt[d._memberId][lastDate] === maxFinal);
-                const kingIds = new Set(resolveKings(top.map(d => d._memberId), maxFinal));
+                const kingIds = new Set(crownResult.currentKing
+                    ? [crownResult.currentKing.id].concat(crownResult.currentKing.alsoIds || [])
+                    : []);
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });

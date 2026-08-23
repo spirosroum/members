@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.08 (23:55) — Crown group fixes, Hunt Log cleanup, winners countdown, input width
+
+- Crown Bounty Leaderboard: the 👑 now marks every member of the reigning Crown group (not just place 1) — all tied throne holders are visible as of the selected date
+- Crown logic: the reigning group = everyone tied at the top when the Crown is claimed; a rival matching the record issues ONE ⚔️ challenge per reign (no duplicate spam); the group extending during an active challenge records a 🛡️ defense (defenses now actually appear)
+- Hall of Kings: reign days no longer double-count boundary days (transfer day belongs to the new King) — fixes inflated «Longest Reign» numbers
+- Crown Bounty Winners: an ongoing period now shows only ⏳ days remaining instead of the current king's name
+- Member Check-In: the ID input now spans the full width of the numpad (300px, aligned edge to edge)
+
 ## 2026-08-23 — v1.07 (23:10) — Bounty polish: belt bars, chart draw order, drop Crown Hold Time
 
 - Removed the «Total Crown Hold Time» section (markup, renderer and i18n hooks)
