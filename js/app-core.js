@@ -1710,6 +1710,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.renderColumnConfigurator();
                 window.addEventListener('resize', App.updateKioskInputMode);
                 window.addEventListener('orientationchange', App.updateKioskInputMode);
+                let chartRz = null;
+                window.addEventListener('resize', () => {
+                    clearTimeout(chartRz);
+                    chartRz = setTimeout(() => { try { App.renderKioskChart(); } catch (e) {} }, 150);
+                });
 
                 // Boot: restore any persisted auth session, then hydrate STATE from
                 // Supabase and start realtime. No anonymous sign-in is required —

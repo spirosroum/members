@@ -794,7 +794,9 @@ Object.assign(App, {
 
                 // Pass B: challenges and takeovers from the proclamation onward.
                 // Co-kings with identical histories extending the record together
-                // are silent — only genuine rivals produce ⚔️/👑 events.
+                // are silent — only genuine rivals produce ⚔️/👑 events. Challenges
+                // and takeovers reference the whole reigning King group.
+                let kingGroup = [kingId].concat(coBreakers);
                 stream.forEach(ev => {
                     if (ev.date <= proclaimDate) return;
                     if (ev.memberId === kingId || identicalThrough(ev.memberId, kingId, ev.date)) {
@@ -802,11 +804,12 @@ Object.assign(App, {
                         return;
                     }
                     if (ev.count === kingCount) {
-                        events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingCount: kingCount });
+                        events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                     } else if (ev.count > kingCount) {
-                        events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingCount: kingCount });
+                        events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                         kingId = ev.memberId;
                         kingCount = ev.count;
+                        kingGroup = [ev.memberId];
                     }
                 });
                 return events;
@@ -826,6 +829,8 @@ Object.assign(App, {
 
                 container.innerHTML = events.slice().reverse().map(ev => {
                     const name = [ev.memberId].concat(ev.alsoIds || []).map(id => nameById[id] || '?').join(' & ');
+                    const prevNames = (ev.prevKingIds && ev.prevKingIds.length ? ev.prevKingIds : [ev.prevKingId])
+                        .map(id => nameById[id] || '?').join(' & ');
                     const emoji = ev.type === 'king' ? '👑' : '⚔️';
                     const action = ev.type === 'king' ? (map.huntNewKing || 'became King') : (map.huntChallenge || 'challenged the Crown');
                     let detail;
@@ -833,10 +838,10 @@ Object.assign(App, {
                         detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
                     } else if (ev.type === 'king') {
                         detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
-                            .replace('{k}', nameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                            .replace('{k}', prevNames).replace('{c}', ev.count);
                     } else {
                         detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
-                            .replace('{k}', nameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                            .replace('{k}', prevNames).replace('{c}', ev.count);
                     }
                     return `
                         <div style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--gray-light);">
@@ -1105,15 +1110,26 @@ Object.assign(App, {
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
                 // Make the chart tall enough to fit every member's line + labels,
                 // even with 50 athletes. Top/bottom padding reserve room for the
-                // staggered right-side names (and crowns) of the highest/lowest groups.
+                // staggered right-side names (and crowns) of the highest/lowest
+                // groups, plus headroom so stacked event markers are never clipped.
                 const offs = Object.values(labelOffsets);
                 const upSpread = offs.length ? Math.max(0, ...offs.map(o => -o)) : 0;
                 const downSpread = offs.length ? Math.max(0, ...offs) : 0;
-                const topPad = Math.max(34, upSpread + 16);
+                const evPerDate = {};
+                crownEvents.forEach(ev => { evPerDate[ev.date] = (evPerDate[ev.date] || 0) + 1; });
+                const maxStack = Object.keys(evPerDate).length ? Math.max(...Object.values(evPerDate)) : 0;
+                const markerHeadroom = maxStack > 1 ? 30 + 16 * (maxStack - 1) : 0;
+                const topPad = Math.max(34, upSpread + 16, markerHeadroom);
                 const bottomPad = Math.max(12, downSpread + 16);
                 const chartH = Math.max(280, series.length * 30 + topPad + bottomPad);
                 const wrap = canvas.parentElement;
                 if (wrap) wrap.style.height = chartH + 'px';
+                const scrollBox = wrap ? wrap.parentElement : null;
+                if (scrollBox && scrollBox.id === 'kiosk-chart-scroll') {
+                    const avail = scrollBox.clientWidth || 600;
+                    wrap.style.width = Math.max(avail, labels.length * 45) + 'px';
+                    scrollBox.style.height = chartH + 'px';
+                }
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
@@ -1158,6 +1174,8 @@ Object.assign(App, {
                 const showTip = hit => {
                     const ev = hit.ev;
                     const who = [ev.memberId].concat(ev.alsoIds || []).map(id => displayNameById[id] || '?').join(' & ');
+                    const prevNames = (ev.prevKingIds && ev.prevKingIds.length ? ev.prevKingIds : [ev.prevKingId])
+                        .map(id => displayNameById[id] || '?').join(' & ');
                     const emoji = ev.type === 'king' ? '👑' : '⚔️';
                     let title;
                     let detail;
@@ -1167,11 +1185,11 @@ Object.assign(App, {
                     } else if (ev.type === 'king') {
                         title = `${who} ${map.huntNewKing || 'became King'}`;
                         detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
-                            .replace('{k}', displayNameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                            .replace('{k}', prevNames).replace('{c}', ev.count);
                     } else {
                         title = `${who} ${map.huntChallenge || 'challenged the Crown'}`;
                         detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
-                            .replace('{k}', displayNameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                            .replace('{k}', prevNames).replace('{c}', ev.count);
                     }
                     tip.innerHTML = `<strong>${Utils.escapeHTML(emoji + ' ' + title)}</strong>${Utils.escapeHTML(detail)}<br>${Utils.escapeHTML(fmtFullDate(ev.date))}`;
                     tip.style.transform = 'translate(-50%, -100%)';

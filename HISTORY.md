@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.90 (14:16) — Chart polish: marker headroom, horizontal scroll, group-aware event text
+- Clipped top emoji fixed: chart top padding now reserves headroom for stacked ⚔️/👑 markers
+- Crown Hunt chart is horizontally scrollable: canvas widens to 45px per day (All-time ranges scroll instead of squeezing); re-fits on window resize
+- Challenges and takeovers now credit the whole reigning King group: «Μάνος challenged the Crown — Matched the record of Μαρία & Δημοσθένης: 5 trainings» (EN phrasing adjusted for multi-king names)
+
 ## 2026-08-23 — v0.89 (15:08) — Fix: co-kings with identical histories no longer trigger ⚔️/👑 against each other
 - When Μαρία & Δημοσθένης (shared Crown since Aug 10) extended the record together on Aug 12, the engine emitted 👑 + ⚔️ as if they were rivals
 - Members whose training history is identical to the current King's (same cumulative count on every date) are treated as co-kings: their extensions are silent, no challenge/takeover markers
