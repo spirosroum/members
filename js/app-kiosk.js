@@ -711,6 +711,10 @@ Object.assign(App, {
                 const INITIAL_KING_MIN_COUNT = 4;
 
                 // Pass A: find the first proclamation via end-of-day snapshots.
+                // Several members may break the record the same day; the one who
+                // reached the new record first (check-in timestamp) takes the Crown.
+                const sMap = {};
+                series.forEach(s => { sMap[s.member.id] = s; });
                 let kingId = null;
                 let kingCount = 0;
                 let proclaimDate = null;
@@ -729,15 +733,29 @@ Object.assign(App, {
                         if (c > maxC) { maxC = c; holders.length = 0; holders.push(id); }
                         else if (c === maxC) holders.push(id);
                     });
-                    const brokeAway = holders.length === 1 && maxC > record && record >= 1 &&
-                        maxC >= INITIAL_KING_MIN_COUNT && prevTopIds.some(id => id !== holders[0]);
-                    if (brokeAway) {
-                        kingId = holders[0];
-                        kingCount = maxC;
-                        proclaimDate = date;
+                    if (maxC > record && record >= 1 && maxC >= INITIAL_KING_MIN_COUNT && prevTopIds.length > 0) {
+                        const droppedOut = prevTopIds.filter(id => (countsEndOfDay[id] ?? 0) < maxC);
+                        if (droppedOut.length > 0) {
+                            const tsOf = id => {
+                                const s = sMap[id];
+                                const t = (s && s.firstTimeAtCount && s.firstTimeAtCount[maxC]) || null;
+                                return t ? new Date(t).getTime() : Infinity;
+                            };
+                            let best = null;
+                            let bestT = Infinity;
+                            holders.forEach(id => {
+                                const t = tsOf(id);
+                                if (t < bestT) { bestT = t; best = id; }
+                            });
+                            if (best !== null) {
+                                kingId = best;
+                                kingCount = maxC;
+                                proclaimDate = date;
+                            }
+                        }
                     }
                     record = Math.max(record, maxC);
-                    prevTopIds = holders;
+                    prevTopIds = holders.slice();
                 });
                 if (kingId === null) return [];
 

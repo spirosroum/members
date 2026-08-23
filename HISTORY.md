@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.88 (14:52) — Fix: Crown events never fired when record was broken by co-breakers
+- First-proclamation pass required a unique end-of-day leader, but real data often had two members breaking the record the same day (Μαρία & Δημοσθένης on Aug 10) so no King was ever proclaimed — chart markers and Hunt Log stayed empty
+- Proclamation now uses timestamp tie-break among same-day co-breakers (earliest check-in takes the Crown), matching the existing resolveKings behavior
+
 ## 2026-08-23 — v0.87 (14:22) — Hunt Log & Crown Hunt chart event markers
 - New single-source Crown event engine `App.getCrownEvents()`: replays every training increment chronologically; ⚔️ when a member reaches exactly the King's record, 👑 when someone exceeds it; King extensions stay silent; first King requires breaking away from a shared top with 4+ sessions (preserves opening-period suppression)
 - Crown Hunt chart: every historical event drawn as an emoji marker anchored to the triggering member's exact data point (scale-based, resize/mobile-safe), vertical offsets prevent overlap
