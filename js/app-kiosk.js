@@ -957,7 +957,7 @@ Object.assign(App, {
                     return;
                 }
 
-                const range = App.chartRange || '3m';
+                const range = ['3m', '1m', 'all'].includes(App.chartRange) ? App.chartRange : '3m';
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
                 let since;
@@ -1047,9 +1047,9 @@ Object.assign(App, {
                     borderColor: App.kioskChartColor(s.member.id, i),
                     backgroundColor: App.kioskChartColor(s.member.id, i),
                     borderWidth: 2,
-                    // A visible dot at the bottom marks the member's very first
-                    // training of the period; all other points stay hidden.
-                    pointRadius: labels.map((_, idx) => (idx === firstIdx[s.member.id] ? 5 : 0)),
+                    // A visible dot marks every training: bigger for the member's
+                    // very first training of the period, small for the rest.
+                    pointRadius: labels.map((l, idx) => (pointMap[s.member.id].has(l) ? (idx === firstIdx[s.member.id] ? 5 : 3.5) : 0)),
                     pointBackgroundColor: App.kioskChartColor(s.member.id, i),
                     pointBorderWidth: 0,
                     pointHoverRadius: 4,
@@ -1208,7 +1208,7 @@ Object.assign(App, {
                 const maxStack = Object.keys(evPerDate).length ? Math.max(...Object.values(evPerDate)) : 0;
                 const markerHeadroom = maxStack > 1 ? 30 + 16 * (maxStack - 1) : 0;
                 const topPad = Math.max(34, upSpread + 16, markerHeadroom);
-                const bottomPad = Math.max(12, downSpread + 16);
+                const bottomPad = Math.max(18, downSpread + 16);
                 const chartH = Math.max(280, series.length * 30 + topPad + bottomPad);
                 const wrap = canvas.parentElement;
                 if (wrap) wrap.style.height = chartH + 'px';
@@ -1225,6 +1225,9 @@ Object.assign(App, {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        // Never clip datasets to the chart area — training dots on
+                        // the bottom axis line would otherwise be half-hidden.
+                        clip: false,
                         interaction: { mode: 'index', intersect: false },
                         layout: { padding: { top: topPad, bottom: bottomPad, right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
                         plugins: {

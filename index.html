@@ -155,16 +155,8 @@
                     </div>
                 </div>
                 <div class="flex gap-1 align-center mt-1" style="flex-wrap: wrap; padding: 0.75rem 1.5rem;">
-                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="3m" onclick="App.setKioskChartRange('3m')">3 months</button>
-                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="1m" onclick="App.setKioskChartRange('1m')">Last month</button>
+                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="3m" onclick="App.setKioskChartRange('3m')">Last 90 days</button>
                     <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="all" onclick="App.setKioskChartRange('all')">All-time</button>
-                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="custom" onclick="App.setKioskChartRange('custom')">Custom</button>
-                    <span class="hidden" id="kiosk-chart-custom-range">
-                        <label class="text-gray" style="font-weight:600;">From</label>
-                        <input type="date" id="kiosk-chart-custom-start" onchange="App.renderKioskChart()">
-                        <label class="text-gray" style="font-weight:600;">To</label>
-                        <input type="date" id="kiosk-chart-custom-end" onchange="App.renderKioskChart()">
-                    </span>
                 </div>
                 <div id="king-info-bar" class="hidden" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0.5rem 1.75rem; padding:0.85rem 1.5rem; border-top:1px solid var(--gray-light); border-bottom:1px solid var(--gray-light); background:#fffdf2; text-align:center;"></div>
                 <div class="kiosk-card-body" style="padding-top: 0;">
@@ -1722,9 +1714,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20260823-13"></script>
+    <script src="js/app-core.js?v=20260823-18"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260823-17"></script>
+    <script src="js/app-kiosk.js?v=20260823-18"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1733,7 +1725,7 @@
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260823-08"></script>
-    <script src="js/app-i18n.js?v=20260823-17"></script>
+    <script src="js/app-i18n.js?v=20260823-18"></script>
 
 
 </body>

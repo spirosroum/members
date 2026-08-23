@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.95 (16:07) — Throne wording, range buttons simplified, training dots
+- Wording: «challenged the King», «sat on the Throne» (first proclamation), «stole the Crown», «Current Crown Holder», «Days on Throne in the last 90 days» (EN/EL)
+- Chart ranges reduced to «Last 90 days» and «All-time» (Custom and Last month removed); stale saved ranges fall back to 90 days
+- Every training now shows a small dot on the member's line (first training keeps the bigger dot); datasets no longer clip to the chart area so bottom-axis dots render fully
+
 ## 2026-08-23 — v0.94 (15:46) — Crown Bounty rename, marker order, stable chart
 - Renamed «Crown Hunt / Κυνηγητό Στέμματος» to «Crown Bounty / Λάφυρο του Στέμματος» (title, i18n, fallbacks)
 - Takeover events now read «Stole the Crown / Άρπαξε το Στέμμα» instead of «became King» (first proclamation keeps «became King»)
