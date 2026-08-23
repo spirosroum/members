@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.16 (00:01) — Bounty LB: late-backfilled attendance no longer vanishes from past days
+
+- Fixed members missing from historical Bounty Leaderboard days (e.g. absent on Aug 17, back on Aug 19; first training on Aug 4 invisible): the window gate tested the record's entry timestamp, but admin-marked/backfilled attendance stores entryTime = save moment while slotDate = the real class day — anything recorded more than a day later never appeared on earlier date views. The window is now bounded purely by session date, so any session dated to that day shows on that day no matter when it was entered
+- Seniority fix: «who reached N first» tie-breaks now anchor the time-of-day to the session date, so backfilled sessions keep the seniority of their own day instead of their bookkeeping timestamp
+- 💩 semantics clarified (unchanged code): 🥇🥈🥉 are fixed to places 1–3 and 💩 marks only the unmedaled last-place row(s); a sole member is place 1 → crowned 👑, never pooped
+- Verified with an automated harness against the live code: 22/22 scenarios pass, including the exact reported Aug 4 / Aug 17 cases
+
 ## 2026-08-23 — v1.15 (23:28) — Bounty LB: phantom-member fix, correct ▲/▼, midnight-safe sessions
 
 - Fixed members appearing/disappearing on the Crown Bounty Leaderboard: a member with «Hide from Leaderboard» enabled was excluded from the roster BEFORE the safety net snapshot, so their own check-ins re-added them as a nameless phantom row (raw id) — hidden ids now count as known and stay off the board; genuinely unknown ids (deleted members with trainings, e.g. Christos) are still rescued

@@ -877,15 +877,13 @@ Object.assign(App, {
                 const visits = DB.getVisits();
 
                 const result = [];
-                // ±24h grace on the entry timestamp, then bounds are enforced
-                // on the effective session date: a slot booked late the night
-                // before (or a class backfilled after midnight) belongs to its
-                // slotDate and must not vanish from that day's standings.
+                // Bounds are enforced on the effective session date alone:
+                // attendance entered days later (entryTime = save moment,
+                // slotDate = the real class day) must still count for the day
+                // it belongs to, on every historical view.
                 const sinceIso = Utils.dateToLocalIso(since);
                 const untilIso = Utils.dateToLocalIso(until);
-                const lo = new Date(since.getTime() - 86400000);
-                const hi = new Date(until.getTime() + 86400000);
-                const inWindow = (d, dateKey) => !isNaN(d.getTime()) && d >= lo && d < hi && dateKey >= sinceIso && dateKey <= untilIso;
+                const inWindow = (dateKey) => !!dateKey && dateKey >= sinceIso && dateKey <= untilIso;
                 memberIds.forEach(member => {
                     const cins = checkins.filter(ci => ci.memberId === member.id && ci.entryTime);
                     const seen = new Set();
@@ -893,8 +891,8 @@ Object.assign(App, {
                     const mEvents = [];
                     cins.forEach(ci => {
                         const d = new Date(ci.entryTime);
-                        const dateKey = ci.slotDate || Utils.dateToLocalIso(d);
-                        if (!inWindow(d, dateKey)) return;
+                        const dateKey = ci.slotDate || (isNaN(d.getTime()) ? '' : Utils.dateToLocalIso(d));
+                        if (!inWindow(dateKey)) return;
                         const sessionKey = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
                         if (seen.has(sessionKey)) return;
                         seen.add(sessionKey);
@@ -903,18 +901,30 @@ Object.assign(App, {
                     visits.forEach(v => {
                         if (v.memberId !== member.id || !v.entryTime || checkinVisitIds.has(v.id)) return;
                         const d = new Date(v.entryTime);
-                        const dateKey = Utils.dateToLocalIso(d);
-                        if (!inWindow(d, dateKey)) return;
+                        const dateKey = isNaN(d.getTime()) ? '' : Utils.dateToLocalIso(d);
+                        if (!inWindow(dateKey)) return;
                         mEvents.push({ date: dateKey, time: v.entryTime });
                     });
-                    mEvents.sort((a, b) => new Date(a.time) - new Date(b.time));
+                    mEvents.sort((a, b) => {
+                        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+                        return new Date(a.time) - new Date(b.time);
+                    });
                     const firstTimeAtCount = {};
                     const increments = [];
                     let running = 0;
+                    // Seniority timestamps anchor the wall-clock time-of-day to
+                    // the SESSION date, so a backfilled entry (entered days
+                    // later) keeps the seniority of the day it belongs to.
+                    const anchoredTs = (e) => {
+                        const base = new Date(e.date + 'T00:00:00').getTime();
+                        const t = new Date(e.time);
+                        if (isNaN(t.getTime())) return base;
+                        return base + (t.getTime() - new Date(Utils.dateToLocalIso(t) + 'T00:00:00').getTime());
+                    };
                     mEvents.forEach(e => {
                         dayCount[e.date] = (dayCount[e.date] || 0) + 1;
                         running++;
-                        if (!firstTimeAtCount[running]) firstTimeAtCount[running] = e.time;
+                        if (!firstTimeAtCount[running]) firstTimeAtCount[running] = anchoredTs(e);
                         increments.push({ date: e.date, time: e.time, count: running });
                     });
                     const dates = Object.keys(dayCount).sort();
