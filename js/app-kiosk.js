@@ -671,11 +671,13 @@ Object.assign(App, {
                     });
                     mEvents.sort((a, b) => new Date(a.time) - new Date(b.time));
                     const firstTimeAtCount = {};
+                    const increments = [];
                     let running = 0;
                     mEvents.forEach(e => {
                         dayCount[e.date] = (dayCount[e.date] || 0) + 1;
                         running++;
                         if (!firstTimeAtCount[running]) firstTimeAtCount[running] = e.time;
+                        increments.push({ date: e.date, time: e.time, count: running });
                     });
                     const dates = Object.keys(dayCount).sort();
                     let cum = 0;
@@ -683,9 +685,123 @@ Object.assign(App, {
                         cum += dayCount[date];
                         return { date, count: cum };
                     });
-                    if (points.length) result.push({ member, points, firstTimeAtCount });
+                    if (points.length) result.push({ member, points, firstTimeAtCount, increments });
                 });
                 return result;
+            },
+
+            // Single source of truth for Crown events — the Hunt Log and the
+            // chart markers both render from this. Replays every training
+            // increment in chronological order:
+            //  - No King exists until someone breaks away from a shared top
+            //    with 4+ sessions (opening-period ties never crown anyone).
+            //  - Reaching exactly the King's record -> ⚔️ challenge.
+            //  - Exceeding it -> 👑 new King takes the Crown.
+            //  - The King extending his own record stays King without an event.
+            getCrownEvents: (series) => {
+                const stream = [];
+                series.forEach(s => {
+                    (s.increments || []).forEach(inc => {
+                        stream.push({ memberId: s.member.id, date: inc.date, ts: inc.time, count: inc.count });
+                    });
+                });
+                if (!stream.length) return [];
+                stream.sort((a, b) => new Date(a.ts) - new Date(b.ts));
+
+                const INITIAL_KING_MIN_COUNT = 4;
+
+                // Pass A: find the first proclamation via end-of-day snapshots.
+                let kingId = null;
+                let kingCount = 0;
+                let proclaimDate = null;
+                let record = 0;
+                let prevTopIds = [];
+                const countsEndOfDay = {};
+                const byDate = {};
+                stream.forEach(ev => { (byDate[ev.date] = byDate[ev.date] || []).push(ev); });
+                Object.keys(byDate).sort().forEach(date => {
+                    byDate[date].forEach(ev => { countsEndOfDay[ev.memberId] = ev.count; });
+                    if (kingId !== null) return;
+                    let maxC = 0;
+                    const holders = [];
+                    Object.keys(countsEndOfDay).forEach(id => {
+                        const c = countsEndOfDay[id];
+                        if (c > maxC) { maxC = c; holders.length = 0; holders.push(id); }
+                        else if (c === maxC) holders.push(id);
+                    });
+                    const brokeAway = holders.length === 1 && maxC > record && record >= 1 &&
+                        maxC >= INITIAL_KING_MIN_COUNT && prevTopIds.some(id => id !== holders[0]);
+                    if (brokeAway) {
+                        kingId = holders[0];
+                        kingCount = maxC;
+                        proclaimDate = date;
+                    }
+                    record = Math.max(record, maxC);
+                    prevTopIds = holders;
+                });
+                if (kingId === null) return [];
+
+                const events = [{
+                    type: 'king',
+                    memberId: kingId,
+                    count: kingCount,
+                    date: proclaimDate,
+                    ts: ((byDate[proclaimDate] || []).find(ev => ev.memberId === kingId && ev.count === kingCount) || {}).ts || proclaimDate,
+                    prevKingId: null,
+                    prevKingCount: null
+                }];
+
+                // Pass B: challenges and takeovers from the proclamation onward.
+                stream.forEach(ev => {
+                    if (ev.date <= proclaimDate) return;
+                    if (ev.memberId === kingId) { kingCount = ev.count; return; }
+                    if (ev.count === kingCount) {
+                        events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingCount: kingCount });
+                    } else if (ev.count > kingCount) {
+                        events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingCount: kingCount });
+                        kingId = ev.memberId;
+                        kingCount = ev.count;
+                    }
+                });
+                return events;
+            },
+
+            renderHuntLog: (events, nameById) => {
+                const container = document.getElementById('hunt-log-list');
+                const section = document.getElementById('hunt-log-section');
+                if (!container || !section) return;
+                if (!events || !events.length) { section.classList.add('hidden'); return; }
+                section.classList.remove('hidden');
+
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const locale = lang === 'el' ? 'el-GR' : undefined;
+                const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+
+                container.innerHTML = events.slice().reverse().map(ev => {
+                    const name = nameById[ev.memberId] || '?';
+                    const emoji = ev.type === 'king' ? '👑' : '⚔️';
+                    const action = ev.type === 'king' ? (map.huntNewKing || 'became King') : (map.huntChallenge || 'challenged the Crown');
+                    let detail;
+                    if (ev.type === 'king' && !ev.prevKingId) {
+                        detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
+                    } else if (ev.type === 'king') {
+                        detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
+                            .replace('{k}', nameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                    } else {
+                        detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
+                            .replace('{k}', nameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                    }
+                    return `
+                        <div style="display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0; border-bottom:1px solid var(--gray-light);">
+                            <span style="font-size:1.2rem; flex-shrink:0;">${emoji}</span>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-weight:700;">${Utils.escapeHTML(name)} ${Utils.escapeHTML(action)}</div>
+                                <div class="text-gray" style="font-size:0.82rem;">${Utils.escapeHTML(detail)} · ${Utils.escapeHTML(fmtDate(ev.date))}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             },
 
             setKioskChartRange: (range) => {
@@ -707,12 +823,14 @@ Object.assign(App, {
                 if (typeof Chart === 'undefined') {
                     const holder = document.getElementById('kiosk-training-chart-container');
                     if (holder) holder.classList.add('hidden');
+                    App.renderHuntLog && App.renderHuntLog([], {});
                     return;
                 }
                 const members = App._kioskLeaderboardMembers || [];
                 if (!members.length) {
                     const holder = document.getElementById('kiosk-training-chart-container');
                     if (holder) holder.classList.add('hidden');
+                    App.renderHuntLog && App.renderHuntLog([], {});
                     return;
                 }
 
@@ -741,6 +859,7 @@ Object.assign(App, {
                 if (!series.length) {
                     if (App._kioskChartInstance) { App._kioskChartInstance.destroy(); App._kioskChartInstance = null; }
                     canvas.style.display = 'none';
+                    App.renderHuntLog && App.renderHuntLog([], {});
                     return;
                 }
                 canvas.style.display = 'block';
@@ -840,44 +959,11 @@ Object.assign(App, {
                     return candidates;
                 };
 
-                // In-chart crowns: a crown appears above a date when a king is proclaimed
-                // (the first breakaway from the initial cohort, e.g. Aug 10, or a new king overtake, e.g. Aug 20).
-                const chartCrowns = {};
-                let record = 0;
-                let proclaimedKings = [];
-                labels.forEach(date => {
-                    let maxToday = -1;
-                    const holders = [];
-                    series.forEach(s => {
-                        const c = countAt[s.member.id][date];
-                        if (c == null) return;
-                        if (c > maxToday) { maxToday = c; holders.length = 0; holders.push(s.member.id); }
-                        else if (c === maxToday) holders.push(s.member.id);
-                    });
-                    if (maxToday <= 0) return;
-
-                    if (maxToday > record) {
-                        const kings = resolveKings(holders, maxToday);
-                        if (proclaimedKings.length === 0) {
-                            const prevAtTop = series.filter(s => countAt[s.member.id][date] === record).map(s => s.member.id);
-                            if (record >= 1 && prevAtTop.length > 0) {
-                                const droppedOut = prevAtTop.filter(id => (countAt[id][date] ?? 0) < maxToday);
-                                if (droppedOut.length > 0 && maxToday >= 4) {
-                                    proclaimedKings = kings;
-                                    chartCrowns[date] = kings;
-                                }
-                            }
-                        } else {
-                            const prevKey = proclaimedKings.slice().sort().join('|');
-                            const newKey = kings.slice().sort().join('|');
-                            if (prevKey !== newKey) {
-                                proclaimedKings = kings;
-                                chartCrowns[date] = kings;
-                            }
-                        }
-                        record = maxToday;
-                    }
-                });
+                // Crown Hunt event markers (⚔️ challenges / 👑 takeovers) share a
+                // single source of truth with the Hunt Log below the chart.
+                const crownEvents = App.getCrownEvents(series);
+                const displayNameById = {};
+                series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
                 // Final king(s): the member(s) at the max final cumulative count.
                 const lastDate = labels[labels.length - 1];
@@ -930,30 +1016,41 @@ Object.assign(App, {
                     }
                 };
 
-                // Crown emoji above the date a new king (or kings) breaks the record.
-                const crownPlugin = {
-                    id: 'kioskChartCrowns',
+                // Hunt event markers (⚔️/👑) drawn above the exact data point that
+                // triggered each event, with vertical offsets when they overlap.
+                // Positions come from the chart scales, so they follow resizes.
+                const markerHits = [];
+                const eventsPlugin = {
+                    id: 'kioskEventMarkers',
                     afterDatasetsDraw(chart) {
-                        const dates = Object.keys(chartCrowns);
-                        if (!dates.length) return;
+                        markerHits.length = 0;
+                        if (!crownEvents.length) return;
                         const ctx = chart.ctx;
                         ctx.save();
-                        ctx.font = '16px system-ui, sans-serif';
+                        ctx.font = '15px system-ui, sans-serif';
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'bottom';
-                        const xScale = chart.scales.x;
-                        dates.forEach(date => {
-                            const ids = chartCrowns[date];
-                            const x = xScale.getPixelForValue(date);
-                            ids.forEach(mid => {
-                                const di = datasets.findIndex(ds => ds._memberId === mid);
-                                const meta = di >= 0 ? chart.getDatasetMeta(di) : null;
-                                if (!meta || !meta.visible) return;
-                                const idx = labels.indexOf(date);
-                                const pt = meta.data[idx];
-                                if (!pt || !isFinite(pt.y)) return;
-                                ctx.fillText('👑', x, pt.y - 12);
-                            });
+                        const pts = [];
+                        crownEvents.forEach(ev => {
+                            const di = datasets.findIndex(ds => ds._memberId === ev.memberId);
+                            if (di < 0) return;
+                            const meta = chart.getDatasetMeta(di);
+                            if (!meta || !meta.visible) return;
+                            const idx = labels.indexOf(ev.date);
+                            if (idx < 0) return;
+                            const pt = meta.data[idx];
+                            if (!pt || !isFinite(pt.x) || !isFinite(pt.y)) return;
+                            pts.push({ x: pt.x, y: pt.y, ev });
+                        });
+                        pts.sort((a, b) => a.x - b.x || a.y - b.y);
+                        const placed = [];
+                        pts.forEach(p => {
+                            let off = 0;
+                            while (placed.some(d => Math.abs(d.x - p.x) < 14 && Math.abs(d.y - (p.y - 8 - off)) < 15)) off += 16;
+                            const y = p.y - 8 - off;
+                            ctx.fillText(p.ev.type === 'king' ? '👑' : '⚔️', p.x, y);
+                            placed.push({ x: p.x, y });
+                            markerHits.push({ x: p.x, y, ev: p.ev });
                         });
                         ctx.restore();
                     }
@@ -974,7 +1071,7 @@ Object.assign(App, {
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [rightLabelsPlugin, crownPlugin],
+                    plugins: [rightLabelsPlugin, eventsPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
@@ -1003,6 +1100,58 @@ Object.assign(App, {
                         }
                     }
                 });
+
+                let tip = document.getElementById('kiosk-marker-tip');
+                if (!tip) {
+                    tip = document.createElement('div');
+                    tip.id = 'kiosk-marker-tip';
+                    document.body.appendChild(tip);
+                }
+                const locale = (App.currentKioskLang === 'el') ? 'el-GR' : undefined;
+                const fmtFullDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+                const showTip = hit => {
+                    const ev = hit.ev;
+                    const who = displayNameById[ev.memberId] || '?';
+                    const emoji = ev.type === 'king' ? '👑' : '⚔️';
+                    let title;
+                    let detail;
+                    if (ev.type === 'king' && !ev.prevKingId) {
+                        title = `${who} ${map.huntNewKing || 'became King'}`;
+                        detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
+                    } else if (ev.type === 'king') {
+                        title = `${who} ${map.huntNewKing || 'became King'}`;
+                        detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
+                            .replace('{k}', displayNameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                    } else {
+                        title = `${who} ${map.huntChallenge || 'challenged the Crown'}`;
+                        detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
+                            .replace('{k}', displayNameById[ev.prevKingId] || '?').replace('{c}', ev.count);
+                    }
+                    tip.innerHTML = `<strong>${Utils.escapeHTML(emoji + ' ' + title)}</strong>${Utils.escapeHTML(detail)}<br>${Utils.escapeHTML(fmtFullDate(ev.date))}`;
+                    tip.style.transform = 'translate(-50%, -100%)';
+                    tip.style.display = 'block';
+                    const rect = canvas.getBoundingClientRect();
+                    tip.style.left = Math.min(Math.max(rect.left + hit.x, 8), window.innerWidth - 8 - Math.min(280, window.innerWidth)) + 'px';
+                    tip.style.top = (rect.top + hit.y - 10) + 'px';
+                };
+                const hideTip = () => { if (tip) tip.style.display = 'none'; };
+                canvas.onmousemove = e => {
+                    const rect = canvas.getBoundingClientRect();
+                    const mx = e.clientX - rect.left;
+                    const my = e.clientY - rect.top;
+                    const hit = markerHits.find(h => Math.abs(h.x - mx) <= 11 && my >= h.y - 18 && my <= h.y + 6);
+                    if (hit) showTip(hit); else hideTip();
+                };
+                canvas.onclick = e => {
+                    const rect = canvas.getBoundingClientRect();
+                    const mx = e.clientX - rect.left;
+                    const my = e.clientY - rect.top;
+                    const hit = markerHits.find(h => Math.abs(h.x - mx) <= 14 && my >= h.y - 22 && my <= h.y + 8);
+                    if (hit) showTip(hit); else hideTip();
+                };
+                canvas.onmouseleave = hideTip;
+
+                App.renderHuntLog(crownEvents, displayNameById);
                 App.renderCrownHistory && App.renderCrownHistory();
             },
 

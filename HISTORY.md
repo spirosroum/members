@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.87 (14:22) — Hunt Log & Crown Hunt chart event markers
+- New single-source Crown event engine `App.getCrownEvents()`: replays every training increment chronologically; ⚔️ when a member reaches exactly the King's record, 👑 when someone exceeds it; King extensions stay silent; first King requires breaking away from a shared top with 4+ sessions (preserves opening-period suppression)
+- Crown Hunt chart: every historical event drawn as an emoji marker anchored to the triggering member's exact data point (scale-based, resize/mobile-safe), vertical offsets prevent overlap
+- Marker tooltips on hover/tap: «George challenged the Crown / Matched Manos' record of 6 trainings / August 23, 2026» style details, EN/EL
+- New Hunt Log card under the chart listing all events newest-first from the same event objects (chart and log can never diverge)
+- Old date-level crown drawing replaced by per-event markers; current-King indicator (👑 prefix on labels) unchanged
+- i18n keys huntLog*/huntChallenge/huntNewKing/huntFirstKing/huntMatched/huntBroke (EN+EL); chart re-renders on language toggle
+
 ## 2026-08-23 — v0.86 (13:31) — Full-card belt colors on Training Leaderboard & Proclaimed King Days
 - Removed the belt badge from member cards on the Training Leaderboard and Proclaimed King Days list
 - Card backgrounds now use the member's belt color (custom shades apply); same contrast rules as check-in cards: White belt → black text (#000000), all other belts → white text (#FFFFFF)

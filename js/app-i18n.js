@@ -47,6 +47,13 @@ App.KIOSK_I18N = {
         crownHistorySubtitle: 'Days as King in the last 90 days.',
         crownHistoryDay: 'day',
         crownHistoryDays: 'days',
+        huntLogTitle: 'Hunt Log',
+        huntLogSubtitle: 'Challenges and crown takeovers.',
+        huntChallenge: 'challenged the Crown',
+        huntNewKing: 'became King',
+        huntFirstKing: 'Claimed the Crown with {c} trainings.',
+        huntMatched: "Matched {k}'s record of {c} trainings.",
+        huntBroke: "Broke {k}'s record with {c} trainings.",
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
         leaderboardMemberColumn: 'Name',
@@ -241,6 +248,13 @@ App.KIOSK_I18N = {
         crownHistorySubtitle: 'Ημέρες ως Βασιλιάς τις τελευταίες 90 ημέρες.',
         crownHistoryDay: 'ημέρα',
         crownHistoryDays: 'ημέρες',
+        huntLogTitle: 'Ημερολόγιο Κυνηγητού',
+        huntLogSubtitle: 'Προκλήσεις και ανατροπές του Στέμματος.',
+        huntChallenge: 'προκάλεσε το Στέμμα',
+        huntNewKing: 'έγινε Βασιλιάς',
+        huntFirstKing: 'Διεκδίκησε το Στέμμα με {c} προπονήσεις.',
+        huntMatched: 'Ισοφάρισε το ρεκόρ ({k}) με {c} προπονήσεις.',
+        huntBroke: 'Έσπασε το ρεκόρ ({k}) με {c} προπονήσεις.',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
         leaderboardMemberColumn: 'Όνομα',
@@ -403,6 +417,7 @@ App.setKioskLanguage = function(lang) {
         localStorage.setItem('kiosk_lang', lang);
         App.currentKioskLang = lang;
         App.applyKioskTranslations();
+        if (App.renderKioskChart) { try { App.renderKioskChart(); } catch (e) {} }
     } catch (e) { console.warn('setKioskLanguage error', e); }
 };
 
@@ -514,6 +529,8 @@ App.applyKioskTranslations = function() {
         });
         const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || 'Proclaimed King Days';
         const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days as King in the last 90 days.';
+        const huntLogTitle = document.getElementById('hunt-log-title'); if (huntLogTitle) huntLogTitle.innerText = map.huntLogTitle || 'Hunt Log';
+        const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';
         App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
