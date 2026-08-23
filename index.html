@@ -82,7 +82,6 @@
                     <h3>Member Check-In</h3>
                 </div>
                 <div class="flex-col align-center kiosk-card-body" style="text-align: center;">
-                    <p class="text-gray mt-1" style="font-size: 1.1rem;">Scan or enter your Member ID to check in.</p>
                     <input type="text" id="kiosk-id-input" readonly inputmode="none" class="search-bar mt-2" placeholder="󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏󠁯•󠁏󠁏" maxlength="8" pattern="\d*" style="font-size: 3rem; text-align: center; letter-spacing: 5px; width: 80%; max-width: 300px;" onkeyup="if(event.key === 'Enter') App.kioskSubmit()">
                     
                     <!-- Numpad -->
@@ -119,10 +118,10 @@
                 </div>
             </div>
             
-            <div class="kiosk-card" style="grid-column: 1 / -1;">
-                <div class="kiosk-card-header">
-                    <div>
-                        <h3 id="kiosk-schedule-title" style="margin: 0;">Training Schedule</h3>
+                <div class="kiosk-card" id="kiosk-schedule-card" style="grid-column: 1 / -1;">
+                    <div class="kiosk-card-header">
+                        <div>
+                            <h3 id="kiosk-schedule-title" style="margin: 0;">Training Schedule</h3>
                         <p id="kiosk-schedule-subtitle" class="text-gray" style="margin: 0;">Weekly class schedule.</p>
                     </div>
                     <div class="flex gap-1 align-center" style="flex-shrink:0;">
@@ -179,6 +178,11 @@
                 <div id="hall-of-kings-section" class="hidden" style="border-top: 1px solid var(--gray-light); padding: 1.25rem 1.5rem;">
                     <h4 id="hall-of-kings-title" style="margin: 0 0 0.75rem 0; font-size: 1.05rem; font-weight: 800; color: var(--dark);">🏆 HALL OF KINGS</h4>
                     <div id="hall-of-kings-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:0.75rem;"></div>
+                </div>
+
+                <div id="period-winners-section" class="hidden" style="border-top: 1px solid var(--gray-light); padding: 1.25rem 1.5rem;">
+                    <h4 id="period-winners-title" style="margin: 0 0 0.75rem 0; font-size: 1.05rem; font-weight: 700; color: var(--dark);">Crown Bounty Winners</h4>
+                    <div id="period-winners-list" style="max-height: 330px; overflow-y: auto;"></div>
                 </div>
 
                 <div id="kiosk-crown-history-section" class="hidden" style="border-top: 1px solid var(--gray-light); padding: 1.25rem 1.5rem;">
@@ -1238,6 +1242,15 @@
                         <button class="btn-outline btn-small" onclick="App.resetBeltColors()">Reset to Defaults</button>
                     </div>
                 </div>
+                <div class="card mt-2">
+                    <h3>Check-in Portal</h3>
+                    <p class="text-gray mb-1">Control what members see on the public check-in screen.</p>
+                    <label class="closed-date-toggle">
+                        <input type="checkbox" id="setting-hide-kiosk-schedule" onchange="App.setHideKioskSchedule(this.checked)">
+                        <span class="closed-date-toggle-track"></span>
+                        <span class="closed-date-toggle-label">Hide Training Schedule</span>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -1720,9 +1733,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20260823-18"></script>
+    <script src="js/app-core.js?v=20260823-21"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260823-20"></script>
+    <script src="js/app-kiosk.js?v=20260823-21"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1730,8 +1743,8 @@
     <script src="js/app-plans.js?v=20260815-1"></script>
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
-    <script src="js/app-admin.js?v=20260823-08"></script>
-    <script src="js/app-i18n.js?v=20260823-20"></script>
+    <script src="js/app-admin.js?v=20260823-21"></script>
+    <script src="js/app-i18n.js?v=20260823-21"></script>
 
 
 </body>

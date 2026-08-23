@@ -970,15 +970,6 @@ Object.assign(App, {
                     if (!longest || days > longest.days) longest = { id: ke.memberId, alsoIds: ke.alsoIds || [], days };
                 });
 
-                const crownCounts = {};
-                kingEvents.forEach(ke => {
-                    [ke.memberId].concat(ke.alsoIds || []).forEach(id => { crownCounts[id] = (crownCounts[id] || 0) + 1; });
-                });
-                let mostCrowns = null;
-                Object.keys(crownCounts).forEach(id => {
-                    if (!mostCrowns || crownCounts[id] > mostCrowns.count) mostCrowns = { id, count: crownCounts[id] };
-                });
-
                 const defCounts = {};
                 events.filter(e => e.type === 'defense').forEach(de => {
                     [de.memberId].concat(de.alsoIds || []).forEach(id => { defCounts[id] = (defCounts[id] || 0) + 1; });
@@ -991,6 +982,8 @@ Object.assign(App, {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const nm = id => nameById[id] || '?';
+                const trainingsWord = map.kingStatPoints || 'Trainings';
+                const daysWord = map.crownHistoryDays || 'days';
                 const card = (label, value) => `
                     <div style="background:var(--light); border-radius:10px; padding:0.7rem 0.9rem;">
                         <div class="text-gray" style="font-size:0.72rem; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">${Utils.escapeHTML(label)}</div>
@@ -999,14 +992,76 @@ Object.assign(App, {
                 const holder = (id, alsoIds) => '👑 ' + Utils.escapeHTML([id].concat(alsoIds || []).map(nm).join(' & '));
 
                 const cards = [];
-                if (highest) cards.push(card(map.hallHighestScore || 'Highest Score', `${holder(highest.id)} — ${highest.count}`));
-                if (longest) cards.push(card(map.hallLongestReign || 'Longest Reign', `${holder(longest.id, longest.alsoIds)} — ${longest.days}`));
-                if (mostCrowns) cards.push(card(map.hallMostCrowns || 'Most Crowns', `${holder(mostCrowns.id)} — ${mostCrowns.count}`));
+                if (highest) cards.push(card(map.hallHighestScore || 'Highest Score', `${holder(highest.id)} — ${highest.count} ${Utils.escapeHTML(trainingsWord)}`));
+                if (longest) cards.push(card(map.hallLongestReign || 'Longest Reign', `${holder(longest.id, longest.alsoIds)} — ${longest.days} ${Utils.escapeHTML(daysWord)}`));
                 if (mostDefs) cards.push(card(map.hallMostDefenses || 'Most Crown Defenses', `${holder(mostDefs.id)} — ${mostDefs.count}`));
 
                 if (!cards.length) { section.classList.add('hidden'); return; }
                 section.classList.remove('hidden');
                 grid.innerHTML = cards.join('');
+                App.renderPeriodWinners({ members, series, events, nameById });
+            },
+
+            // Crown Bounty periods (4 months each): Nov–Feb, Mar–Jun, Jul–Oct.
+            // The Crown Holder on the final day of a period wins that period.
+            renderPeriodWinners: (ctx) => {
+                const list = document.getElementById('period-winners-list');
+                const section = document.getElementById('period-winners-section');
+                if (!list || !section) return;
+                if (!ctx || !ctx.events) { section.classList.add('hidden'); return; }
+                const kingEvents = ctx.events.filter(e => e.type === 'king');
+                if (!kingEvents.length) { section.classList.add('hidden'); return; }
+
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const loc = lang === 'el' ? 'el-GR' : undefined;
+                const iso = d => Utils.dateToLocalIso(d);
+                const todayMid = new Date();
+                todayMid.setHours(0, 0, 0, 0);
+                const firstActivity = (() => {
+                    let min = null;
+                    ctx.series.forEach(s => {
+                        if (s.points.length && (!min || s.points[0].date < min)) min = s.points[0].date;
+                    });
+                    return min;
+                })();
+                if (!firstActivity) { section.classList.add('hidden'); return; }
+
+                const periods = [];
+                const startYear = parseInt(firstActivity.slice(0, 4), 10) - 1;
+                const endYear = todayMid.getFullYear() + 1;
+                for (let y = startYear; y <= endYear; y++) {
+                    periods.push({ n: 1, start: new Date(y, 10, 1), end: new Date(y + 1, 2, 1) });
+                    periods.push({ n: 2, start: new Date(y + 1, 2, 1), end: new Date(y + 1, 6, 1) });
+                    periods.push({ n: 3, start: new Date(y + 1, 6, 1), end: new Date(y + 1, 10, 1) });
+                }
+                const monthFmt = d => d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
+                const rows = [];
+                let evIdx = 0;
+                let lastHolder = null;
+                periods.forEach(p => {
+                    const endExcl = new Date(p.end.getTime() - 1);
+                    const endIso = iso(endExcl);
+                    if (endExcl < new Date(firstActivity + 'T00:00:00')) return;
+                    while (evIdx < kingEvents.length && kingEvents[evIdx].date <= endIso) {
+                        lastHolder = kingEvents[evIdx];
+                        evIdx++;
+                    }
+                    const ongoing = endExcl >= todayMid;
+                    if (ongoing && !lastHolder) return;
+                    if (!lastHolder) return;
+                    const names = [lastHolder.memberId].concat(lastHolder.alsoIds || []).map(id => ctx.nameById[id] || '?').join(' & ');
+                    const label = `${Utils.escapeHTML(map.periodWord || 'Period')} ${p.n} · ${monthFmt(p.start)} – ${monthFmt(new Date(endExcl))}`;
+                    rows.push(`
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.5rem 0; border-bottom:1px solid var(--gray-light); flex-wrap:wrap;">
+                            <span class="text-gray" style="font-size:0.9rem;">${label}${ongoing ? ` · ${Utils.escapeHTML(map.periodOngoing || 'ongoing')}` : ''}</span>
+                            <span style="font-weight:700;">👑 ${Utils.escapeHTML(names)}</span>
+                        </div>
+                    `);
+                });
+                if (!rows.length) { section.classList.add('hidden'); return; }
+                section.classList.remove('hidden');
+                list.innerHTML = rows.join('');
             },
 
             setKioskChartRange: (range) => {

@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.98 (18:16) — Bounty periods, Hall tweaks, admin schedule toggle
+- Hall of Kings: removed Most Crowns; Highest Score now shows «— N Trainings», Longest Reign «— N days»
+- New «Crown Bounty Winners» log: 4-month periods (Nov–Feb, Mar–Jun, Jul–Oct); the Crown Holder on the final day of each period wins it; the running period is marked «ongoing»
+- Admin → Member Settings → Check-in Portal: new toggle to hide the Training Schedule card on the check-in portal (persisted to settings)
+- Removed the «Scan or enter your Member ID to check in.» prompt from the Member Check-In card (and its i18n updater)
+
 ## 2026-08-23 — v0.97 (17:43) — Hall of Kings, 1-point alert, mobile legend fix
 - Mobile legend overlay is now viewport-fixed and centered (was anchored inside the scrollable canvas, so entries were cut off-screen)
 - New 🏆 Hall of Kings card (all-time records): Highest Score, Longest Reign, Most Crowns, Most Crown Defenses (EN/EL)

@@ -65,8 +65,10 @@ App.KIOSK_I18N = {
         hallOfKingsTitle: 'HALL OF KINGS',
         hallHighestScore: 'Highest Score',
         hallLongestReign: 'Longest Reign',
-        hallMostCrowns: 'Most Crowns',
         hallMostDefenses: 'Most Crown Defenses',
+        periodWinnersTitle: 'Crown Bounty Winners',
+        periodWord: 'Period',
+        periodOngoing: 'ongoing',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
         leaderboardMemberColumn: 'Name',
@@ -279,8 +281,10 @@ App.KIOSK_I18N = {
         hallOfKingsTitle: 'ΑΙΘΟΥΣΑ ΤΩΝ ΒΑΣΙΛΙΑΔΩΝ',
         hallHighestScore: 'Υψηλότερο Σκορ',
         hallLongestReign: 'Μεγαλύτερη Βασιλεία',
-        hallMostCrowns: 'Περισσότερα Στέμματα',
         hallMostDefenses: 'Περισσότερες Άμυνες',
+        periodWinnersTitle: 'Νικητές του Λαφύρου',
+        periodWord: 'Περίοδος',
+        periodOngoing: 'σε εξέλιξη',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
         leaderboardMemberColumn: 'Όνομα',
@@ -508,7 +512,7 @@ App.applyKioskTranslations = function() {
         if (memberMenuBtn) { memberMenuBtn.title = menuBtnTitle; memberMenuBtn.setAttribute('aria-label', menuBtnTitle); }
         // Main kiosk texts
         const h2 = document.querySelector('#view-kiosk .kiosk-input-card .kiosk-card-header h3'); if (h2) h2.innerText = map.memberCheckInTitle;
-        const p = document.querySelector('#view-kiosk .kiosk-input-card p.text-gray'); if (p) p.innerText = map.scanPrompt;
+        const p = document.querySelector('#view-kiosk .kiosk-input-card p.text-gray'); if (p) p.remove();
         const kioskInput = document.getElementById('kiosk-id-input'); if (kioskInput) kioskInput.placeholder = map.enterMemberIdPlaceholder || '••••';
         // Numpad buttons
         Array.from(document.querySelectorAll('#view-kiosk .kiosk-numpad button')).forEach(btn => {
@@ -558,6 +562,7 @@ App.applyKioskTranslations = function() {
         const huntLogTitle = document.getElementById('hunt-log-title'); if (huntLogTitle) huntLogTitle.innerText = map.huntLogTitle || 'Hunt Log';
         const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';
         const hallTitle = document.getElementById('hall-of-kings-title'); if (hallTitle) hallTitle.innerText = '🏆 ' + (map.hallOfKingsTitle || 'HALL OF KINGS');
+        const periodTitle = document.getElementById('period-winners-title'); if (periodTitle) periodTitle.innerText = map.periodWinnersTitle || 'Crown Bounty Winners';
         App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';

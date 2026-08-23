@@ -1629,6 +1629,13 @@ Object.assign(App, {
                 App.renderBeltColorConfig();
                 const sizeInput = document.getElementById('setting-leaderboard-size');
                 if (sizeInput) sizeInput.value = DB.getLeaderboardSize();
+                const hideSched = document.getElementById('setting-hide-kiosk-schedule');
+                if (hideSched) hideSched.checked = DB.getHideKioskSchedule();
+            },
+
+            setHideKioskSchedule: (v) => {
+                DB.setHideKioskSchedule(v);
+                App.applyKioskScheduleVisibility();
             },
 
             // Admin editor for belt shades. Each belt gets a color picker synced
