@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.97 (17:43) — Hall of Kings, 1-point alert, mobile legend fix
+- Mobile legend overlay is now viewport-fixed and centered (was anchored inside the scrollable canvas, so entries were cut off-screen)
+- New 🏆 Hall of Kings card (all-time records): Highest Score, Longest Reign, Most Crowns, Most Crown Defenses (EN/EL)
+- Hunt Log alert: 🔥 «Only 1 point from the Crown!» shown for members sitting exactly 1 training behind the current Crown Holder
+
 ## 2026-08-23 — v0.96 (16:19) — Mobile chart UX & Throne renames
 - Mobile: the all-members hover tooltip no longer fires on touch-scroll (built-in tooltip is desktop-only); the bottom color/name legend is hidden and now appears as a compact overlay only when the user taps inside the chart
 - Renamed «Proclaimed King Days» to «Total Crown Hold Time» (EN/EL)

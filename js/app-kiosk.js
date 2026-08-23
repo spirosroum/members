@@ -841,6 +841,7 @@ Object.assign(App, {
                 const throneDays = coronation && coronation.date ? Math.max(1, Math.round((todayMid - new Date(coronation.date + 'T00:00:00')) / 86400000) + 1) : 0;
                 return {
                     events,
+                    counts: latestCounts,
                     currentKing: kingId !== null ? {
                         id: kingId,
                         alsoIds: alsoNow,
@@ -851,7 +852,7 @@ Object.assign(App, {
                 };
             },
 
-            renderHuntLog: (events, nameById) => {
+            renderHuntLog: (events, nameById, ctx) => {
                 const container = document.getElementById('hunt-log-list');
                 const section = document.getElementById('hunt-log-section');
                 if (!container || !section) return;
@@ -860,6 +861,21 @@ Object.assign(App, {
 
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+
+                const alertEl = document.getElementById('hunt-log-alert');
+                if (alertEl) {
+                    const ko = ctx && ctx.currentKing;
+                    const nearIds = ko && ctx.counts
+                        ? Object.keys(ctx.counts).filter(id => id !== ko.id && ctx.counts[id] === ko.points - 1)
+                        : [];
+                    if (nearIds.length) {
+                        const nearNames = nearIds.map(id => nameById[id] || '?').join(' & ');
+                        alertEl.innerHTML = `🔥 ${Utils.escapeHTML(nearNames)} — ${Utils.escapeHTML(map.huntOneAway || 'Only 1 point from the Crown!')}`;
+                        alertEl.classList.remove('hidden');
+                    } else {
+                        alertEl.classList.add('hidden');
+                    }
+                }
                 const locale = lang === 'el' ? 'el-GR' : undefined;
                 const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -918,11 +934,79 @@ Object.assign(App, {
                 const names = [info.id].concat(info.alsoIds || []).map(id => (nameById && nameById[id]) || '?').join(' & ');
                 const stat = (label, value) => `<span class="text-gray" style="font-size:0.9rem; white-space:nowrap;">${Utils.escapeHTML(label)}: <strong style="color:var(--dark);">${Utils.escapeHTML(String(value))}</strong></span>`;
                 bar.innerHTML = `
-                    <span style="font-size:1.05rem;">👑 <span class="text-gray" style="font-weight:600; font-size:0.95rem;">${Utils.escapeHTML(map.kingInfoTitle || 'Current King')}:</span> <strong>${Utils.escapeHTML(names)}</strong></span>
-                    ${stat(map.kingStatPoints || 'Points', info.points)}
-                    ${stat(map.kingStatDays || 'Days on Throne', info.daysOnThrone)}
+                    <span style="font-size:1.05rem;">👑 <span class="text-gray" style="font-weight:600; font-size:0.95rem;">${Utils.escapeHTML(map.kingInfoTitle || 'Current Crown Holder')}:</span> <strong>${Utils.escapeHTML(names)}</strong></span>
+                    ${stat(map.kingStatPoints || 'Trainings', info.points)}
+                    ${stat(map.kingStatDays || 'Throne Streak', info.daysOnThrone)}
                     ${stat(map.kingStatDefenses || 'Crown Defenses', info.defenses)}
                 `;
+            },
+
+            renderHallOfKings: () => {
+                const grid = document.getElementById('hall-of-kings-grid');
+                const section = document.getElementById('hall-of-kings-section');
+                if (!grid || !section) return;
+                const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                const series = App.getCumulativeTrainingSeries(members, new Date(0), until);
+                const result = App.getCrownEvents(series);
+                const events = result.events;
+                const nameById = {};
+                const allNames = App.kioskDisplayNames(members);
+                members.forEach((m, i) => { nameById[m.id] = allNames[i]; });
+
+                let highest = null;
+                series.forEach(s => {
+                    const c = s.points.length ? s.points[s.points.length - 1].count : 0;
+                    if (c > 0 && (!highest || c > highest.count)) highest = { id: s.member.id, count: c };
+                });
+
+                const kingEvents = events.filter(e => e.type === 'king');
+                let longest = null;
+                kingEvents.forEach((ke, i) => {
+                    const start = new Date(ke.date + 'T00:00:00');
+                    const end = i + 1 < kingEvents.length ? new Date(kingEvents[i + 1].date + 'T00:00:00') : new Date(new Date().setHours(0, 0, 0, 0));
+                    const days = Math.max(1, Math.round((end - start) / 86400000) + 1);
+                    if (!longest || days > longest.days) longest = { id: ke.memberId, alsoIds: ke.alsoIds || [], days };
+                });
+
+                const crownCounts = {};
+                kingEvents.forEach(ke => {
+                    [ke.memberId].concat(ke.alsoIds || []).forEach(id => { crownCounts[id] = (crownCounts[id] || 0) + 1; });
+                });
+                let mostCrowns = null;
+                Object.keys(crownCounts).forEach(id => {
+                    if (!mostCrowns || crownCounts[id] > mostCrowns.count) mostCrowns = { id, count: crownCounts[id] };
+                });
+
+                const defCounts = {};
+                events.filter(e => e.type === 'defense').forEach(de => {
+                    [de.memberId].concat(de.alsoIds || []).forEach(id => { defCounts[id] = (defCounts[id] || 0) + 1; });
+                });
+                let mostDefs = null;
+                Object.keys(defCounts).forEach(id => {
+                    if (!mostDefs || defCounts[id] > mostDefs.count) mostDefs = { id, count: defCounts[id] };
+                });
+
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const nm = id => nameById[id] || '?';
+                const card = (label, value) => `
+                    <div style="background:var(--light); border-radius:10px; padding:0.7rem 0.9rem;">
+                        <div class="text-gray" style="font-size:0.72rem; font-weight:700; letter-spacing:0.5px; text-transform:uppercase;">${Utils.escapeHTML(label)}</div>
+                        <div style="font-weight:700; margin-top:0.2rem;">${value}</div>
+                    </div>`;
+                const holder = (id, alsoIds) => '👑 ' + Utils.escapeHTML([id].concat(alsoIds || []).map(nm).join(' & '));
+
+                const cards = [];
+                if (highest) cards.push(card(map.hallHighestScore || 'Highest Score', `${holder(highest.id)} — ${highest.count}`));
+                if (longest) cards.push(card(map.hallLongestReign || 'Longest Reign', `${holder(longest.id, longest.alsoIds)} — ${longest.days}`));
+                if (mostCrowns) cards.push(card(map.hallMostCrowns || 'Most Crowns', `${holder(mostCrowns.id)} — ${mostCrowns.count}`));
+                if (mostDefs) cards.push(card(map.hallMostDefenses || 'Most Crown Defenses', `${holder(mostDefs.id)} — ${mostDefs.count}`));
+
+                if (!cards.length) { section.classList.add('hidden'); return; }
+                section.classList.remove('hidden');
+                grid.innerHTML = cards.join('');
             },
 
             setKioskChartRange: (range) => {
@@ -1347,9 +1431,10 @@ Object.assign(App, {
                 };
                 canvas.onmouseleave = () => { hideTip(); };
 
-                App.renderHuntLog(crownEvents, displayNameById);
+                App.renderHuntLog(crownEvents, displayNameById, crownResult);
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
                 App.renderCrownHistory && App.renderCrownHistory();
+                App.renderHallOfKings && App.renderHallOfKings();
             },
 
             renderCrownHistory: () => {

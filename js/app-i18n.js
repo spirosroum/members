@@ -57,10 +57,16 @@ App.KIOSK_I18N = {
         huntDefense: 'defended the Crown',
         huntHeldOff: 'Held off the challenge ({k}) with {c} trainings.',
         huntStoleCrown: 'stole the Crown',
+        huntOneAway: 'Only 1 point from the Crown!',
         kingInfoTitle: 'Current Crown Holder',
         kingStatPoints: 'Trainings',
         kingStatDays: 'Throne Streak',
         kingStatDefenses: 'Crown Defenses',
+        hallOfKingsTitle: 'HALL OF KINGS',
+        hallHighestScore: 'Highest Score',
+        hallLongestReign: 'Longest Reign',
+        hallMostCrowns: 'Most Crowns',
+        hallMostDefenses: 'Most Crown Defenses',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
         leaderboardMemberColumn: 'Name',
@@ -265,10 +271,16 @@ App.KIOSK_I18N = {
         huntDefense: 'υπεράσπισε το Στέμμα',
         huntHeldOff: 'Άντεξε την πρόκληση ({k}) με {c} προπονήσεις.',
         huntStoleCrown: 'άρπαξε το Στέμμα',
+        huntOneAway: 'Μόνο 1 πόντο από το Στέμμα!',
         kingInfoTitle: 'Τρέχων Κάτοχος του Στέμματος',
         kingStatPoints: 'Προπονήσεις',
         kingStatDays: 'Σερί στο Θρόνο',
         kingStatDefenses: 'Άμυνες Στέμματος',
+        hallOfKingsTitle: 'ΑΙΘΟΥΣΑ ΤΩΝ ΒΑΣΙΛΙΑΔΩΝ',
+        hallHighestScore: 'Υψηλότερο Σκορ',
+        hallLongestReign: 'Μεγαλύτερη Βασιλεία',
+        hallMostCrowns: 'Περισσότερα Στέμματα',
+        hallMostDefenses: 'Περισσότερες Άμυνες',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
         leaderboardMemberColumn: 'Όνομα',
@@ -545,6 +557,7 @@ App.applyKioskTranslations = function() {
         const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days on Throne in the last 90 days.';
         const huntLogTitle = document.getElementById('hunt-log-title'); if (huntLogTitle) huntLogTitle.innerText = map.huntLogTitle || 'Hunt Log';
         const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';
+        const hallTitle = document.getElementById('hall-of-kings-title'); if (hallTitle) hallTitle.innerText = '🏆 ' + (map.hallOfKingsTitle || 'HALL OF KINGS');
         App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
