@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.17 (00:21) — Bounty periods renumbered, period navigation, live countdown
+
+- Removed the «All-time» button from Crown Bounty; the chart, Hunt Log, King bar and Bounty Leaderboard are strictly period-scoped
+- New ‹ › period navigation: ‹ appears only when the previous period has recorded sessions, › only while a newer viewed period exists (never past the running one); navigating also rescopesthe Bounty Leaderboard's date picker to that period (defaults to its last day)
+- Period numbering fixed: Jul–Oct = Period 1, Nov–Feb = Period 2, Mar–Jun = Period 3 (chart label and Crown Bounty Winners list follow); endExcl corrected to a true exclusive boundary (first day of the next period)
+- Countdown banner is now live: ⚔️ 69d 04h 12m 33s until the Crown Bounty ends! — ticks every second with localized unit letters (ημ/ώ/λ/δ in Greek); hidden while viewing a past period
+- Verified with an automated harness: 22/22 scenarios pass
+
 ## 2026-08-24 — v1.16 (00:01) — Bounty LB: late-backfilled attendance no longer vanishes from past days
 
 - Fixed members missing from historical Bounty Leaderboard days (e.g. absent on Aug 17, back on Aug 19; first training on Aug 4 invisible): the window gate tested the record's entry timestamp, but admin-marked/backfilled attendance stores entryTime = save moment while slotDate = the real class day — anything recorded more than a day later never appeared on earlier date views. The window is now bounded purely by session date, so any session dated to that day shows on that day no matter when it was entered

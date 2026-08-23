@@ -77,6 +77,12 @@ App.KIOSK_I18N = {
         bountyDayWord: 'day',
         bountyDaysWord: 'days',
         bountyCountdownText: 'until the Crown Bounty ends!',
+        cdUnitD: 'd',
+        cdUnitH: 'h',
+        cdUnitM: 'm',
+        cdUnitS: 's',
+        bountyPrevPeriodTitle: 'Previous period',
+        bountyNextPeriodTitle: 'Next period',
         bountyLeaderboardTitle: 'Crown Bounty Leaderboard',
         bountyLeaderboardSubtitle: 'Every training counts — hold your place until someone breaks it!',
         bountyLeaderboardNoTrainings: 'No trainings recorded for this date.',
@@ -304,6 +310,12 @@ App.KIOSK_I18N = {
         bountyDayWord: 'ημέρα',
         bountyDaysWord: 'ημέρες',
         bountyCountdownText: 'μέχρι το τέλος του Λαφύρου!',
+        cdUnitD: 'ημ',
+        cdUnitH: 'ώ',
+        cdUnitM: 'λ',
+        cdUnitS: 'δ',
+        bountyPrevPeriodTitle: 'Προηγούμενη περίοδος',
+        bountyNextPeriodTitle: 'Επόμενη περίοδος',
         bountyLeaderboardTitle: 'Κατάταξη Λαφύρου',
         bountyLeaderboardSubtitle: 'Κάθε προπόνηση μετράει — κράτα τη θέση σου μέχρι κάποιος να τη σπάσει!',
         bountyLeaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις για αυτή την ημερομηνία.',
@@ -584,6 +596,8 @@ App.applyKioskTranslations = function() {
         const periodTitle = document.getElementById('period-winners-title'); if (periodTitle) periodTitle.innerText = map.periodWinnersTitle || 'Crown Bounty Winners';
         const bountyLbTitle = document.getElementById('bounty-leaderboard-title'); if (bountyLbTitle) bountyLbTitle.innerText = map.bountyLeaderboardTitle || 'Crown Bounty Leaderboard';
         const bountyLbSubtitle = document.getElementById('bounty-leaderboard-subtitle'); if (bountyLbSubtitle) bountyLbSubtitle.innerText = map.bountyLeaderboardSubtitle || 'Every training counts — hold your place until someone breaks it!';
+        const bountyPrevBtn = document.getElementById('bounty-prev-period'); if (bountyPrevBtn) { bountyPrevBtn.title = map.bountyPrevPeriodTitle || 'Previous period'; bountyPrevBtn.setAttribute('aria-label', bountyPrevBtn.title); }
+        const bountyNextBtn = document.getElementById('bounty-next-period'); if (bountyNextBtn) { bountyNextBtn.title = map.bountyNextPeriodTitle || 'Next period'; bountyNextBtn.setAttribute('aria-label', bountyNextBtn.title); }
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
         const classDetailsCloseBtn = document.querySelector('#modal-class-details .btn-primary'); if (classDetailsCloseBtn) classDetailsCloseBtn.innerText = map.classDetailsClose || 'Close';

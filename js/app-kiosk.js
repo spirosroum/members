@@ -658,18 +658,20 @@ Object.assign(App, {
                     }
                 });
                 if (!members.length) { section.classList.add('hidden'); return; }
-                const bp = App.getCurrentBountyPeriod();
+                const bp = App.getViewedBountyPeriod();
                 const since = new Date(bp.start.getTime());
                 since.setHours(0, 0, 0, 0);
                 const todayIso = Utils.dateToLocalIso(new Date());
                 const minIso = Utils.dateToLocalIso(since);
+                const periodLast = new Date(bp.endExcl.getTime() - 86400000);
+                const maxIso = Utils.dateToLocalIso(periodLast < new Date() ? periodLast : new Date());
 
-                let selIso = App._bountyLbDate || todayIso;
-                if (selIso > todayIso || selIso < minIso) { selIso = todayIso; App._bountyLbDate = selIso; }
+                let selIso = App._bountyLbDate || maxIso;
+                if (selIso > maxIso || selIso < minIso) { selIso = maxIso; App._bountyLbDate = selIso; }
                 const dateInput = document.getElementById('bounty-leaderboard-date');
                 if (dateInput) {
                     dateInput.min = minIso;
-                    dateInput.max = todayIso;
+                    dateInput.max = maxIso;
                     if (dateInput.value !== selIso) dateInput.value = selIso;
                 }
 
@@ -836,18 +838,19 @@ Object.assign(App, {
             },
 
             bountyLbDateNav: (dir) => {
-                const bp = App.getCurrentBountyPeriod();
+                const bp = App.getViewedBountyPeriod();
                 const minDate = new Date(bp.start.getTime());
                 minDate.setHours(0, 0, 0, 0);
                 const minIso = Utils.dateToLocalIso(minDate);
-                const todayIso = Utils.dateToLocalIso(new Date());
+                const periodLast = new Date(bp.endExcl.getTime() - 86400000);
+                const maxIso = Utils.dateToLocalIso(periodLast < new Date() ? periodLast : new Date());
                 const dateInput = document.getElementById('bounty-leaderboard-date');
-                const base = App._bountyLbDate || (dateInput && dateInput.value) || todayIso;
+                const base = App._bountyLbDate || (dateInput && dateInput.value) || maxIso;
                 const d = new Date(base + 'T00:00:00');
                 if (isNaN(d.getTime())) return;
                 d.setDate(d.getDate() + dir);
                 const iso = Utils.dateToLocalIso(d);
-                if (iso < minIso || iso > todayIso) return;
+                if (iso < minIso || iso > maxIso) return;
                 App._bountyLbDate = iso;
                 App.renderBountyLeaderboard();
             },
@@ -1239,9 +1242,9 @@ Object.assign(App, {
                 const startYear = parseInt(firstActivity.slice(0, 4), 10) - 1;
                 const endYear = todayMid.getFullYear() + 1;
                 for (let y = startYear; y <= endYear; y++) {
-                    periods.push({ n: 1, start: new Date(y, 10, 1), end: new Date(y + 1, 2, 1) });
-                    periods.push({ n: 2, start: new Date(y + 1, 2, 1), end: new Date(y + 1, 6, 1) });
-                    periods.push({ n: 3, start: new Date(y + 1, 6, 1), end: new Date(y + 1, 10, 1) });
+                    periods.push({ n: 2, start: new Date(y, 10, 1), end: new Date(y + 1, 2, 1) });
+                    periods.push({ n: 3, start: new Date(y + 1, 2, 1), end: new Date(y + 1, 6, 1) });
+                    periods.push({ n: 1, start: new Date(y + 1, 6, 1), end: new Date(y + 1, 10, 1) });
                 }
                 const monthFmt = d => d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
                 const rows = [];
@@ -1288,60 +1291,98 @@ Object.assign(App, {
             },
 
             setKioskChartRange: (range) => {
-                App.chartRange = range;
-                localStorage.setItem('kiosk_chart_range', range);
-                const isCustom = range === 'custom';
+                App.chartRange = 'period';
+                localStorage.setItem('kiosk_chart_range', 'period');
                 document.querySelectorAll('.kiosk-chart-range-btn').forEach(b => {
-                    const matches = isCustom ? b.dataset.range === 'custom' : b.dataset.range === range;
-                    b.classList.toggle('active', !!matches);
+                    b.classList.toggle('active', b.dataset.range === 'period');
                 });
-                const rangeEl = document.getElementById('kiosk-chart-custom-range');
-                if (rangeEl) rangeEl.classList.toggle('hidden', !isCustom);
-                App.renderKioskChart();
+                App._bountyViewOffset = 0;
+                App._bountyLbDate = null;
+                App._kioskChartFp = null;
+                App.renderKioskChart(true);
             },
 
-            // Crown Bounty periods (4 months each): Nov–Feb, Mar–Jun, Jul–Oct.
-            getCurrentBountyPeriod: () => {
+            // Crown Bounty periods (4 months each): Jul–Oct = P1, Nov–Feb =
+            // P2, Mar–Jun = P3. offset walks back in whole periods (0 = the
+            // running one). endExcl is a true exclusive boundary (the first
+            // day of the next period).
+            getBountyPeriod: (offset) => {
                 const now = new Date();
                 const y = now.getFullYear();
                 const m = now.getMonth();
-                let n;
-                let start;
-                let endExcl;
-                if (m >= 10) {
-                    n = 1;
-                    start = new Date(y, 10, 1);
-                    endExcl = new Date(y + 1, 2, 0);
-                } else if (m <= 1) {
-                    n = 1;
-                    start = new Date(y - 1, 10, 1);
-                    endExcl = new Date(y, 2, 0);
-                } else if (m <= 5) {
-                    n = 2;
-                    start = new Date(y, 2, 1);
-                    endExcl = new Date(y, 6, 0);
-                } else {
-                    n = 3;
-                    start = new Date(y, 6, 1);
-                    endExcl = new Date(y, 10, 0);
-                }
+                const baseMonth = (m >= 6 && m <= 9) ? 6 : (m >= 10 || m <= 1) ? 10 : 2;
+                const off = parseInt(offset, 10) || 0;
+                const start = new Date(y, baseMonth + off * 4, 1);
+                const sm = start.getMonth();
+                const n = Math.floor(((sm + 12 - 6) % 12) / 4) + 1;
+                const endExcl = new Date(start.getFullYear(), sm + 4, 1);
                 return { n, start, endExcl };
+            },
+
+            getCurrentBountyPeriod: () => App.getBountyPeriod(0),
+
+            getViewedBountyPeriod: () => App.getBountyPeriod(-(parseInt(App._bountyViewOffset, 10) || 0)),
+
+            // ‹ › period navigation. dir -1 = older period (hidden unless it
+            // has recorded sessions), dir +1 = newer (hidden at the current).
+            bountyPeriodNav: (dir) => {
+                const cur = parseInt(App._bountyViewOffset, 10) || 0;
+                const off = cur + (dir === -1 ? 1 : -1);
+                if (off < 0 || off === cur) return;
+                App._bountyViewOffset = off;
+                App._bountyLbDate = null;
+                App._kioskChartFp = null;
+                App.renderKioskChart(true);
+            },
+
+            updateBountyPeriodNav: () => {
+                const prevBtn = document.getElementById('bounty-prev-period');
+                const nextBtn = document.getElementById('bounty-next-period');
+                const off = parseInt(App._bountyViewOffset, 10) || 0;
+                let prevHas = false;
+                try {
+                    const prev = App.getBountyPeriod(-(off + 1));
+                    const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                    const series = App.getCumulativeTrainingSeries(members, prev.start, new Date(prev.endExcl.getTime() - 1));
+                    prevHas = series.length > 0;
+                } catch (e) {}
+                if (prevBtn) prevBtn.classList.toggle('hidden', !prevHas);
+                if (nextBtn) nextBtn.classList.toggle('hidden', off === 0);
             },
 
             renderBountyCountdown: () => {
                 const el = document.getElementById('bounty-countdown');
                 if (!el) return;
+                const off = parseInt(App._bountyViewOffset, 10) || 0;
+                if (off !== 0) {
+                    el.classList.add('hidden');
+                    return;
+                }
+                el.classList.remove('hidden');
+                try { App.tickBountyCountdown(); } catch (e) {}
+                if (!App._countdownTimer) {
+                    App._countdownTimer = setInterval(() => { try { App.tickBountyCountdown(); } catch (e) {} }, 1000);
+                }
+            },
+
+            tickBountyCountdown: () => {
+                const el = document.getElementById('bounty-countdown');
+                if (!el || el.classList.contains('hidden')) return;
                 const p = App.getCurrentBountyPeriod();
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const endBoundary = new Date(p.endExcl.getTime());
-                endBoundary.setDate(endBoundary.getDate() + 1);
-                const days = Math.max(0, Math.ceil((endBoundary - today) / 86400000));
+                const diff = Math.max(0, p.endExcl.getTime() - Date.now());
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
-                const dayWord = days === 1 ? (map.bountyDayWord || 'day') : (map.bountyDaysWord || 'days');
-                el.innerHTML = `⚔️ <span style="font-size:1.4rem; color:#fde68a; padding:0 0.25rem;">${days}</span> ${Utils.escapeHTML(dayWord)} ${Utils.escapeHTML(map.bountyCountdownText || 'until the Crown Bounty ends!')} ⚔️`;
-                el.classList.remove('hidden');
+                const ud = map.cdUnitD || 'd';
+                const uh = map.cdUnitH || 'h';
+                const um = map.cdUnitM || 'm';
+                const us = map.cdUnitS || 's';
+                const pad2 = x => String(x).padStart(2, '0');
+                const d = Math.floor(diff / 86400000);
+                const h = Math.floor(diff / 3600000) % 24;
+                const min = Math.floor(diff / 60000) % 60;
+                const sec = Math.floor(diff / 1000) % 60;
+                const seg = (v, u) => `<span style="color:#fde68a; padding:0 0.15rem;">${v}</span><span style="opacity:0.85;">${Utils.escapeHTML(u)}</span>`;
+                el.innerHTML = `⚔️ ${seg(d, ud)} ${seg(pad2(h), uh)} ${seg(pad2(min), um)} ${seg(pad2(sec), us)} ${Utils.escapeHTML(map.bountyCountdownText || 'until the Crown Bounty ends!')} ⚔️`;
             },
 
             renderKioskChart: (force) => {
@@ -1363,17 +1404,13 @@ Object.assign(App, {
                     return;
                 }
 
-                const range = ['period', 'all'].includes(App.chartRange) ? App.chartRange : 'period';
-                const until = new Date();
-                until.setHours(23, 59, 59, 999);
-                let since;
-                if (range === 'all') {
-                    since = new Date(0);
-                } else {
-                    const p = App.getCurrentBountyPeriod();
-                    since = new Date(p.start.getTime());
-                    since.setHours(0, 0, 0, 0);
-                }
+                const range = 'period';
+                const todayEnd = new Date();
+                todayEnd.setHours(23, 59, 59, 999);
+                const vp = App.getViewedBountyPeriod();
+                let since = new Date(vp.start.getTime());
+                since.setHours(0, 0, 0, 0);
+                const until = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
 
                 const series = App.getCumulativeTrainingSeries(members, since, until);
 
@@ -1472,12 +1509,8 @@ Object.assign(App, {
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(tickLocale, { day: 'numeric', month: 'short', year: 'numeric' });
                 const periodLabel = document.getElementById('kiosk-chart-period');
                 if (periodLabel) {
-                    if (range === 'period') {
-                        const cp = App.getCurrentBountyPeriod();
-                        periodLabel.innerText = `${map.periodWord || 'Period'} ${cp.n} · ${cp.start.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })} – ${cp.endExcl.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })}`;
-                    } else {
-                        periodLabel.innerText = map.chartRangeAll || 'All-time';
-                    }
+                    const lastDay = new Date(vp.endExcl.getTime() - 1);
+                    periodLabel.innerText = `${map.periodWord || 'Period'} ${vp.n} · ${vp.start.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })} – ${lastDay.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })}`;
                 }
 
                 // Crown Hunt event markers (⚔️ challenges / 👑 takeovers / 🛡️
@@ -1765,6 +1798,7 @@ Object.assign(App, {
                 App.renderCurrentKingBar(kingBarInfo, displayNameById);
                 App.renderPeriodWinners && App.renderPeriodWinners();
                 App.renderBountyLeaderboard && App.renderBountyLeaderboard();
+                App.updateBountyPeriodNav();
                 App.renderBountyCountdown();
             },
 
