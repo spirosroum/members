@@ -462,20 +462,23 @@ Object.assign(App, {
                         const rawBeltStr = (m.belt || 'White').split('/')[0].trim();
                         if(hiddenBelts.includes(rawBeltStr)) return '';
 
+                        // Full-card belt color fill with contrasting text
+                        const beltBg = Utils.getBeltColor(m.belt);
+                        const textColor = rawBeltStr === 'White' ? '#000000' : '#FFFFFF';
+
                         // Red dot now reflects visit-level unpaid status only
                         const expiredDot = isUnpaidVisit ? `<span title="Membership unpaid for this visit" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--danger); margin-right:8px; vertical-align:middle;"></span>` : '';
                         // If the visit is paid but the member has no sessions left, show a subtle warning (yellow dot)
                         const sessionsDot = (!isUnpaidVisit && isOutOfSessions) ? `<span title="Member has no sessions left after this" style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#f59e0b; margin-right:6px; vertical-align:middle;"></span>` : '';
 
-                        return `<tr><td>
+                        return `<tr><td style="background:${beltBg}; color:${textColor}; border-radius:8px; padding-left:0.5rem; padding-right:0.5rem; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);">
                             <div class="flex-col gap-1">
                                 <div class="kiosk-present-name-row">
-                                    <span class="kiosk-present-name">${expiredDot}${sessionsDot}${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</span>
+                                    <span class="kiosk-present-name" style="color:${textColor};">${expiredDot}${sessionsDot}${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</span>
                                     ${App.buildVisitClassTags(visit)}
                                 </div>
-                                <span class="text-gray" style="font-size: 0.9rem;">${Utils.formatTime(visit.entryTime)}</span>
+                                <span style="font-size: 0.9rem; color:${textColor}; opacity:0.8;">${Utils.formatTime(visit.entryTime)}</span>
                             </div>
-                            ${Utils.getBeltBox(m.belt)}
                         </td></tr>`;
                     } else {
                         // Admin list: row background indicates unpaid visit or frozen status

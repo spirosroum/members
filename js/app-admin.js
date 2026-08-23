@@ -1626,8 +1626,66 @@ Object.assign(App, {
                 `).join('');
                 App.renderAttendanceFeedbackConfig();
                 App.renderLeaderboardMedalConfig();
+                App.renderBeltColorConfig();
                 const sizeInput = document.getElementById('setting-leaderboard-size');
                 if (sizeInput) sizeInput.value = DB.getLeaderboardSize();
+            },
+
+            // Admin editor for belt shades. Each belt gets a color picker synced
+            // with a hex text field; saved shades drive belt styling app-wide.
+            renderBeltColorConfig: () => {
+                const el = document.getElementById('belt-color-config');
+                if (!el) return;
+                const colors = Object.assign({}, DEFAULT_BELT_COLORS, STATE.beltColors || {});
+                el.innerHTML = Object.keys(colors).map(b => `
+                    <div style="display:flex; align-items:center; gap:0.6rem; padding:0.4rem 0; flex-wrap:wrap;">
+                        <span class="belt-box belt-${b.toLowerCase()}" data-belt-preview="${b}"></span>
+                        <span class="text-gray" style="width:64px; font-weight:600;">${b}</span>
+                        <input type="color" data-belt-color="${b}" value="${Utils.escapeHTML(colors[b])}" style="width:44px; height:36px; padding:0; border:1px solid var(--gray-light); border-radius:var(--border-radius); cursor:pointer; background:var(--white);">
+                        <input type="text" class="search-bar" data-belt-hex="${b}" value="${Utils.escapeHTML(colors[b])}" maxlength="7" style="width:90px; text-align:center;">
+                    </div>`).join('');
+                el.querySelectorAll('input[type="color"]').forEach(inp => {
+                    inp.addEventListener('input', () => {
+                        const b = inp.dataset.beltColor;
+                        const hex = el.querySelector(`[data-belt-hex="${b}"]`);
+                        if (hex) hex.value = inp.value;
+                        const preview = el.querySelector(`[data-belt-preview="${b}"]`);
+                        if (preview) preview.style.background = inp.value;
+                    });
+                });
+                el.querySelectorAll('input[data-belt-hex]').forEach(inp => {
+                    inp.addEventListener('change', () => {
+                        const v = inp.value.trim();
+                        if (!/^#[0-9a-fA-F]{6}$/.test(v)) return;
+                        const b = inp.dataset.beltHex;
+                        const pick = el.querySelector(`input[type="color"][data-belt-color="${b}"]`);
+                        if (pick) pick.value = v;
+                        const preview = el.querySelector(`[data-belt-preview="${b}"]`);
+                        if (preview) preview.style.background = v;
+                    });
+                });
+            },
+
+            saveBeltColors: () => {
+                const colors = {};
+                document.querySelectorAll('#belt-color-config input[type="color"]').forEach(inp => {
+                    colors[inp.dataset.beltColor] = inp.value;
+                });
+                STATE.beltColors = Object.assign({}, DEFAULT_BELT_COLORS, colors);
+                fallbackToLocal();
+                saveToCloud();
+                App.applyBeltColors();
+                App.renderLivePresent && App.renderLivePresent();
+                alert('Belt colors saved.');
+            },
+
+            resetBeltColors: () => {
+                STATE.beltColors = Object.assign({}, DEFAULT_BELT_COLORS);
+                fallbackToLocal();
+                saveToCloud();
+                App.applyBeltColors();
+                App.renderLivePresent && App.renderLivePresent();
+                alert('Belt colors reset to defaults.');
             },
 
             saveLeaderboardSize: () => {

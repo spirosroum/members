@@ -112,6 +112,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
         const DEFAULT_ATTENDANCE_EMOJIS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.emoji]));
         const DEFAULT_ATTENDANCE_COLORS = Object.fromEntries(DEFAULT_ATTENDANCE_RANGES.map(r => [r.threshold, r.color]));
         const DEFAULT_LEADERBOARD_EMOJIS = { 1: '🥇', 2: '🥈', 3: '🥉', last: '💩' };
+        const DEFAULT_BELT_COLORS = { White: '#ffffff', Blue: '#1d4ed8', Purple: '#6b21a8', Brown: '#78350f', Black: '#0f172a' };
         const DEFAULT_LEADERBOARD_SIZE = 10;
 
         // Hydrate attendance ranges from localStorage, migrating the legacy
@@ -153,7 +154,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             memberStatsVisibility: JSON.parse(localStorage.getItem('gym_member_stats_visibility') || '{"totalTrainings":true,"totalHours":true,"avgDay":true,"avgWeek":true,"avgDays":true,"avgDaysMonth":true,"avgMonth":true,"rank":true}'),
             attendanceRanges: loadAttendanceRanges(),
             leaderboardEmojis: Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, JSON.parse(localStorage.getItem('gym_leaderboard_emojis') || '{}')),
-            leaderboardSize: parseInt(localStorage.getItem('gym_leaderboard_size') || '10', 10)
+            leaderboardSize: parseInt(localStorage.getItem('gym_leaderboard_size') || '10', 10),
+            beltColors: Object.assign({}, DEFAULT_BELT_COLORS, JSON.parse(localStorage.getItem('gym_belt_colors') || '{}'))
         };
 
         function fallbackToLocal() {
@@ -182,6 +184,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_attendance_ranges', JSON.stringify(STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES));
                 localStorage.setItem('gym_leaderboard_emojis', JSON.stringify(STATE.leaderboardEmojis || {}));
                 localStorage.setItem('gym_leaderboard_size', String(STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE));
+                localStorage.setItem('gym_belt_colors', JSON.stringify(STATE.beltColors || {}));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -198,7 +201,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 memberStatsVisibility: STATE.memberStatsVisibility || { totalTrainings: true, totalHours: true, avgDay: true, avgWeek: true, avgDays: true, avgDaysMonth: true, avgMonth: true, rank: true },
                 attendanceRanges: STATE.attendanceRanges || DEFAULT_ATTENDANCE_RANGES,
                 leaderboardEmojis: STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS,
-                leaderboardSize: STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE
+                leaderboardSize: STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE,
+                beltColors: STATE.beltColors || DEFAULT_BELT_COLORS
             };
         }
 
@@ -478,6 +482,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 }
                 if (s.leaderboard_emojis) STATE.leaderboardEmojis = Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, s.leaderboard_emojis);
                 if (s.leaderboard_size != null) STATE.leaderboardSize = parseInt(s.leaderboard_size, 10) || DEFAULT_LEADERBOARD_SIZE;
+                if (s.belt_colors && typeof s.belt_colors === 'object') {
+                    STATE.beltColors = Object.assign({}, DEFAULT_BELT_COLORS, s.belt_colors);
+                    if (App.applyBeltColors) App.applyBeltColors();
+                }
                 this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
             },
@@ -632,7 +640,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'member_stats_visibility', value: p.memberStatsVisibility },
                     { key: 'attendance_ranges', value: p.attendanceRanges },
                     { key: 'leaderboard_emojis', value: p.leaderboardEmojis },
-                    { key: 'leaderboard_size', value: p.leaderboardSize }
+                    { key: 'leaderboard_size', value: p.leaderboardSize },
+                    { key: 'belt_colors', value: p.beltColors }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
                 this.settingsMirror = json;
@@ -1033,6 +1042,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             setShowClassCheckins: (v) => { STATE.showClassCheckins = !!v; return saveToCloud(); },
             setMemberStatsVisibility: (v) => { STATE.memberStatsVisibility = v || {}; return saveToCloud(); },
             setLeaderboardSize: (n) => { STATE.leaderboardSize = parseInt(n, 10) || DEFAULT_LEADERBOARD_SIZE; return saveToCloud(); },
+            setBeltColors: (c) => { STATE.beltColors = c || {}; return saveToCloud(); },
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 
@@ -1275,6 +1285,11 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const baseBelt = b.split('/')[0].trim();
                 const beltClass = baseBelt.toLowerCase();
                 return `<span class="belt-box belt-${beltClass}" aria-label="${baseBelt}"></span>`;
+            },
+            getBeltColor: (rawBelt) => {
+                const baseBelt = ((rawBelt || 'White').split('/')[0].trim());
+                const colors = STATE.beltColors || DEFAULT_BELT_COLORS;
+                return colors[baseBelt] || DEFAULT_BELT_COLORS[baseBelt] || '#ffffff';
             },
             getMemberIdBadge: (m) => {
                 const beltBase = (m && m.belt) ? m.belt.split('/')[0].trim() : 'White';
@@ -1645,9 +1660,24 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 });
             },
 
+            applyBeltColors: () => {
+                let el = document.getElementById('belt-color-overrides');
+                if (!el) {
+                    el = document.createElement('style');
+                    el.id = 'belt-color-overrides';
+                    document.head.appendChild(el);
+                }
+                const colors = Object.assign({}, DEFAULT_BELT_COLORS, STATE.beltColors || {});
+                el.textContent = Object.keys(colors).map(b => {
+                    const cls = String(b).toLowerCase();
+                    return `.belt-box.belt-${cls}, .belt-badge.belt-${cls} { background: ${colors[b]}; }`;
+                }).join('');
+            },
+
             init: () => {
                 App.cleanBin(); 
                 App.updateUICurrency();
+                App.applyBeltColors();
  
                 App.bindAdminListeners();
                  

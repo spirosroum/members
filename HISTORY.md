@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.85 (13:19) — Custom belt colors & full-color check-in cards
+- New "Belt Colors" card in Admin → Member Settings: per-belt color picker + hex field (White/Blue/Purple/Brown/Black) with Save/Reset; shades persist to the `settings` table (`belt_colors` key) and localStorage fallback
+- Saved shades drive belt styling app-wide via an injected style override on `.belt-box` / `.belt-badge` classes (`App.applyBeltColors()`, applied at boot, after settings load, and on save)
+- Kiosk "Currently Inside" list: removed the separate belt badge from each member card; the whole card is now filled with the member's belt color
+- Text contrast rules on kiosk cards: White belt → black text (#000000); all other belts → white text (#FFFFFF)
+- Added `Utils.getBeltColor()` helper; new `DEFAULT_BELT_COLORS` constant in `app-core.js`
+
 ## 2026-08-23 — v0.84 (12:58) — Dotted last-name abbreviations on kiosk leaderboard
 - Disambiguation names now end with a dot: the last name is kept only up to and including its first consonant («Νίκος Π.», «Γιώργος Ιωάν.»)
 - Letters extend past the first consonant only when needed to stay unique between same-first-name members («Νίκος Παπ.» vs «Νίκος Παπα.»)
