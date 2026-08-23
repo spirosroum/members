@@ -608,14 +608,16 @@ Object.assign(App, {
 
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
-                        ${top.map((entry, idx) => `
-                            <div class="kiosk-lb-card">
-                                <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
-                                <strong class="kiosk-lb-name">${Utils.escapeHTML(displayNames[idx])}</strong>
-                                <span class="kiosk-lb-belt">${Utils.getBeltBox(entry.member.belt)}</span>
-                                <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
-                            </div>
-                        `).join('')}
+                        ${top.map((entry, idx) => {
+                            const textColor = ((entry.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
+                            return `
+                                <div class="kiosk-lb-card" style="background:${Utils.getBeltColor(entry.member.belt)};">
+                                    <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
+                                    <strong class="kiosk-lb-name" style="color:${textColor};">${Utils.escapeHTML(displayNames[idx])}</strong>
+                                    <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
+                                </div>
+                            `;
+                        }).join('')}
                     </div>
                 `;
                 App.renderKioskChart && App.renderKioskChart();
@@ -1161,11 +1163,11 @@ Object.assign(App, {
                     <div class="kiosk-leaderboard">
                         ${entries.map((e, idx) => {
                             const dayLabel = e.days === 1 ? (map.crownHistoryDay || 'day') : (map.crownHistoryDays || 'days');
+                            const textColor = ((e.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
                             return `
-                                <div class="kiosk-lb-card">
+                                <div class="kiosk-lb-card" style="background:${Utils.getBeltColor(e.member.belt)};">
                                     <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${e.rank}</span></div>
-                                    <strong class="kiosk-lb-name">${Utils.escapeHTML(crownNames[idx])}</strong>
-                                    <span class="kiosk-lb-belt">${Utils.getBeltBox(e.member.belt)}</span>
+                                    <strong class="kiosk-lb-name" style="color:${textColor};">${Utils.escapeHTML(crownNames[idx])}</strong>
                                     <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
                                 </div>
                             `;

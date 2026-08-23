@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.86 (13:31) — Full-card belt colors on Training Leaderboard & Proclaimed King Days
+- Removed the belt badge from member cards on the Training Leaderboard and Proclaimed King Days list
+- Card backgrounds now use the member's belt color (custom shades apply); same contrast rules as check-in cards: White belt → black text (#000000), all other belts → white text (#FFFFFF)
+- Rank pills and count badges keep their own light backgrounds for readability on any belt color
+
 ## 2026-08-23 — v0.85 (13:19) — Custom belt colors & full-color check-in cards
 - New "Belt Colors" card in Admin → Member Settings: per-belt color picker + hex field (White/Blue/Purple/Brown/Black) with Save/Reset; shades persist to the `settings` table (`belt_colors` key) and localStorage fallback
 - Saved shades drive belt styling app-wide via an injected style override on `.belt-box` / `.belt-badge` classes (`App.applyBeltColors()`, applied at boot, after settings load, and on save)
