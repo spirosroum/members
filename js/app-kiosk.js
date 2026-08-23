@@ -677,9 +677,9 @@ Object.assign(App, {
 
                 const until = new Date(selIso + 'T23:59:59.999');
                 const series = App.getCumulativeTrainingSeries(members, since, until);
-                const sMap = {};
-                series.forEach(s => { sMap[s.member.id] = s; });
-                const countAt = (s, iso) => {
+                const active = App.rankPeriodSeries(series, selIso);
+                const ptsKeyOf = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
+                const countAtSeries = (s, iso) => {
                     if (!s || !s.points.length) return 0;
                     let c = 0;
                     for (let i = 0; i < s.points.length; i++) {
@@ -687,50 +687,10 @@ Object.assign(App, {
                     }
                     return c;
                 };
-                const firstTs = (e) => (e.firstTimeAtCount && e.firstTimeAtCount[e.count]) ? new Date(e.firstTimeAtCount[e.count]).getTime() : Infinity;
-                const ptsKeyOf = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
-                const assignPlaces = (list) => {
-                    list.sort((a, b) => {
-                        if (b.count !== a.count) return b.count - a.count;
-                        const ta = firstTs(a);
-                        const tb = firstTs(b);
-                        if (ta !== tb) return ta - tb;
-                        const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
-                        const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
-                        if (fa !== fb) return fa - fb;
-                        const na = ((a.member.lastName || '') + ' ' + (a.member.firstName || '')).localeCompare((b.member.lastName || '') + ' ' + (b.member.firstName || ''));
-                        if (na !== 0) return na;
-                        return String(a.id).localeCompare(String(b.id));
-                    });
-                    // One holder per position. Only members whose entire
-                    // workout history (cumulative count on every date up to
-                    // the selected day) is exactly identical share a position.
-                    // Matching a holder's count without the same history is
-                    // NOT enough — the holder keeps the spot until surpassed,
-                    // and the newcomer lands below (position = players ahead + 1).
-                    const groupPlace = {};
-                    list.forEach((e, i) => {
-                        const k = ptsKeyOf(e.points);
-                        if (groupPlace[k] != null) {
-                            e.place = groupPlace[k];
-                        } else {
-                            e.place = i + 1;
-                            groupPlace[k] = e.place;
-                        }
-                    });
-                    list.sort((a, b) => a.place - b.place);
-                };
 
                 const refDate = new Date(selIso + 'T00:00:00');
                 refDate.setDate(refDate.getDate() - 1);
                 const refIso = refDate < since ? minIso : Utils.dateToLocalIso(refDate);
-
-                const entries = members.map(m => {
-                    const s = sMap[m.id];
-                    return { member: m, id: m.id, count: countAt(s, selIso), series: s, points: (s && s.points) ? s.points : [], firstTimeAtCount: s ? s.firstTimeAtCount : null };
-                });
-                const active = entries.filter(e => e.count > 0);
-                assignPlaces(active);
 
                 // ▲/▼ compare the member's PLACE against yesterday's, using
                 // the exact same grouping rules (single holders; shared only
@@ -742,8 +702,8 @@ Object.assign(App, {
                     const refEntries = active.map(e => ({
                         id: e.id,
                         member: e.member,
-                        c: countAt(e.series, refIso),
-                        ts: firstTsAt(e, countAt(e.series, refIso)),
+                        c: countAtSeries(e.series, refIso),
+                        ts: firstTsAt(e, countAtSeries(e.series, refIso)),
                         points: e.points.filter(pt => pt.date <= refIso)
                     }))
                         .filter(x => x.c > 0)
@@ -768,13 +728,6 @@ Object.assign(App, {
                         }
                     });
                 }
-
-                const topCount = active.reduce((m, e) => Math.max(m, e.count), 0);
-                const topMembers = active.filter(e => e.count === topCount);
-                const primaryTop = topMembers.reduce((b, e) => (firstTs(e) < firstTs(b) ? e : b), topMembers[0]);
-                const kingSet = new Set(topMembers
-                    .filter(e => ptsKeyOf(e.points) === ptsKeyOf(primaryTop.points))
-                    .map(e => e.member.id));
 
                 const prevTops = {};
                 container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
@@ -801,7 +754,7 @@ Object.assign(App, {
                                 if (entry.place < refPlace) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
-                            const rankCell = (kingSet.has(entry.member.id) || entry.place === 1)
+                            const rankCell = (entry.crown || entry.place === 1)
                                 ? '<span class="kiosk-lb-rank-num">👑</span>'
                                 : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                             return `
@@ -939,6 +892,59 @@ Object.assign(App, {
                     if (points.length) result.push({ member, points, firstTimeAtCount, increments });
                 });
                 return result;
+            },
+
+            // Shared ranking engine for every period standings view (Bounty
+            // Leaderboard, period rankings modal): count desc; ties broken by
+            // who reached the score first (session-anchored), then first
+            // training date, then name/id. One holder per position; only
+            // members whose entire history is exactly identical share a place.
+            // e.crown marks the reigning group (top count + identical to the
+            // earliest top holder).
+            rankPeriodSeries: (series, selIso) => {
+                const countAt = (s, iso) => {
+                    if (!s || !s.points.length) return 0;
+                    let c = 0;
+                    for (let i = 0; i < s.points.length; i++) {
+                        if (s.points[i].date <= iso) c = s.points[i].count; else break;
+                    }
+                    return c;
+                };
+                const firstTs = (e) => (e.firstTimeAtCount && e.firstTimeAtCount[e.count]) ? new Date(e.firstTimeAtCount[e.count]).getTime() : Infinity;
+                const ptsKeyOf = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
+                const entries = series.map(s => ({ member: s.member, id: s.member.id, count: countAt(s, selIso), series: s, points: (s && s.points) ? s.points : [], firstTimeAtCount: s ? s.firstTimeAtCount : null }));
+                const active = entries.filter(e => e.count > 0);
+                active.sort((a, b) => {
+                    if (b.count !== a.count) return b.count - a.count;
+                    const ta = firstTs(a);
+                    const tb = firstTs(b);
+                    if (ta !== tb) return ta - tb;
+                    const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
+                    const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
+                    if (fa !== fb) return fa - fb;
+                    const na = ((a.member.lastName || '') + ' ' + (a.member.firstName || '')).localeCompare((b.member.lastName || '') + ' ' + (b.member.firstName || ''));
+                    if (na !== 0) return na;
+                    return String(a.id).localeCompare(String(b.id));
+                });
+                const groupPlace = {};
+                active.forEach((e, i) => {
+                    const k = ptsKeyOf(e.points);
+                    if (groupPlace[k] != null) {
+                        e.place = groupPlace[k];
+                    } else {
+                        e.place = i + 1;
+                        groupPlace[k] = e.place;
+                    }
+                });
+                active.sort((a, b) => a.place - b.place);
+                const topCount = active.reduce((m, e) => Math.max(m, e.count), 0);
+                const topMembers = active.filter(e => e.count === topCount);
+                const primaryTop = topMembers.reduce((b, e) => (firstTs(e) < firstTs(b) ? e : b), topMembers[0]);
+                const kingSet = new Set(topMembers
+                    .filter(e => ptsKeyOf(e.points) === ptsKeyOf(primaryTop.points))
+                    .map(e => e.member.id));
+                active.forEach(e => { e.crown = kingSet.has(e.member.id); });
+                return active;
             },
 
             // Single source of truth for Crown events — the Hunt Log and the
@@ -1124,20 +1130,6 @@ Object.assign(App, {
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
 
-                const alertEl = document.getElementById('hunt-log-alert');
-                if (alertEl) {
-                    const ko = ctx && ctx.currentKing;
-                    const nearIds = ko && ctx.counts
-                        ? Object.keys(ctx.counts).filter(id => id !== ko.id && ctx.counts[id] === ko.points - 1)
-                        : [];
-                    if (nearIds.length) {
-                        const nearNames = nearIds.map(id => nameById[id] || '?').join(' & ');
-                        alertEl.innerHTML = `🔥 ${Utils.escapeHTML(nearNames)} — ${Utils.escapeHTML(map.huntOneAway || '1 point left to challenge the Throne!')}`;
-                        alertEl.classList.remove('hidden');
-                    } else {
-                        alertEl.classList.add('hidden');
-                    }
-                }
                 const locale = lang === 'el' ? 'el-GR' : undefined;
                 const fmtDate = d => new Date(d + 'T12:00:00').toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -1246,6 +1238,7 @@ Object.assign(App, {
                     periods.push({ n: 3, start: new Date(y + 1, 2, 1), end: new Date(y + 1, 6, 1) });
                     periods.push({ n: 1, start: new Date(y + 1, 6, 1), end: new Date(y + 1, 10, 1) });
                 }
+                App._bountyPeriodsCache = periods;
                 const monthFmt = d => d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
                 const rows = [];
                 let evIdx = 0;
@@ -1272,9 +1265,9 @@ Object.assign(App, {
                         rightSide = `👑 ${Utils.escapeHTML(names)}`;
                     }
                     rows.push(`
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.5rem 0; border-bottom:1px solid var(--gray-light); flex-wrap:wrap;">
+                        <div onclick="App.openPeriodRankings('${iso(p.start)}')" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.6rem 0.5rem; margin:0 -0.5rem; border-bottom:1px solid var(--gray-light); flex-wrap:wrap; border-radius:8px;" onmouseover="this.style.background='var(--gray-light)'" onmouseout="this.style.background='transparent'">
                             <span class="text-gray" style="font-size:0.9rem;">${label}${ongoing ? ` · ${Utils.escapeHTML(map.periodOngoing || 'ongoing')}` : ''}</span>
-                            <span style="font-weight:700;">${rightSide}</span>
+                            <span style="font-weight:700;">${rightSide} <span aria-hidden="true">›</span></span>
                         </div>
                     `);
                 });
@@ -1288,6 +1281,69 @@ Object.assign(App, {
                 } else {
                     list.style.maxHeight = 'none';
                 }
+            },
+
+            // Period rankings modal — the final standings of a finished
+            // period, or the standings so far for the ongoing one.
+            openPeriodRankings: (startIso) => {
+                const list = document.getElementById('period-rankings-list');
+                const sub = document.getElementById('period-rankings-sub');
+                if (!list || !sub) return;
+                const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === startIso);
+                if (!p) return;
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const loc = lang === 'el' ? 'el-GR' : undefined;
+                const monthFmt = d => d.toLocaleDateString(loc, { month: 'short', year: 'numeric' });
+                const todayMid = new Date();
+                todayMid.setHours(0, 0, 0, 0);
+                const lastDay = new Date(p.end.getTime() - 86400000);
+                const finished = lastDay < todayMid;
+                const endDay = finished ? lastDay : todayMid;
+
+                const allMembers = DB.getMembers();
+                const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                const knownIds = new Set(allMembers.map(m => m.id));
+                DB.getClassCheckins().forEach(ci => {
+                    if (ci.entryTime && !knownIds.has(ci.memberId)) {
+                        knownIds.add(ci.memberId);
+                        members.push({ id: ci.memberId, firstName: '', lastName: String(ci.memberId) });
+                    }
+                });
+                const checkinVisitIds = new Set(DB.getClassCheckins().map(c => c.visitId));
+                DB.getVisits().forEach(v => {
+                    if (v.entryTime && !checkinVisitIds.has(v.id) && !knownIds.has(v.memberId)) {
+                        knownIds.add(v.memberId);
+                        members.push({ id: v.memberId, firstName: '', lastName: String(v.memberId) });
+                    }
+                });
+
+                const series = App.getCumulativeTrainingSeries(members, p.start, endDay);
+                const active = App.rankPeriodSeries(series, Utils.dateToLocalIso(endDay));
+                sub.innerText = `${map.periodWord || 'Period'} ${p.n} · ${monthFmt(p.start)} – ${monthFmt(lastDay)}${finished ? '' : ` · ${map.periodOngoing || 'ongoing'}`}`;
+                if (!active.length) {
+                    list.innerHTML = `<p class="text-gray" style="padding: 1rem 0; text-align:center;">${Utils.escapeHTML(map.bountyLeaderboardNoTrainings || 'No trainings recorded for this date.')}</p>`;
+                } else {
+                    const displayNames = App.kioskDisplayNames(active.map(e => e.member));
+                    const lastPlace = active[active.length - 1].place;
+                    list.innerHTML = `
+                        <div class="kiosk-leaderboard">
+                            ${active.map((entry, idx) => {
+                                const rankCell = (entry.crown || entry.place === 1)
+                                    ? '<span class="kiosk-lb-rank-num">👑</span>'
+                                    : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
+                                return `
+                                    <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                        <div class="kiosk-lb-rank">${rankCell}</div>
+                                        <strong class="kiosk-lb-name" style="color:var(--dark);">${Utils.escapeHTML(displayNames[idx])}</strong>
+                                        <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+                App.openModal('modal-period-rankings');
             },
 
             setKioskChartRange: (range) => {
@@ -1617,17 +1673,28 @@ Object.assign(App, {
                             if (!pt || !isFinite(pt.x) || !isFinite(pt.y)) return;
                             pts.push({ x: pt.x, y: pt.y, ev });
                         });
-                        pts.sort((a, b) => a.x - b.x || a.y - b.y ||
-                            ({ challenge: 0, defense: 1, king: 2 }[a.ev.type] || 0) - ({ challenge: 0, defense: 1, king: 2 }[b.ev.type] || 0));
-                        const placed = [];
+                        // Cluster markers by horizontal proximity, then stack
+                        // each cluster top-down: 👑 kings highest, then 🛡️
+                        // defenses, then ⚔️ challenges — so a new king's emoji
+                        // never renders below a shield on the same day.
+                        const typeWeight = (t) => ({ king: 2, consolidate: 2, defense: 1, challenge: 0 }[t] ?? 0);
+                        const clusters = [];
                         pts.forEach(p => {
-                            let off = 0;
-                            while (placed.some(d => Math.abs(d.x - p.x) < 14 && Math.abs(d.y - (p.y - 8 - off)) < 15)) off += 16;
-                            const y = p.y - 8 - off;
-                            const evEmoji = p.ev.type === 'king' || p.ev.type === 'consolidate' ? '👑' : (p.ev.type === 'defense' ? '🛡️' : '⚔️');
-                            ctx.fillText(evEmoji, p.x, y);
-                            placed.push({ x: p.x, y });
-                            markerHits.push({ x: p.x, y, ev: p.ev });
+                            const c = clusters.find(list => list.some(q => Math.abs(q.x - p.x) < 14));
+                            if (c) c.push(p); else clusters.push([p]);
+                        });
+                        const placed = [];
+                        clusters.forEach(cluster => {
+                            cluster.sort((a, b) => (typeWeight(b.ev.type) - typeWeight(a.ev.type)) || (a.y - b.y));
+                            const topRef = Math.min(...cluster.map(p => p.y));
+                            cluster.forEach((p, i) => {
+                                let y = topRef - 8 - i * 16;
+                                while (placed.some(d => Math.abs(d.x - p.x) < 14 && Math.abs(d.y - y) < 15)) y -= 16;
+                                const evEmoji = p.ev.type === 'king' || p.ev.type === 'consolidate' ? '👑' : (p.ev.type === 'defense' ? '🛡️' : '⚔️');
+                                ctx.fillText(evEmoji, p.x, y);
+                                placed.push({ x: p.x, y });
+                                markerHits.push({ x: p.x, y, ev: p.ev });
+                            });
                         });
                         ctx.restore();
                     }

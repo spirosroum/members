@@ -2,6 +2,14 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.18 (00:45) — Winners rankings modal, marker stacking fix, hunt alert removed
+
+- Removed the «🔥 … — 1 point left to challenge the Throne!» alert from the Hunt Log (markup, renderer, i18n keys)
+- Chart event markers now stack top-down per day: 👑 kings always highest, 🛡️ defenses below them, ⚔️ challenges lowest — a new king's emoji can no longer render under a shield even when they sit on different members' lines
+- «Crown Bounty Winners» rows are now clickable (hover highlight + › affordance), including the ongoing period; clicking opens a Period Rankings modal listing every member's place/count for that period — final standings once finished, standings-so-far while ongoing, 👑 for the reigning group, roster safety net included
+- Extracted the shared ranking engine `rankPeriodSeries()` so the Bounty Leaderboard and the new modal use one source of truth for places/crowns
+- Verified with an automated harness: 11/11 scenarios pass
+
 ## 2026-08-24 — v1.17 (00:21) — Bounty periods renumbered, period navigation, live countdown
 
 - Removed the «All-time» button from Crown Bounty; the chart, Hunt Log, King bar and Bounty Leaderboard are strictly period-scoped

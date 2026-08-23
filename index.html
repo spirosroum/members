@@ -179,7 +179,6 @@
                         <h4 id="hunt-log-title" style="margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--dark);">Hunt Log</h4>
                         <p id="hunt-log-subtitle" class="text-gray" style="margin: 0.2rem 0 0 0; font-size: 0.85rem;">Challenges and crown takeovers.</p>
                     </div>
-                    <div id="hunt-log-alert" class="hidden" style="margin-bottom: 0.6rem; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:0.5rem 0.75rem; font-size:0.9rem; font-weight:700;"></div>
                     <div id="hunt-log-list" style="max-height: 330px; overflow-y: auto;"></div>
                 </div>
 
@@ -197,6 +196,16 @@
             <h2 id="kiosk-alert-title" style="font-size: 1.75rem; margin-bottom: 1rem;">Notice</h2>
             <p id="kiosk-alert-msg" style="font-size: 1.2rem; color: var(--dark);"></p>
             <button onclick="App.closeModal('modal-kiosk-alert')" class="btn-primary w-full mt-4 btn-large">Got it!</button>
+        </div>
+    </div>
+
+    <!-- PERIOD RANKINGS MODAL -->
+    <div id="modal-period-rankings" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 460px;">
+            <h2 id="period-rankings-title" style="margin-bottom: 0.15rem;">Period Rankings</h2>
+            <p id="period-rankings-sub" class="text-gray" style="margin: 0 0 1rem 0; font-size: 0.9rem;"></p>
+            <div id="period-rankings-list"></div>
+            <button onclick="App.closeModal('modal-period-rankings')" class="btn-outline w-full mt-3">Close</button>
         </div>
     </div>
 
@@ -1730,7 +1739,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="js/app-core.js?v=20260824-44"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260824-44"></script>
+    <script src="js/app-kiosk.js?v=20260824-45"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1739,7 +1748,7 @@
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260823-21"></script>
-    <script src="js/app-i18n.js?v=20260824-44"></script>
+    <script src="js/app-i18n.js?v=20260824-45"></script>
 
 
 </body>

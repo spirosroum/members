@@ -59,7 +59,6 @@ App.KIOSK_I18N = {
         huntStoleCrown: 'stole the Crown',
         huntTookThrone: 'took the Throne alone',
         huntBrokeAway: 'Broke away from {k}.',
-        huntOneAway: '1 point left to challenge the Throne!',
         kingInfoTitle: 'Current Crown Holder',
         kingStatPoints: 'Trainings',
         kingStatDays: 'Throne Streak',
@@ -86,6 +85,8 @@ App.KIOSK_I18N = {
         bountyLeaderboardTitle: 'Crown Bounty Leaderboard',
         bountyLeaderboardSubtitle: 'Every training counts — hold your place until someone breaks it!',
         bountyLeaderboardNoTrainings: 'No trainings recorded for this date.',
+        periodRankingsTitle: 'Period Rankings',
+        periodRankingsClose: 'Close',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in this period.',
         leaderboardMemberColumn: 'Name',
@@ -292,7 +293,6 @@ App.KIOSK_I18N = {
         huntStoleCrown: 'άρπαξε το Στέμμα',
         huntTookThrone: 'κράτησε μόνος του τον Θρόνο',
         huntBrokeAway: 'Ξεχώρισε από {k}.',
-        huntOneAway: 'Απομένει 1 πόντος για να αμφισβητήσει τον Θρόνο!',
         kingInfoTitle: 'Τρέχων Κάτοχος του Στέμματος',
         kingStatPoints: 'Προπονήσεις',
         kingStatDays: 'Σερί στο Θρόνο',
@@ -319,6 +319,8 @@ App.KIOSK_I18N = {
         bountyLeaderboardTitle: 'Κατάταξη Λαφύρου',
         bountyLeaderboardSubtitle: 'Κάθε προπόνηση μετράει — κράτα τη θέση σου μέχρι κάποιος να τη σπάσει!',
         bountyLeaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις για αυτή την ημερομηνία.',
+        periodRankingsTitle: 'Κατάταξη Περιόδου',
+        periodRankingsClose: 'Κλείσιμο',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         leaderboardMemberColumn: 'Όνομα',
@@ -598,6 +600,8 @@ App.applyKioskTranslations = function() {
         const bountyLbSubtitle = document.getElementById('bounty-leaderboard-subtitle'); if (bountyLbSubtitle) bountyLbSubtitle.innerText = map.bountyLeaderboardSubtitle || 'Every training counts — hold your place until someone breaks it!';
         const bountyPrevBtn = document.getElementById('bounty-prev-period'); if (bountyPrevBtn) { bountyPrevBtn.title = map.bountyPrevPeriodTitle || 'Previous period'; bountyPrevBtn.setAttribute('aria-label', bountyPrevBtn.title); }
         const bountyNextBtn = document.getElementById('bounty-next-period'); if (bountyNextBtn) { bountyNextBtn.title = map.bountyNextPeriodTitle || 'Next period'; bountyNextBtn.setAttribute('aria-label', bountyNextBtn.title); }
+        const periodRankingsTitle = document.getElementById('period-rankings-title'); if (periodRankingsTitle) periodRankingsTitle.innerText = map.periodRankingsTitle || 'Period Rankings';
+        const periodRankingsClose = document.querySelector('#modal-period-rankings .btn-outline'); if (periodRankingsClose) periodRankingsClose.innerText = map.periodRankingsClose || 'Close';
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
         const classDetailsCloseBtn = document.querySelector('#modal-class-details .btn-primary'); if (classDetailsCloseBtn) classDetailsCloseBtn.innerText = map.classDetailsClose || 'Close';
