@@ -641,8 +641,9 @@ Object.assign(App, {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
                 if (!container || !section) return;
-                const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
-                const knownIds = new Set(members.map(m => m.id));
+                const allMembers = DB.getMembers();
+                const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                const knownIds = new Set(allMembers.map(m => m.id));
                 DB.getClassCheckins().forEach(ci => {
                     if (ci.entryTime && !knownIds.has(ci.memberId)) {
                         knownIds.add(ci.memberId);
@@ -735,9 +736,25 @@ Object.assign(App, {
                 // displaced shows ▼ red, holding steady shows nothing.
                 const refPlaces = {};
                 if (refIso !== selIso) {
-                    const refEntries = active.map(e => ({ id: e.id, c: countAt(e.series, refIso), points: e.points.filter(pt => pt.date <= refIso) }))
+                    const firstTsAt = (e, c) => (e.firstTimeAtCount && e.firstTimeAtCount[c]) ? new Date(e.firstTimeAtCount[c]).getTime() : Infinity;
+                    const refEntries = active.map(e => ({
+                        id: e.id,
+                        member: e.member,
+                        c: countAt(e.series, refIso),
+                        ts: firstTsAt(e, countAt(e.series, refIso)),
+                        points: e.points.filter(pt => pt.date <= refIso)
+                    }))
                         .filter(x => x.c > 0)
-                        .sort((a, b) => b.c - a.c);
+                        .sort((a, b) => {
+                            if (b.c !== a.c) return b.c - a.c;
+                            if (a.ts !== b.ts) return a.ts - b.ts;
+                            const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
+                            const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
+                            if (fa !== fb) return fa - fb;
+                            const na = ((a.member.lastName || '') + ' ' + (a.member.firstName || '')).localeCompare((b.member.lastName || '') + ' ' + (b.member.firstName || ''));
+                            if (na !== 0) return na;
+                            return String(a.id).localeCompare(String(b.id));
+                        });
                     const refGroupPlace = {};
                     refEntries.forEach((x, i) => {
                         const k = ptsKeyOf(x.points);
@@ -860,6 +877,15 @@ Object.assign(App, {
                 const visits = DB.getVisits();
 
                 const result = [];
+                // ±24h grace on the entry timestamp, then bounds are enforced
+                // on the effective session date: a slot booked late the night
+                // before (or a class backfilled after midnight) belongs to its
+                // slotDate and must not vanish from that day's standings.
+                const sinceIso = Utils.dateToLocalIso(since);
+                const untilIso = Utils.dateToLocalIso(until);
+                const lo = new Date(since.getTime() - 86400000);
+                const hi = new Date(until.getTime() + 86400000);
+                const inWindow = (d, dateKey) => !isNaN(d.getTime()) && d >= lo && d < hi && dateKey >= sinceIso && dateKey <= untilIso;
                 memberIds.forEach(member => {
                     const cins = checkins.filter(ci => ci.memberId === member.id && ci.entryTime);
                     const seen = new Set();
@@ -867,8 +893,8 @@ Object.assign(App, {
                     const mEvents = [];
                     cins.forEach(ci => {
                         const d = new Date(ci.entryTime);
-                        if (isNaN(d.getTime()) || d < since || d >= until) return;
                         const dateKey = ci.slotDate || Utils.dateToLocalIso(d);
+                        if (!inWindow(d, dateKey)) return;
                         const sessionKey = `${dateKey}|${ci.classId}|${ci.slotStart || ''}|${ci.slotEnd || ''}`;
                         if (seen.has(sessionKey)) return;
                         seen.add(sessionKey);
@@ -877,8 +903,8 @@ Object.assign(App, {
                     visits.forEach(v => {
                         if (v.memberId !== member.id || !v.entryTime || checkinVisitIds.has(v.id)) return;
                         const d = new Date(v.entryTime);
-                        if (isNaN(d.getTime()) || d < since || d >= until) return;
                         const dateKey = Utils.dateToLocalIso(d);
+                        if (!inWindow(d, dateKey)) return;
                         mEvents.push({ date: dateKey, time: v.entryTime });
                     });
                     mEvents.sort((a, b) => new Date(a.time) - new Date(b.time));

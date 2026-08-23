@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.15 (23:28) — Bounty LB: phantom-member fix, correct ▲/▼, midnight-safe sessions
+
+- Fixed members appearing/disappearing on the Crown Bounty Leaderboard: a member with «Hide from Leaderboard» enabled was excluded from the roster BEFORE the safety net snapshot, so their own check-ins re-added them as a nameless phantom row (raw id) — hidden ids now count as known and stay off the board; genuinely unknown ids (deleted members with trainings, e.g. Christos) are still rescued
+- Fixed ▲/▼ movement indicators for anyone tied on the previous day: yesterday-reference places were sorted by score only, silently inheriting TODAY's order — a displaced holder showed no ▼ and a climber no ▲ whenever they had been tied; reference places now use the exact same tie-break chain as today's standings (score → who reached it first → first training date → name)
+- Midnight-boundary safety in the training series: entry timestamps get a ±24h grace while placement is enforced on the effective session date — a class backfilled shortly after midnight now credits its class day instead of vanishing from it (late-night bookings still credit the class's own day)
+- Verified all Crown Bounty Leaderboard rules against the live code with an automated harness (15 scenarios): strict surpass-to-overtake, holder-keeps-spot-on-tie, identical-history sharing + shared 👑, green/red/no-indicator movement, open-gym counting, dedup of duplicate check-in rows, period scoping
+
 ## 2026-08-23 — v1.14 (04:00) — Bulletproof date arrows (SVG chevrons)
 
 - Replaced the ‹ › text arrows on the Bounty Leaderboard date picker with inline SVG chevrons — they render identically on every device/font and no longer depend on Unicode glyph support
