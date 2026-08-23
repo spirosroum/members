@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.10 (01:20) — Crown = everyone tied at the top
+
+- The 👑 now belongs to EVERY member tied at the top training count on the selected date — leaderboard, chart labels and King bar all agree (Reynaldo, Δημοσθένης and Μαρία tied at the top all hold it)
+- A member below the top count can never display a crown, regardless of past lineage (fixes Fransisco keeping a crown in 5th place on Aug 5)
+- Hunt Log mechanics unchanged: matching the record = ⚔️ challenge, exceeding = 👑 steal, group extension after a challenge = 🛡️ defense
+
 ## 2026-08-23 — v1.09 (00:40) — Crown event fixes, per-period Hall of Kings, label ranking, countdown sync
 
 - Chart: a 👑 marker now appears every time the number of kings is reduced (one co-king pulls ahead alone → «took the Throne alone» / «κράτησε μόνος του τον Θρόνο»), in markers, tooltips and Hunt Log

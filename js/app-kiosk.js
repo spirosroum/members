@@ -702,10 +702,10 @@ Object.assign(App, {
                     refActive.forEach(e => { refRanks[e.id] = e.place; });
                 }
 
-                const crownResult = App.getCrownEvents(series);
-                const kingSet = new Set(crownResult.currentKing
-                    ? [crownResult.currentKing.id].concat(crownResult.currentKing.alsoIds || [])
-                    : []);
+                // The Crown belongs to EVERYONE tied at the top training count
+                // on the selected date — all co-holders get the 👑.
+                const topCount = active.reduce((m, e) => Math.max(m, e.count), 0);
+                const kingSet = new Set(active.filter(e => e.count === topCount).map(e => e.member.id));
 
                 const prevTops = {};
                 container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
@@ -1486,13 +1486,14 @@ Object.assign(App, {
                 const displayNameById = {};
                 series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
-                // Final king(s): the reigning group from getCrownEvents — the
-                // proclaimed lineage members still tied at the top record.
+                // Final king(s): EVERY member tied at the top final cumulative
+                // count holds the Crown — matching the leaderboard.
                 const lastDate = labels[labels.length - 1];
                 const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
-                const kingIds = new Set(crownResult.currentKing
-                    ? [crownResult.currentKing.id].concat(crownResult.currentKing.alsoIds || [])
-                    : []);
+                const maxFinal = Math.max(...finalCounts);
+                const kingIds = new Set(datasets
+                    .filter(d => countAt[d._memberId][lastDate] === maxFinal)
+                    .map(d => d._memberId));
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });
@@ -1743,7 +1744,12 @@ Object.assign(App, {
                 canvas.onmouseleave = () => { hideTip(); };
 
                 App.renderHuntLog(crownEvents, displayNameById, crownResult);
-                App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
+                const kingBarInfo = crownResult.currentKing
+                    ? Object.assign({}, crownResult.currentKing, {
+                        alsoIds: [...kingIds].filter(id => id !== crownResult.currentKing.id)
+                    })
+                    : null;
+                App.renderCurrentKingBar(kingBarInfo, displayNameById);
                 App.renderHallOfKings && App.renderHallOfKings();
                 App.renderPeriodWinners && App.renderPeriodWinners();
                 App.renderBountyLeaderboard && App.renderBountyLeaderboard();
