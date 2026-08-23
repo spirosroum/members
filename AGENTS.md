@@ -36,6 +36,7 @@ index.html
 - **Update `HISTORY.md`** — append a new entry at the top with today's date, a short version name (e.g. `0.1`), the current time (HH:MM), a one-line summary, and a bullet list of what changed. Header format: `## YYYY-MM-DD — v0.1 (HH:MM) — Short summary`. Bump the version name on each change (minor bump per change: `0.1` → `0.2`). For a major update, suggest bumping the major version and flag it to the user. When `HISTORY.md` grows past ~15 entries, move the older entries to the top of `HISTORY-ARCHIVE.md`.
 - **Write a descriptive commit message** — summarize what changed and why. Keep it under 72 chars for the subject line.
 - **After committing, auto-push to `main`** on `https://github.com/spirosroum/members.git` (GitHub Pages deploys from `main`, not `master`). If git push fails, tell the user which files changed so they can upload manually.
+- **Always push without asking** (standing instruction from the user, 2026-08-23): after every requested change is complete, commit + push immediately — do not wait for an explicit "push" request.
 
 ### After deployment (schema changes only)
 - Supabase schema lives in `supabase/migrations/*.sql`. Apply a new migration via the SQL editor, the Supabase CLI (`supabase db push`), or `node migration/apply-remote.js` with a Personal Access Token. **Never edit the live DB without also updating the migration files.**
