@@ -628,16 +628,34 @@ Object.assign(App, {
 
             // Crown Bounty leaderboard for the current period, scoped to any
             // date via the built-in picker (+/- day arrows): neutral
-            // (belt-free) cards, strictly ONE member per place (ties broken by
-            // who reached the score first, then earliest first workout, then
-            // name), 👑 for 1st place, 💩 for last, only members with at least
-            // one workout, ▲/▼ movement vs the previous day (clamped to the
-            // period start), and FLIP slide animation on reorder.
+            // (belt-free) cards with belt-colored accent bars, strictly ONE
+            // member per place (ties broken by who reached the score first,
+            // then earliest first workout, then name). 👑 goes to everyone
+            // tied at the top count whose training history is exactly
+            // identical to the earliest top holder; 💩 marks the very last
+            // place. Only members with at least one workout appear.
+            // ▲/▼ compare the member's score TIER (dense rank of their count)
+            // against the previous day — holding your tier shows nothing.
+            // FLIP slide animation runs on reorder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
                 if (!container || !section) return;
                 const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                const knownIds = new Set(members.map(m => m.id));
+                DB.getClassCheckins().forEach(ci => {
+                    if (ci.entryTime && !knownIds.has(ci.memberId)) {
+                        knownIds.add(ci.memberId);
+                        members.push({ id: ci.memberId, firstName: '', lastName: String(ci.memberId) });
+                    }
+                });
+                const checkinVisitIds = new Set(DB.getClassCheckins().map(c => c.visitId));
+                DB.getVisits().forEach(v => {
+                    if (v.entryTime && !checkinVisitIds.has(v.id) && !knownIds.has(v.memberId)) {
+                        knownIds.add(v.memberId);
+                        members.push({ id: v.memberId, firstName: '', lastName: String(v.memberId) });
+                    }
+                });
                 if (!members.length) { section.classList.add('hidden'); return; }
                 const bp = App.getCurrentBountyPeriod();
                 const since = new Date(bp.start.getTime());
@@ -694,18 +712,33 @@ Object.assign(App, {
                 const active = entries.filter(e => e.count > 0);
                 assignPlaces(active);
 
+                // ▲/▼ compare the member's SCORE TIER (dense rank of their
+                // training count) against yesterday's — so a king who keeps
+                // training with the other kings holds his tier and shows no
+                // arrow, while a king who misses sessions drops a tier (▼).
+                const tiersOf = (counts) => [...new Set(counts)].sort((a, b) => b - a);
+                const curTiers = tiersOf(active.map(e => e.count));
                 const refRanks = {};
                 if (refIso !== selIso) {
-                    const refActive = active.filter(e => countAt(e.series, refIso) > 0)
-                        .map(e => ({ member: e.member, id: e.id, count: countAt(e.series, refIso), points: e.points.filter(pt => pt.date <= refIso), firstTimeAtCount: e.firstTimeAtCount }));
-                    assignPlaces(refActive);
-                    refActive.forEach(e => { refRanks[e.id] = e.place; });
+                    const refCounts = active.map(e => countAt(e.series, refIso)).filter(c => c > 0);
+                    const refTiers = tiersOf(refCounts);
+                    active.forEach(e => {
+                        const rc = countAt(e.series, refIso);
+                        refRanks[e.id] = rc > 0 ? refTiers.indexOf(rc) + 1 : null;
+                    });
                 }
 
-                // The Crown belongs to EVERYONE tied at the top training count
-                // on the selected date — all co-holders get the 👑.
+                // The Crown belongs to everyone tied at the top training count
+                // WHOSE TRAINING HISTORY is exactly identical to that of the
+                // earliest top holder — later joiners with the same score but
+                // a different history are challengers, not kings.
+                const ptsKey = (pts) => pts.map(pt => pt.date + '=' + pt.count).join('|');
                 const topCount = active.reduce((m, e) => Math.max(m, e.count), 0);
-                const kingSet = new Set(active.filter(e => e.count === topCount).map(e => e.member.id));
+                const topMembers = active.filter(e => e.count === topCount);
+                const primaryTop = topMembers.reduce((b, e) => (firstTs(e) < firstTs(b) ? e : b), topMembers[0]);
+                const kingSet = new Set(topMembers
+                    .filter(e => ptsKey(e.points) === ptsKey(primaryTop.points))
+                    .map(e => e.member.id));
 
                 const prevTops = {};
                 container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
@@ -725,11 +758,12 @@ Object.assign(App, {
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
                         ${active.map((entry, idx) => {
-                            const refRank = refRanks[entry.member.id];
+                            const refTier = refRanks[entry.member.id];
+                            const curTier = curTiers.indexOf(entry.count) + 1;
                             let nameColor = 'var(--dark)';
                             let arrow = '';
-                            if (refRank != null && refRank !== entry.place) {
-                                if (entry.place < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
+                            if (refIso !== selIso && refTier != null && refTier !== curTier) {
+                                if (curTier < refTier) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
                             const rankCell = (kingSet.has(entry.member.id) || entry.place === 1)
@@ -1486,14 +1520,26 @@ Object.assign(App, {
                 const displayNameById = {};
                 series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
-                // Final king(s): EVERY member tied at the top final cumulative
-                // count holds the Crown — matching the leaderboard.
+                // Final king(s): everyone tied at the top final count whose
+                // training history is exactly identical to the earliest top
+                // holder — matching the Crown Bounty Leaderboard.
                 const lastDate = labels[labels.length - 1];
                 const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
                 const maxFinal = Math.max(...finalCounts);
-                const kingIds = new Set(datasets
+                const ptsKeyOf = (id) => {
+                    const s = series.find(x => x.member.id === id);
+                    return s ? s.points.map(p => p.date + '=' + p.count).join('|') : '';
+                };
+                const tiedIds = datasets
                     .filter(d => countAt[d._memberId][lastDate] === maxFinal)
-                    .map(d => d._memberId));
+                    .map(d => d._memberId);
+                const tsOfCount = (id, c) => {
+                    const s = series.find(x => x.member.id === id);
+                    const t = (s && s.firstTimeAtCount && s.firstTimeAtCount[c]) || null;
+                    return t ? new Date(t).getTime() : Infinity;
+                };
+                const primaryId = tiedIds.reduce((b, id) => (tsOfCount(id, maxFinal) < tsOfCount(b, maxFinal) ? id : b), tiedIds[0]);
+                const kingIds = new Set(tiedIds.filter(id => ptsKeyOf(id) === ptsKeyOf(primaryId)));
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });

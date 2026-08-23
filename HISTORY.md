@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.11 (02:10) — Crown requires identical history, tier arrows, roster safety
+
+- 👑 now requires the member to be tied at the top count AND have a training history exactly identical to the earliest top holder — Manos (first check-in Aug 4, a day late) is no longer crowned and sits 5th by reach order
+- ▲/▼ indicators compare SCORE TIERS (dense rank of training counts) instead of unique places: kings who keep training together hold their tier and show no arrow (Maria stays clean on Aug 10), while a king who misses sessions drops a tier and shows ▼
+- Roster safety: any member id found in check-in data but missing from the members list still appears on the leaderboard (shown by id) so check-ins like Christos's can never silently vanish
+
 ## 2026-08-23 — v1.10 (01:20) — Crown = everyone tied at the top
 
 - The 👑 now belongs to EVERY member tied at the top training count on the selected date — leaderboard, chart labels and King bar all agree (Reynaldo, Δημοσθένης and Μαρία tied at the top all hold it)
