@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.14 (04:00) — Bulletproof date arrows (SVG chevrons)
+
+- Replaced the ‹ › text arrows on the Bounty Leaderboard date picker with inline SVG chevrons — they render identically on every device/font and no longer depend on Unicode glyph support
+- Restored index.html from the last clean commit after a tooling rewrite risked encoding damage; verified all emojis/Greek text intact
+
 ## 2026-08-23 — v1.13 (03:30) — Ranking audit: strict holders, identical-history sharing only
 
 - Re-audited and enforced the core ranking rules: each position has a single holder; a position is shared ONLY by players whose entire workout history is exactly identical
