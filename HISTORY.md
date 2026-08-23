@@ -2,6 +2,9 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.92 (14:42) — Hunt Log shows 5 entries, scroll for the rest
+- Hunt Log list height now fits exactly 5 entries (measured per row) with vertical scrolling for older events
+
 ## 2026-08-23 — v0.91 (14:27) — Friendlier Crown Hunt chart date labels
 - X-axis dates now render as short friendly labels («Aug 3» / «3 Αυγ») instead of raw ISO strings (2026-08-03), localized to the kiosk language
 - Labels stay horizontal (no 45° tilt) with auto-skip; January ticks include the year

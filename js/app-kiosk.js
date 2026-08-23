@@ -853,6 +853,14 @@ Object.assign(App, {
                         </div>
                     `;
                 }).join('');
+
+                const rows = container.children;
+                if (rows.length > 5 && rows[0]) {
+                    const top0 = rows[0].getBoundingClientRect().top;
+                    container.style.maxHeight = Math.ceil(rows[5].getBoundingClientRect().top - top0) + 'px';
+                } else {
+                    container.style.maxHeight = 'none';
+                }
             },
 
             setKioskChartRange: (range) => {
