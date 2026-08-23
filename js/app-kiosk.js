@@ -581,6 +581,7 @@ Object.assign(App, {
                     const lastRank = top[top.length - 1].rank;
                     top = top.concat(standings.slice(size).filter(entry => entry.rank === lastRank));
                 }
+                App._kioskLeaderboardMembers = top.map(e => e.member);
                 const container = document.getElementById('kiosk-leaderboard-container');
                 if (!container) {
                     App.renderKioskChart && App.renderKioskChart();
@@ -606,7 +607,6 @@ Object.assign(App, {
                     }
                 });
                 const lastRank = top.length ? top[top.length - 1].rank : null;
-                App._kioskLeaderboardMembers = top.map(e => e.member);
                 const displayNames = App.kioskDisplayNames(top.map(e => e.member));
 
                 container.innerHTML = `

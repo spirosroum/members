@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.06 (22:30) — Fix broken check-in portal chart
+
+- Fixed the portal regression: the chart reads `App._kioskLeaderboardMembers`, which was only populated by the removed Training Leaderboard's render path — the chart card stayed hidden and took the whole Crown Bounty section with it
+- `renderKioskLeaderboard` now populates the member list before its container check, so the chart renders without a leaderboard card
+
 ## 2026-08-23 — v1.05 (22:05) — Crown from day one, leaderboard reshuffle, alert rename
 
 - Crown logic: the Crown is claimable from the very first workout — the end-of-day leader becomes King immediately; members with exactly identical training histories share the Crown (chart 👑 labels/markers, Hunt Log, King bar and Hall of Kings all follow)
