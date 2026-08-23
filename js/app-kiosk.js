@@ -625,10 +625,10 @@ Object.assign(App, {
 
             // Crown Bounty leaderboard for the current period, scoped to any
             // date via the built-in picker (+/- day arrows): neutral
-            // (belt-free) cards, strict places (ties broken by who reached the
-            // score first; only identical training histories share a place),
-            // only members with at least one workout, ▲/▼ movement vs 7 days
-            // earlier (clamped to the period start), a gold box for the
+            // (belt-free) cards, strictly ONE member per place (ties broken by
+            // who reached the score first, then earliest first workout, then
+            // name), only members with at least one workout, ▲/▼ movement vs
+            // 7 days earlier (clamped to the period start), a gold box for the
             // reigning Crown Holder, and FLIP slide animation on reorder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
@@ -663,25 +663,21 @@ Object.assign(App, {
                     }
                     return c;
                 };
-                const sameHistory = (pa, pb) => pa.map(pt => pt.date + '=' + pt.count).join('|') === pb.map(pt => pt.date + '=' + pt.count).join('|');
+                const firstTs = (e) => (e.firstTimeAtCount && e.firstTimeAtCount[e.count]) ? new Date(e.firstTimeAtCount[e.count]).getTime() : Infinity;
                 const assignPlaces = (list) => {
                     list.sort((a, b) => {
                         if (b.count !== a.count) return b.count - a.count;
-                        const ta = (a.firstTimeAtCount && a.firstTimeAtCount[a.count]) ? new Date(a.firstTimeAtCount[a.count]).getTime() : Infinity;
-                        const tb = (b.firstTimeAtCount && b.firstTimeAtCount[b.count]) ? new Date(b.firstTimeAtCount[b.count]).getTime() : Infinity;
-                        return ta - tb;
+                        const ta = firstTs(a);
+                        const tb = firstTs(b);
+                        if (ta !== tb) return ta - tb;
+                        const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
+                        const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
+                        if (fa !== fb) return fa - fb;
+                        const na = ((a.member.lastName || '') + ' ' + (a.member.firstName || '')).localeCompare((b.member.lastName || '') + ' ' + (b.member.firstName || ''));
+                        if (na !== 0) return na;
+                        return String(a.id).localeCompare(String(b.id));
                     });
-                    let place = 0;
-                    let prev = null;
-                    list.forEach(e => {
-                        if (prev && prev.count === e.count && sameHistory(prev.points, e.points)) {
-                            e.place = prev.place;
-                        } else {
-                            place++;
-                            e.place = place;
-                        }
-                        prev = e;
-                    });
+                    list.forEach((e, i) => { e.place = i + 1; });
                 };
 
                 const refDate = new Date(selIso + 'T00:00:00');
@@ -749,9 +745,13 @@ Object.assign(App, {
                     if (!dy) return;
                     el.style.transition = 'none';
                     el.style.transform = `translateY(${dy}px)`;
-                    void el.offsetHeight;
-                    el.style.transition = 'transform 0.45s ease';
-                    el.style.transform = '';
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            el.style.transition = 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)';
+                            el.style.transform = '';
+                            setTimeout(() => { el.style.transition = ''; }, 550);
+                        });
+                    });
                 });
             },
 
@@ -766,8 +766,10 @@ Object.assign(App, {
                 minDate.setHours(0, 0, 0, 0);
                 const minIso = Utils.dateToLocalIso(minDate);
                 const todayIso = Utils.dateToLocalIso(new Date());
-                const base = App._bountyLbDate || todayIso;
+                const dateInput = document.getElementById('bounty-leaderboard-date');
+                const base = App._bountyLbDate || (dateInput && dateInput.value) || todayIso;
                 const d = new Date(base + 'T00:00:00');
+                if (isNaN(d.getTime())) return;
                 d.setDate(d.getDate() + dir);
                 const iso = Utils.dateToLocalIso(d);
                 if (iso < minIso || iso > todayIso) return;

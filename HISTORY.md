@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.04 (21:20) — Bounty Leaderboard: unique places, smoother slide, arrow fixes
+
+- Strictly ONE member per place now — ties on score are always broken (who reached the count first → earliest first workout → name); no shared ranks, ever
+- Smoother reorder animation: double requestAnimationFrame with an eased cubic-bezier slide and transition cleanup
+- Date arrows hardened: they also use the picker's visible value as the base and ignore invalid dates
+- Cache-busters bumped to 20260823-31 (previous deploy left some clients on a stale app-kiosk.js — the missing arrows/no-animation symptoms match that stale file)
+
 ## 2026-08-23 — v1.03 (20:45) — Bounty Leaderboard: date arrows, slide animation, correct places
 
 - Added ‹ › arrows next to the leaderboard date picker to step day-by-day (clamped to period start / today)
