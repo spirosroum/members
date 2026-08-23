@@ -306,6 +306,13 @@
         .kiosk-lb-count-badge { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; min-width: 34px; padding: 0.3rem 0.65rem; border-radius: 999px; background: #eef2ff; color: #1e3a8a; font-weight: 800; font-size: 0.85rem; line-height: 1.2; }
         .kiosk-lb-belt { flex-shrink: 0; }
 
+        /* Crown Bounty Leaderboard: belt-colored accent bar on the left of each
+           row, echoing the member portal stat-card stripe. Color comes from the
+           admin Belt Colors settings via Utils.getBeltColor(). */
+        .bounty-lb-card { padding-left: 0.65rem; }
+        .bounty-belt-bar { width: 8px; align-self: stretch; min-height: 34px; border-radius: 5px; flex-shrink: 0; border: 1px solid rgba(15, 23, 42, 0.12); }
+        .bounty-lb-card .kiosk-lb-rank-num { background: #fffbeb; border: 1px solid #fde68a; }
+
         /* Layouts */
         .app-container { min-height: 100vh; display: flex; position: relative; }
         
@@ -675,6 +682,14 @@
             .kiosk-numpad { display: grid; }
             .desktop-checkin-btn { display: none; }
             #kiosk-id-input { font-size: 2.2rem; letter-spacing: 4px; }
+
+            /* Crown Bounty Leaderboard on phones: tighter rows, wrap-friendly */
+            .kiosk-lb-card { gap: 0.55rem; padding: 0.6rem 0.7rem; }
+            .bounty-lb-card { padding-left: 0.55rem; }
+            .bounty-belt-bar { width: 7px; min-height: 30px; }
+            .kiosk-lb-rank-num { min-width: 38px; font-size: 0.85rem; padding: 0.25rem 0.5rem; }
+            .kiosk-lb-name { font-size: 0.95rem; }
+            #bounty-leaderboard-date { max-width: 42vw; }
 
             .view-pane { overflow-x: hidden; }
 

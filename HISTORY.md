@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.07 (23:10) — Bounty polish: belt bars, chart draw order, drop Crown Hold Time
+
+- Removed the «Total Crown Hold Time» section (markup, renderer and i18n hooks)
+- Bounty Leaderboard rows now show a belt-colored accent bar on the left of each member, using the admin-configured Belt Colors shades (like the member portal stat-card stripe); amber rank pill for a gamified look
+- Chart: lines are drawn lowest-ranked first, so higher-ranked members' lines always render on top
+- Mobile: tighter leaderboard rows, capped date-picker width, smaller rank pills under 768px
+
 ## 2026-08-23 — v1.06 (22:30) — Fix broken check-in portal chart
 
 - Fixed the portal regression: the chart reads `App._kioskLeaderboardMembers`, which was only populated by the removed Training Leaderboard's render path — the chart card stayed hidden and took the whole Crown Bounty section with it

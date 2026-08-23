@@ -731,7 +731,8 @@ Object.assign(App, {
                                 ? '<span class="kiosk-lb-rank-num">👑</span>'
                                 : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                             return `
-                                <div class="kiosk-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                    <span class="bounty-belt-bar" style="background:${Utils.getBeltColor(entry.member.belt)};" title="${Utils.escapeHTML((entry.member.belt || 'White').split('/')[0])} belt"></span>
                                     <div class="kiosk-lb-rank">${rankCell}</div>
                                     <strong class="kiosk-lb-name" style="color:${nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${nameColor};">${arrow}</span></strong>
                                     <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
@@ -1331,6 +1332,15 @@ Object.assign(App, {
                 }
                 canvas.style.display = 'block';
 
+                // Draw order: lowest-ranked lines first, so higher-ranked
+                // members' lines always render on top of lower ones.
+                series.sort((a, b) => {
+                    const ca = a.points.length ? a.points[a.points.length - 1].count : 0;
+                    const cb = b.points.length ? b.points[b.points.length - 1].count : 0;
+                    if (ca !== cb) return ca - cb;
+                    return String(a.member.id).localeCompare(String(b.member.id));
+                });
+
                 const allDates = new Set();
                 series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
                 const labels = [...allDates].sort();
@@ -1690,181 +1700,9 @@ Object.assign(App, {
 
                 App.renderHuntLog(crownEvents, displayNameById, crownResult);
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
-                App.renderCrownHistory && App.renderCrownHistory();
                 App.renderHallOfKings && App.renderHallOfKings();
                 App.renderBountyLeaderboard && App.renderBountyLeaderboard();
                 App.renderBountyCountdown();
-            },
-
-            renderCrownHistory: () => {
-                const container = document.getElementById('kiosk-crown-history-list');
-                const section = document.getElementById('kiosk-crown-history-section');
-                if (!container || !section) return;
-
-                const members = (App._kioskLeaderboardMembers && App._kioskLeaderboardMembers.length)
-                    ? App._kioskLeaderboardMembers
-                    : DB.getMembers().filter(m => !m.hideFromLeaderboard);
-                if (!members.length) { section.classList.add('hidden'); return; }
-
-                const until = new Date();
-                until.setHours(23, 59, 59, 999);
-                const p = App.getCurrentBountyPeriod();
-                const since = new Date(p.start.getTime());
-                since.setHours(0, 0, 0, 0);
-
-                const series = App.getCumulativeTrainingSeries(members, since, until);
-                if (!series.length) { section.classList.add('hidden'); return; }
-
-                const allDates = new Set();
-                series.forEach(s => s.points.forEach(p => allDates.add(p.date)));
-                const labels = [...allDates].sort();
-                if (!labels.length) { section.classList.add('hidden'); return; }
-
-                const calendarDates = [];
-                const d = new Date(since);
-                while (d <= until) {
-                    calendarDates.push(Utils.dateToLocalIso(d));
-                    d.setDate(d.getDate() + 1);
-                }
-
-                const pointMap = {};
-                const countAt = {};
-                series.forEach(s => {
-                    pointMap[s.member.id] = new Map(s.points.map(p => [p.date, p.count]));
-                    const pm = pointMap[s.member.id];
-                    countAt[s.member.id] = {};
-                    let prev = null;
-                    calendarDates.forEach(date => {
-                        if (pm.has(date)) prev = pm.get(date);
-                        countAt[s.member.id][date] = prev;
-                    });
-                });
-
-                // Resolve which of the given member ids hold the crown: one unless
-                // all share exactly the same training history (identical count on
-                // every date); otherwise the one who reached that count earliest
-                // (or led longest), found by timestamp comparison and backward walk.
-                const resolveKings = (ids, targetCount) => {
-                    if (ids.length <= 1) return ids.slice();
-                    const identical = ids.every(id => labels.map(x => countAt[id][x] ?? 0).join(',') === labels.map(x => countAt[ids[0]][x] ?? 0).join(','));
-                    if (identical) return ids.slice();
-
-                    const sMap = {};
-                    series.forEach(s => { sMap[s.member.id] = s; });
-                    const withTimes = ids.map(id => {
-                        const s = sMap[id];
-                        const t = (s && s.firstTimeAtCount && targetCount && s.firstTimeAtCount[targetCount])
-                            ? new Date(s.firstTimeAtCount[targetCount]).getTime()
-                            : Infinity;
-                        return { id, t };
-                    });
-                    withTimes.sort((a, b) => a.t - b.t);
-                    const minT = withTimes[0].t;
-                    if (isFinite(minT)) {
-                        const winners = withTimes.filter(x => x.t === minT).map(x => x.id);
-                        if (winners.length === 1) return winners;
-                    }
-
-                    let candidates = ids.slice();
-                    for (let idx = labels.length - 1; idx >= 0 && candidates.length > 1; idx--) {
-                        const dateKey = labels[idx];
-                        const maxHere = Math.max(...candidates.map(c => countAt[c][dateKey] ?? -Infinity));
-                        candidates = candidates.filter(c => (countAt[c][dateKey] ?? -Infinity) === maxHere);
-                    }
-                    return candidates;
-                };
-
-                const chartCrowns = {};
-                let record = 0;
-                let proclaimedKings = [];
-
-                labels.forEach(date => {
-                    let maxToday = -1;
-                    const holders = [];
-                    series.forEach(s => {
-                        const c = countAt[s.member.id][date];
-                        if (c == null) return;
-                        if (c > maxToday) { maxToday = c; holders.length = 0; holders.push(s.member.id); }
-                        else if (c === maxToday) holders.push(s.member.id);
-                    });
-                    if (maxToday <= 0) return;
-
-                    if (maxToday > record) {
-                        const kings = resolveKings(holders, maxToday);
-                        if (proclaimedKings.length === 0) {
-                            const prevAtTop = series.filter(s => countAt[s.member.id][date] === record).map(s => s.member.id);
-                            if (record >= 1 && prevAtTop.length > 0) {
-                                const droppedOut = prevAtTop.filter(id => (countAt[id][date] ?? 0) < maxToday);
-                                if (droppedOut.length > 0 && maxToday >= 4) {
-                                    proclaimedKings = kings;
-                                    chartCrowns[date] = kings;
-                                }
-                            }
-                        } else {
-                            const prevKey = proclaimedKings.slice().sort().join('|');
-                            const newKey = kings.slice().sort().join('|');
-                            if (prevKey !== newKey) {
-                                proclaimedKings = kings;
-                                chartCrowns[date] = kings;
-                            }
-                        }
-                        record = maxToday;
-                    }
-                });
-
-                const daysByMember = {};
-                const memberMap = {};
-                series.forEach(s => { memberMap[s.member.id] = s.member; });
-
-                let activeKings = [];
-                calendarDates.forEach(d => {
-                    if (chartCrowns[d]) {
-                        activeKings = chartCrowns[d];
-                    }
-                    activeKings.forEach(id => {
-                        daysByMember[id] = (daysByMember[id] || 0) + 1;
-                    });
-                });
-
-                const entries = Object.entries(daysByMember)
-                    .map(([id, days]) => ({ member: memberMap[id], days }))
-                    .filter(e => e.member && e.days > 0)
-                    .sort((a, b) => b.days - a.days || a.member.lastName.localeCompare(b.member.lastName));
-
-                if (!entries.length) { section.classList.add('hidden'); return; }
-                section.classList.remove('hidden');
-
-                let prevDays = null;
-                let prevRank = 0;
-                entries.forEach((entry, index) => {
-                    if (index === 0 || entry.days !== prevDays) {
-                        entry.rank = index + 1;
-                    } else {
-                        entry.rank = prevRank;
-                    }
-                    prevDays = entry.days;
-                    prevRank = entry.rank;
-                });
-
-                const lang = App.currentKioskLang || 'en';
-                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
-
-                const crownNames = App.kioskDisplayNames(entries.map(x => x.member));
-                container.innerHTML = `
-                    <div class="kiosk-leaderboard">
-                        ${entries.map((e, idx) => {
-                            const dayLabel = e.days === 1 ? (map.crownHistoryDay || 'day') : (map.crownHistoryDays || 'days');
-                            const textColor = ((e.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
-                            return `
-                                <div class="kiosk-lb-card" style="background:${Utils.getBeltColor(e.member.belt)};">
-                                    <div class="kiosk-lb-rank"><span class="kiosk-lb-rank-num">${e.rank}</span></div>
-                                    <strong class="kiosk-lb-name" style="color:${textColor};">${Utils.escapeHTML(crownNames[idx])}</strong>
-                                    <span class="kiosk-lb-count-badge" title="${e.days} ${dayLabel}">${e.days} ${dayLabel}</span>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
             },
 
             checkoutVisit: (visitId) => {
