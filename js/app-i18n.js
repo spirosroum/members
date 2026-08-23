@@ -74,6 +74,8 @@ App.KIOSK_I18N = {
         bountyDayWord: 'day',
         bountyDaysWord: 'days',
         bountyCountdownText: 'until the Crown Bounty ends!',
+        bountyLeaderboardTitle: 'Crown Bounty Leaderboard',
+        bountyLeaderboardSubtitle: 'Every training counts — hold your place until someone breaks it!',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in this period.',
         leaderboardMemberColumn: 'Name',
@@ -295,6 +297,8 @@ App.KIOSK_I18N = {
         bountyDayWord: 'ημέρα',
         bountyDaysWord: 'ημέρες',
         bountyCountdownText: 'μέχρι το τέλος του Λαφύρου!',
+        bountyLeaderboardTitle: 'Κατάταξη Λαφύρου',
+        bountyLeaderboardSubtitle: 'Κάθε προπόνηση μετράει — κράτα τη θέση σου μέχρι κάποιος να τη σπάσει!',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         leaderboardMemberColumn: 'Όνομα',
@@ -573,6 +577,8 @@ App.applyKioskTranslations = function() {
         const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';
         const hallTitle = document.getElementById('hall-of-kings-title'); if (hallTitle) hallTitle.innerText = '🏆 ' + (map.hallOfKingsTitle || 'HALL OF KINGS');
         const periodTitle = document.getElementById('period-winners-title'); if (periodTitle) periodTitle.innerText = map.periodWinnersTitle || 'Crown Bounty Winners';
+        const bountyLbTitle = document.getElementById('bounty-leaderboard-title'); if (bountyLbTitle) bountyLbTitle.innerText = map.bountyLeaderboardTitle || 'Crown Bounty Leaderboard';
+        const bountyLbSubtitle = document.getElementById('bounty-leaderboard-subtitle'); if (bountyLbSubtitle) bountyLbSubtitle.innerText = map.bountyLeaderboardSubtitle || 'Every training counts — hold your place until someone breaks it!';
         App.renderCrownHistory && App.renderCrownHistory();
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';

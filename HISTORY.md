@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.01 (19:29) — Fix broken portal; separate Crown Bounty Leaderboard
+- Fixed the broken check-in portal: the chart's period label referenced the i18n map before its declaration, crashing the whole render chain (empty chart, broken check-in)
+- Reverted the general Training Leaderboard to its original logic (last 3 months, shared ranks)
+- New separate «Crown Bounty Leaderboard» card: current-period standings with strict places (ties broken by who reached the score first; identical histories share a place), ▲ green / ▼ red movement since the last snapshot, and a gold card for the reigning Crown Holder
+
 ## 2026-08-23 — v1.00 (19:05) — Period leaderboard with places & rank movement
 - Training Leaderboard now runs on the current bounty period with strict places: one member per place, ties broken by who reached the score first (first to claim a place keeps it until broken); only identical training histories share a place
 - Rank movement: ▲ green when a member climbs, ▼ red when they drop, default belt-contrast when unchanged, 👑 gold for the Crown Holder (snapshot persisted per period in localStorage)

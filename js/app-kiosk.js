@@ -514,55 +514,29 @@ Object.assign(App, {
                 if (adminList) adminList.innerHTML = activeVisits.map(v => generateRow(v, false)).join('') || '<tr><td colspan="6" class="text-center text-gray">No members currently inside.</td></tr>';
             },
 
-            // Period standings: one member per place, ties broken by who reached
-            // the score first; only members with exactly the same training history
-            // share a place. The first to claim a place keeps it until broken.
             getLeaderboardStandings: () => {
-                const members = DB.getMembers().filter(member => !member.hideFromLeaderboard);
-                const until = new Date();
-                until.setHours(23, 59, 59, 999);
-                const p = App.getCurrentBountyPeriod();
-                const since = new Date(p.start.getTime());
-                since.setHours(0, 0, 0, 0);
-                const series = App.getCumulativeTrainingSeries(members, since, until);
-                const sMap = {};
-                series.forEach(s => { sMap[s.member.id] = s; });
-
-                const entries = members.map(m => {
-                    const s = sMap[m.id];
-                    return { member: m, count: (s && s.points.length) ? s.points[s.points.length - 1].count : 0, series: s };
-                });
-                const active = entries.filter(e => e.count > 0);
-                const inactive = entries.filter(e => e.count === 0)
-                    .sort((a, b) => (a.member.lastName || '').localeCompare(b.member.lastName || ''));
-                active.sort((a, b) => {
-                    if (b.count !== a.count) return b.count - a.count;
-                    const ta = (a.series && a.series.firstTimeAtCount[a.count]) ? new Date(a.series.firstTimeAtCount[a.count]).getTime() : Infinity;
-                    const tb = (b.series && b.series.firstTimeAtCount[b.count]) ? new Date(b.series.firstTimeAtCount[b.count]).getTime() : Infinity;
-                    return ta - tb;
-                });
-
-                let place = 0;
-                let prev = null;
-                active.forEach(e => {
-                    if (prev && prev.count === e.count && App.samePeriodHistory(prev.series, e.series)) {
-                        e.rank = prev.rank;
+                const threeMonthsAgo = new Date();
+                threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+                const standings = DB.getMembers()
+                    .filter(member => !member.hideFromLeaderboard)
+                    .map(member => ({
+                        member,
+                        count: App.getMemberLeaderboardCount(member.id, threeMonthsAgo)
+                    }))
+                    .filter(entry => entry.count > 0)
+                    .sort((a, b) => b.count - a.count || a.member.lastName.localeCompare(b.member.lastName));
+                let prevCount = null;
+                let prevRank = 0;
+                standings.forEach((entry, index) => {
+                    if (index === 0 || entry.count !== prevCount) {
+                        entry.rank = index + 1;
                     } else {
-                        place++;
-                        e.rank = place;
+                        entry.rank = prevRank;
                     }
-                    prev = e;
+                    prevCount = entry.count;
+                    prevRank = entry.rank;
                 });
-                inactive.forEach((e, i) => { e.rank = place + i + 1; });
-
-                const result = App.getCrownEvents(series);
-                App._periodKingIds = new Set(result.currentKing ? [result.currentKing.id].concat(result.currentKing.alsoIds || []) : []);
-                return active.concat(inactive);
-            },
-
-            samePeriodHistory: (a, b) => {
-                if (!a || !b) return false;
-                return a.points.map(pt => pt.date + '=' + pt.count).join('|') === b.points.map(pt => pt.date + '=' + pt.count).join('|');
+                return standings;
             },
 
             leaderboardRankCell: (rank, isLast) => {
@@ -632,33 +606,105 @@ Object.assign(App, {
                 App._kioskLeaderboardMembers = top.map(e => e.member);
                 const displayNames = App.kioskDisplayNames(top.map(e => e.member));
 
-                // Rank movement vs the last snapshot (per period): ▲ green when
-                // up, ▼ red when down, gold for the Crown Holder.
-                const bp = App.getCurrentBountyPeriod();
-                const periodKey = 'P' + bp.n + '-' + bp.start.getFullYear() + '-' + (bp.start.getMonth() + 1);
-                let savedRanks = { period: periodKey, ranks: {} };
-                try {
-                    const parsed = JSON.parse(localStorage.getItem('gym_period_ranks') || 'null');
-                    if (parsed && parsed.period === periodKey && parsed.ranks) savedRanks = parsed;
-                } catch (err) {}
-                const prevRanks = savedRanks.ranks || {};
-
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
                         ${top.map((entry, idx) => {
                             const textColor = ((entry.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
-                            const isKing = (App._periodKingIds || new Set()).has(entry.member.id);
+                            return `
+                                <div class="kiosk-lb-card" style="background:${Utils.getBeltColor(entry.member.belt)};">
+                                    <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
+                                    <strong class="kiosk-lb-name" style="color:${textColor};">${Utils.escapeHTML(displayNames[idx])}</strong>
+                                    <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+                App.renderKioskChart && App.renderKioskChart();
+            },
+
+            // Separate Crown Bounty leaderboard for the current period: strict
+            // places (ties broken by who reached the score first; identical
+            // training histories share a place), ▲/▼ movement since the last
+            // snapshot, and a gold box for the reigning Crown Holder.
+            renderBountyLeaderboard: () => {
+                const container = document.getElementById('bounty-leaderboard-container');
+                const section = document.getElementById('bounty-leaderboard-section');
+                if (!container || !section) return;
+                const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                if (!members.length) { section.classList.add('hidden'); return; }
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                const bp = App.getCurrentBountyPeriod();
+                const since = new Date(bp.start.getTime());
+                since.setHours(0, 0, 0, 0);
+                const series = App.getCumulativeTrainingSeries(members, since, until);
+                const sMap = {};
+                series.forEach(s => { sMap[s.member.id] = s; });
+
+                const entries = members.map(m => {
+                    const s = sMap[m.id];
+                    return { member: m, count: (s && s.points.length) ? s.points[s.points.length - 1].count : 0, series: s };
+                });
+                const active = entries.filter(e => e.count > 0);
+                const inactive = entries.filter(e => e.count === 0)
+                    .sort((a, b) => (a.member.lastName || '').localeCompare(b.member.lastName || ''));
+                const sameHistory = (a, b) => {
+                    if (!a || !b) return false;
+                    return a.points.map(pt => pt.date + '=' + pt.count).join('|') === b.points.map(pt => pt.date + '=' + pt.count).join('|');
+                };
+                active.sort((a, b) => {
+                    if (b.count !== a.count) return b.count - a.count;
+                    const ta = (a.series && a.series.firstTimeAtCount[a.count]) ? new Date(a.series.firstTimeAtCount[a.count]).getTime() : Infinity;
+                    const tb = (b.series && b.series.firstTimeAtCount[b.count]) ? new Date(b.series.firstTimeAtCount[b.count]).getTime() : Infinity;
+                    return ta - tb;
+                });
+                let place = 0;
+                let prev = null;
+                active.forEach(e => {
+                    if (prev && prev.count === e.count && sameHistory(prev.series, e.series)) {
+                        e.rank = prev.rank;
+                    } else {
+                        place++;
+                        e.rank = place;
+                    }
+                    prev = e;
+                });
+                inactive.forEach((e, i) => { e.rank = place + i + 1; });
+                const standings = active.concat(inactive);
+
+                const periodKey = 'P' + bp.n + '-' + bp.start.getFullYear() + '-' + (bp.start.getMonth() + 1);
+                let savedRanks = { period: periodKey, ranks: {} };
+                try {
+                    const parsed = JSON.parse(localStorage.getItem('gym_bounty_ranks') || 'null');
+                    if (parsed && parsed.period === periodKey && parsed.ranks) savedRanks = parsed;
+                } catch (err) {}
+                const prevRanks = savedRanks.ranks || {};
+
+                const result = App.getCrownEvents(series);
+                const kingIds = new Set(result.currentKing ? [result.currentKing.id].concat(result.currentKing.alsoIds || []) : []);
+
+                const displayNames = App.kioskDisplayNames(standings.map(e => e.member));
+                const lastRank = standings.length ? standings[standings.length - 1].rank : null;
+
+                container.innerHTML = `
+                    <div class="kiosk-leaderboard">
+                        ${standings.map((entry, idx) => {
+                            const beltText = ((entry.member.belt || 'White').split('/')[0].trim() === 'White') ? '#000000' : '#FFFFFF';
+                            const isKing = kingIds.has(entry.member.id);
                             const prevRank = prevRanks[entry.member.id];
-                            let nameColor = textColor;
+                            let boxBg = Utils.getBeltColor(entry.member.belt);
+                            let nameColor = beltText;
                             let arrow = '';
                             if (isKing) {
-                                nameColor = '#d4af37';
+                                boxBg = '#d4af37';
+                                nameColor = '#000000';
                             } else if (prevRank != null && prevRank !== entry.rank) {
                                 if (entry.rank < prevRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
                             return `
-                                <div class="kiosk-lb-card" style="background:${Utils.getBeltColor(entry.member.belt)};">
+                                <div class="kiosk-lb-card" style="background:${boxBg};">
                                     <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.rank, entry.rank === lastRank)}</div>
                                     <strong class="kiosk-lb-name" style="color:${nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${nameColor};">${arrow}</span></strong>
                                     <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
@@ -667,10 +713,10 @@ Object.assign(App, {
                         }).join('')}
                     </div>
                 `;
+                section.classList.remove('hidden');
                 const newRanks = {};
                 standings.forEach(e => { newRanks[e.member.id] = e.rank; });
-                try { localStorage.setItem('gym_period_ranks', JSON.stringify({ period: periodKey, ranks: newRanks })); } catch (err) {}
-                App.renderKioskChart && App.renderKioskChart();
+                try { localStorage.setItem('gym_bounty_ranks', JSON.stringify({ period: periodKey, ranks: newRanks })); } catch (err) {}
             },
 
             // Deterministic per-member color from a distinct palette (stable across
@@ -1224,16 +1270,6 @@ Object.assign(App, {
 
                 const holder = document.getElementById('kiosk-training-chart-container');
                 if (holder) holder.classList.remove('hidden');
-                const periodLabel = document.getElementById('kiosk-chart-period');
-                if (periodLabel) {
-                    const loc = (App.currentKioskLang === 'el') ? 'el-GR' : undefined;
-                    if (range === 'period') {
-                        const cp = App.getCurrentBountyPeriod();
-                        periodLabel.innerText = `${map.periodWord || 'Period'} ${cp.n} · ${cp.start.toLocaleDateString(loc, { month: 'short', year: 'numeric' })} – ${cp.endExcl.toLocaleDateString(loc, { month: 'short', year: 'numeric' })}`;
-                    } else {
-                        periodLabel.innerText = map.chartRangeAll || 'All-time';
-                    }
-                }
                 const empty = document.getElementById('kiosk-training-chart-empty');
                 if (empty) empty.classList.toggle('hidden', series.length > 0);
                 if (!series.length) {
@@ -1306,6 +1342,15 @@ Object.assign(App, {
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
                 const tickLocale = (App.currentKioskLang === 'el') ? 'el-GR' : undefined;
                 const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(tickLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+                const periodLabel = document.getElementById('kiosk-chart-period');
+                if (periodLabel) {
+                    if (range === 'period') {
+                        const cp = App.getCurrentBountyPeriod();
+                        periodLabel.innerText = `${map.periodWord || 'Period'} ${cp.n} · ${cp.start.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })} – ${cp.endExcl.toLocaleDateString(tickLocale, { month: 'short', year: 'numeric' })}`;
+                    } else {
+                        periodLabel.innerText = map.chartRangeAll || 'All-time';
+                    }
+                }
 
                 // Resolve which of the given member ids hold the crown: one unless
                 // all share exactly the same training history (identical count on
@@ -1597,6 +1642,7 @@ Object.assign(App, {
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
                 App.renderCrownHistory && App.renderCrownHistory();
                 App.renderHallOfKings && App.renderHallOfKings();
+                App.renderBountyLeaderboard && App.renderBountyLeaderboard();
                 App.renderBountyCountdown();
             },
 
