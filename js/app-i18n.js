@@ -43,7 +43,7 @@ App.KIOSK_I18N = {
         chartRangeCustom: 'Custom',
         chartNoTrainings: 'No trainings recorded in this period.',
         chartTooltipTrainings: 'trainings',
-        crownHistoryTitle: 'Proclaimed King Days',
+        crownHistoryTitle: 'Total Crown Hold Time',
         crownHistorySubtitle: 'Days on Throne in the last 90 days.',
         crownHistoryDay: 'day',
         crownHistoryDays: 'days',
@@ -58,8 +58,8 @@ App.KIOSK_I18N = {
         huntHeldOff: 'Held off the challenge ({k}) with {c} trainings.',
         huntStoleCrown: 'stole the Crown',
         kingInfoTitle: 'Current Crown Holder',
-        kingStatPoints: 'Points',
-        kingStatDays: 'Days on Throne',
+        kingStatPoints: 'Trainings',
+        kingStatDays: 'Throne Streak',
         kingStatDefenses: 'Crown Defenses',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in the last 3 months yet.',
@@ -251,7 +251,7 @@ App.KIOSK_I18N = {
         chartRangeCustom: 'Προσαρμογή',
         chartNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         chartTooltipTrainings: 'προπονήσεις',
-        crownHistoryTitle: 'Ημέρες Ανακηρυγμένου Βασιλιά',
+        crownHistoryTitle: 'Συνολικός Χρόνος Κατοχής του Στέμματος',
         crownHistorySubtitle: 'Ημέρες στο Θρόνο τις τελευταίες 90 ημέρες.',
         crownHistoryDay: 'ημέρα',
         crownHistoryDays: 'ημέρες',
@@ -266,8 +266,8 @@ App.KIOSK_I18N = {
         huntHeldOff: 'Άντεξε την πρόκληση ({k}) με {c} προπονήσεις.',
         huntStoleCrown: 'άρπαξε το Στέμμα',
         kingInfoTitle: 'Τρέχων Κάτοχος του Στέμματος',
-        kingStatPoints: 'Πόντοι',
-        kingStatDays: 'Ημέρες στο Θρόνο',
+        kingStatPoints: 'Προπονήσεις',
+        kingStatDays: 'Σερί στο Θρόνο',
         kingStatDefenses: 'Άμυνες Στέμματος',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις στους τελευταίους 3 μήνες ακόμα.',
@@ -541,7 +541,7 @@ App.applyKioskTranslations = function() {
             const text = key === '3m' ? map.chartRange3m : key === '1m' ? map.chartRange1m : key === 'all' ? map.chartRangeAll : map.chartRangeCustom;
             if (text) btn.innerText = text;
         });
-        const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || 'Proclaimed King Days';
+        const crownTitle = document.getElementById('kiosk-crown-history-title'); if (crownTitle) crownTitle.innerText = map.crownHistoryTitle || 'Total Crown Hold Time';
         const crownSubtitle = document.getElementById('kiosk-crown-history-subtitle'); if (crownSubtitle) crownSubtitle.innerText = map.crownHistorySubtitle || 'Days on Throne in the last 90 days.';
         const huntLogTitle = document.getElementById('hunt-log-title'); if (huntLogTitle) huntLogTitle.innerText = map.huntLogTitle || 'Hunt Log';
         const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';

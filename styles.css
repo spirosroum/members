@@ -902,3 +902,6 @@
         .kiosk-marker-tip { position: fixed; z-index: 10000; background: var(--dark); color: var(--white); padding: 0.6rem 0.75rem; border-radius: 8px; font-size: 0.8rem; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.3); pointer-events: none; max-width: 260px; line-height: 1.35; display: none; }
         .kiosk-marker-tip strong { display: block; margin-bottom: 0.15rem; }
 
+
+        #kiosk-chart-legend { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 55%; overflow-y: auto; background: rgba(255,255,255,0.97); border: 1px solid var(--gray-light); border-radius: 10px; padding: 0.6rem 0.8rem; display: none; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.9rem; z-index: 6; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12); font-size: 0.85rem; }
+

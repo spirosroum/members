@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.96 (16:19) — Mobile chart UX & Throne renames
+- Mobile: the all-members hover tooltip no longer fires on touch-scroll (built-in tooltip is desktop-only); the bottom color/name legend is hidden and now appears as a compact overlay only when the user taps inside the chart
+- Renamed «Proclaimed King Days» to «Total Crown Hold Time» (EN/EL)
+- King bar stats renamed: Points → «Trainings / Προπονήσεις», Days on Throne → «Throne Streak / Σερί στο Θρόνο» (Crown Defenses already counted per current streak)
+
 ## 2026-08-23 — v0.95 (16:07) — Throne wording, range buttons simplified, training dots
 - Wording: «challenged the King», «sat on the Throne» (first proclamation), «stole the Crown», «Current Crown Holder», «Days on Throne in the last 90 days» (EN/EL)
 - Chart ranges reduced to «Last 90 days» and «All-time» (Custom and Last month removed); stale saved ranges fall back to 90 days

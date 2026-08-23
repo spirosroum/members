@@ -1231,8 +1231,9 @@ Object.assign(App, {
                         interaction: { mode: 'index', intersect: false },
                         layout: { padding: { top: topPad, bottom: bottomPad, right: isDesktop ? maxNameLen * 6 + 14 : 0 } },
                         plugins: {
-                            legend: { display: !isDesktop, position: 'bottom', labels: { boxWidth: 12, padding: 8 } },
+                            legend: { display: false },
                             tooltip: {
+                                enabled: isDesktop,
                                 filter: item => {
                                     const d = datasets.find(x => x._memberId === item.dataset._memberId);
                                     const v = d && countAt[d._memberId][item.label];
@@ -1313,6 +1314,18 @@ Object.assign(App, {
                     tip.style.top = (rect.top + hit.y - 10) + 'px';
                 };
                 const hideTip = () => { if (tip) tip.style.display = 'none'; };
+                let lg = document.getElementById('kiosk-chart-legend');
+                if (!lg) {
+                    lg = document.createElement('div');
+                    lg.id = 'kiosk-chart-legend';
+                    wrap.appendChild(lg);
+                }
+                lg.innerHTML = datasets.map(ds => `
+                    <div style="display:flex; align-items:center; gap:0.45rem; min-width:0;">
+                        <span style="width:13px; height:13px; border-radius:4px; background:${ds.borderColor}; flex-shrink:0;"></span>
+                        <span style="color:var(--dark); overflow-wrap:anywhere;">${Utils.escapeHTML(ds.label.replace('👑 ', ''))}</span>
+                    </div>`).join('');
+                lg.style.display = 'none';
                 canvas.onmousemove = e => {
                     const rect = canvas.getBoundingClientRect();
                     const mx = e.clientX - rect.left;
@@ -1325,9 +1338,14 @@ Object.assign(App, {
                     const mx = e.clientX - rect.left;
                     const my = e.clientY - rect.top;
                     const hit = markerHits.find(h => Math.abs(h.x - mx) <= 14 && my >= h.y - 22 && my <= h.y + 8);
-                    if (hit) showTip(hit); else hideTip();
+                    if (hit) { showTip(hit); return; }
+                    hideTip();
+                    if (!isDesktop) {
+                        const show = lg.style.display === 'none';
+                        lg.style.display = show ? 'grid' : 'none';
+                    }
                 };
-                canvas.onmouseleave = hideTip;
+                canvas.onmouseleave = () => { hideTip(); };
 
                 App.renderHuntLog(crownEvents, displayNameById);
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
