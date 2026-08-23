@@ -546,18 +546,23 @@ Object.assign(App, {
                 return `<span class="kiosk-lb-rank-num">${rank}</span>`;
             },
 
-            // First names only; when two members share a first name, append the
-            // leading letters of the last name just enough to disambiguate.
+            // First names only; when two members share a first name, abbreviate the
+            // last name through its first consonant with a trailing dot («Νίκος Π.»),
+            // extending letter-by-letter only as far as needed to stay unique.
             kioskDisplayNames: (members) => {
+                const vowels = 'aeiouyαεηιουωϊϋάέήίόύώ';
+                const isVowel = ch => vowels.includes(ch.toLowerCase());
                 const list = members.map(m => ({ first: (m.firstName || '').trim(), last: (m.lastName || '').trim() }));
                 return list.map((m, i) => {
                     let name = m.first || m.last || '';
                     if (m.first && m.last) {
                         const rivals = list.filter((x, j) => j !== i && x.first === m.first);
                         if (rivals.length) {
-                            let k = 1;
+                            let k = 0;
+                            while (k < m.last.length && isVowel(m.last[k])) k++;
+                            k = Math.min(k + 1, m.last.length);
                             while (k < m.last.length && rivals.some(r => r.last.slice(0, k) === m.last.slice(0, k))) k++;
-                            name = m.first + ' ' + m.last.slice(0, k);
+                            name = m.first + ' ' + m.last.slice(0, k) + (k < m.last.length ? '.' : '');
                         }
                     }
                     return name;

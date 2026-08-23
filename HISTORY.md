@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.84 (12:58) — Dotted last-name abbreviations on kiosk leaderboard
+- Disambiguation names now end with a dot: the last name is kept only up to and including its first consonant («Νίκος Π.», «Γιώργος Ιωάν.»)
+- Letters extend past the first consonant only when needed to stay unique between same-first-name members («Νίκος Παπ.» vs «Νίκος Παπα.»)
+
 ## 2026-08-23 — v0.83 (12:50) — First-name display on kiosk leaderboard & Crown Hunt
 - Kiosk Training Leaderboard, Crown Hunt chart labels (right-side names, mobile legend, tooltips) and Proclaimed King Days list now show the member's first name only
 - When two displayed members share a first name, just enough leading letters of the last name are appended to disambiguate («Νίκος Παπα» vs «Νίκος Παπ»); fully identical names fall back to the full last name
