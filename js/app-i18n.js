@@ -581,7 +581,6 @@ App.applyKioskTranslations = function() {
         });
         const huntLogTitle = document.getElementById('hunt-log-title'); if (huntLogTitle) huntLogTitle.innerText = map.huntLogTitle || 'Hunt Log';
         const huntLogSubtitle = document.getElementById('hunt-log-subtitle'); if (huntLogSubtitle) huntLogSubtitle.innerText = map.huntLogSubtitle || 'Challenges and crown takeovers.';
-        const hallTitle = document.getElementById('hall-of-kings-title'); if (hallTitle) hallTitle.innerText = '🏆 ' + (map.hallOfKingsTitle || 'HALL OF KINGS');
         const periodTitle = document.getElementById('period-winners-title'); if (periodTitle) periodTitle.innerText = map.periodWinnersTitle || 'Crown Bounty Winners';
         const bountyLbTitle = document.getElementById('bounty-leaderboard-title'); if (bountyLbTitle) bountyLbTitle.innerText = map.bountyLeaderboardTitle || 'Crown Bounty Leaderboard';
         const bountyLbSubtitle = document.getElementById('bounty-leaderboard-subtitle'); if (bountyLbSubtitle) bountyLbSubtitle.innerText = map.bountyLeaderboardSubtitle || 'Every training counts — hold your place until someone breaks it!';

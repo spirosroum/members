@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.12 (02:50) — Shared-place arrows fixed; Hall of Kings temporarily removed
+
+- Leaderboard places now use competition ranking (1224): equal counts share a place, listed by who reached it first — this is the ranking the ▲/▼ indicators compare against
+- Indicators fixed: climbing any shared place shows ▲ green (Manos 4th→3rd), being displaced shows ▼ red (Giorgos Panagiotidis), and kings who keep training together hold the same shared place with no arrow (Maria case)
+- Hall of Kings temporarily removed (section markup, renderer and i18n hook) until its stats are reworked; Crown Bounty Winners is unaffected
+
 ## 2026-08-23 — v1.11 (02:10) — Crown requires identical history, tier arrows, roster safety
 
 - 👑 now requires the member to be tied at the top count AND have a training history exactly identical to the earliest top holder — Manos (first check-in Aug 4, a day late) is no longer crowned and sits 5th by reach order
