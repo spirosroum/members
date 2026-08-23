@@ -974,7 +974,8 @@ Object.assign(App, {
                 }));
 
                 const map = App.KIOSK_I18N[App.currentKioskLang || 'en'] || App.KIOSK_I18N.en;
-                const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                const tickLocale = (App.currentKioskLang === 'el') ? 'el-GR' : undefined;
+                const dateFmt = d => new Date(d + 'T12:00:00').toLocaleDateString(tickLocale, { day: 'numeric', month: 'short', year: 'numeric' });
 
                 // Resolve which of the given member ids hold the crown: one unless
                 // all share exactly the same training history (identical count on
@@ -1157,7 +1158,21 @@ Object.assign(App, {
                             }
                         },
                         scales: {
-                            x: { ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 12 }, grid: { display: false } },
+                            x: {
+                                ticks: {
+                                    maxRotation: 0,
+                                    autoSkip: true,
+                                    maxTicksLimit: 10,
+                                    callback: function(value) {
+                                        const raw = this.getLabelForValue(value);
+                                        const d = new Date(raw + 'T12:00:00');
+                                        if (isNaN(d.getTime())) return raw;
+                                        if (d.getMonth() === 0) return d.toLocaleDateString(tickLocale, { day: 'numeric', month: 'short', year: 'numeric' });
+                                        return d.toLocaleDateString(tickLocale, { day: 'numeric', month: 'short' });
+                                    }
+                                },
+                                grid: { display: false }
+                            },
                             y: { min: 1, ticks: { precision: 0 }, grid: { color: 'rgba(0,0,0,0.06)' } }
                         }
                     }
