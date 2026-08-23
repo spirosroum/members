@@ -2,6 +2,16 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.09 (00:40) — Crown event fixes, per-period Hall of Kings, label ranking, countdown sync
+
+- Chart: a 👑 marker now appears every time the number of kings is reduced (one co-king pulls ahead alone → «took the Throne alone» / «κράτησε μόνος του τον Θρόνο»), in markers, tooltips and Hunt Log
+- Defenses: reign-scoped — any extension by the King group after ANY challenge of the current reign records a 🛡️ defense (fixes missing defenses, e.g. Aug 6)
+- Crown sharing restored to identical-histories rule; the final king group only keeps members identical to the primary King and still tied at his record (fixes stale crowns like Fransisco's on 14/8)
+- Hall of Kings: records are now computed PER PERIOD (crown/score reset each period) — Highest Score, Longest Reign, Most/Total Defenses no longer span periods; reign days are end-exclusive
+- Removed «👑 Bounty» badge from the Bounty Leaderboard header
+- Chart right-side names are ordered by leaderboard ranking (count desc, earlier reach first) within tied groups
+- Countdown and Winners «days left» now use the same formula (exclusive period end + ceil) — both show the same number
+
 ## 2026-08-23 — v1.08 (23:55) — Crown group fixes, Hunt Log cleanup, winners countdown, input width
 
 - Crown Bounty Leaderboard: the 👑 now marks every member of the reigning Crown group (not just place 1) — all tied throne holders are visible as of the selected date

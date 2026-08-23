@@ -855,13 +855,14 @@ Object.assign(App, {
             // Single source of truth for Crown events — the Hunt Log and the
             // chart markers both render from this. Replays every training
             // increment in chronological order:
-            //  - The Crown is claimable from the very first workout: everyone
-            //    tied at the end-of-day top claims it together.
-            //  - The reigning group holds the Crown while tied at its record;
-            //    a rival matching the record issues a ⚔️ challenge (once per
-            //    reign), exceeding it steals the Crown 👑.
-            //  - The group extending its record during an active challenge is
-            //    a 🛡️ defense.
+            //  - The Crown is claimable from the very first workout; everyone
+            //    tied at the end-of-day top claims it, and only members with
+            //    exactly identical training histories keep sharing it.
+            //  - A rival matching the record issues a ⚔️ challenge (once per
+            //    reign); exceeding it steals the Crown 👑.
+            //  - The King group extending its record after any challenge is a
+            //    🛡️ defense; pulling ahead alone reduces the number of kings
+            //    and emits a 👑 sole-hold event.
             getCrownEvents: (series) => {
                 const stream = [];
                 series.forEach(s => {
@@ -872,9 +873,31 @@ Object.assign(App, {
                 if (!stream.length) return [];
                 stream.sort((a, b) => new Date(a.ts) - new Date(b.ts));
 
-                // Two members share the Crown while they are tied at the top:
-                // the reigning group is proclaimed together and every member
-                // still tied at the group's record keeps holding it.
+                // Two members share the Crown only while their training
+                // histories are identical (same cumulative count on every date
+                // up to `limit`).
+                const ptMap = {};
+                series.forEach(s => { ptMap[s.member.id] = s.points; });
+                const countOn = (id, date) => {
+                    const pts = ptMap[id];
+                    let c = null;
+                    for (let i = 0; i < pts.length && pts[i].date <= date; i++) c = pts[i].count;
+                    return c;
+                };
+                const identicalThrough = (a, b, limit) => {
+                    const dates = new Set();
+                    ptMap[a].forEach(p => { if (p.date <= limit) dates.add(p.date); });
+                    ptMap[b].forEach(p => { if (p.date <= limit) dates.add(p.date); });
+                    for (const d of dates) {
+                        if (countOn(a, d) !== countOn(b, d)) return false;
+                    }
+                    return true;
+                };
+
+                // Pass A: proclamation on the first active day. Everyone tied
+                // at the end-of-day top claims the Crown together — but only
+                // those with histories identical to the earliest claimant keep
+                // sharing it; the rest fall away as their histories diverge.
                 const sMap = {};
                 series.forEach(s => { sMap[s.member.id] = s; });
                 let kingId = null;
@@ -908,7 +931,7 @@ Object.assign(App, {
                     kingId = best;
                     kingCount = maxC;
                     proclaimDate = date;
-                    coBreakers = holders.filter(id => id !== best);
+                    coBreakers = holders.filter(id => id !== best && identicalThrough(id, best, date));
                     break;
                 }
                 if (kingId === null) return [];
@@ -925,14 +948,17 @@ Object.assign(App, {
                 }];
 
                 // Pass B: challenges and takeovers from the proclamation onward.
-                // The reigning group extends the record silently — unless a
-                // challenger is pending, which turns the extension into a 🛡️
-                // defense. A rival reaching exactly the record issues ONE ⚔️
-                // challenge per reign; exceeding it steals the Crown 👑 and
-                // starts a new reigning group.
+                // Co-kings with identical histories extending the record are
+                // silent — unless a challenge happened since the last defense,
+                // which turns the extension into a 🛡️ defense. A rival reaching
+                // exactly the record issues ONE ⚔️ challenge per reign; exceeding
+                // it steals the Crown 👑. When co-kings' histories diverge
+                // because one pulls ahead alone, the number of kings is reduced
+                // and a 👑 "sole hold" event marks the moment.
                 let kingGroup = [kingId].concat(coBreakers);
-                let challengers = [];
                 const challengedInReign = new Set();
+                const reignChallengers = [];
+                let reignChallenged = false;
                 let coronation = { date: proclaimDate, memberId: kingId };
                 let lastActivity = proclaimDate;
                 const latestCounts = {};
@@ -940,12 +966,17 @@ Object.assign(App, {
                     latestCounts[ev.memberId] = ev.count;
                     if (ev.date > lastActivity) lastActivity = ev.date;
                     if (ev.date <= proclaimDate) return;
-                    if (kingGroup.includes(ev.memberId)) {
+                    if (kingGroup.includes(ev.memberId) || identicalThrough(ev.memberId, kingId, ev.date)) {
                         if (ev.count > kingCount) {
-                            if (challengers.length > 0) {
-                                events.push({ type: 'defense', memberId: ev.memberId, alsoIds: kingGroup.filter(i => i !== ev.memberId), count: ev.count, date: ev.date, ts: ev.ts, challengerIds: challengers.slice(), challengerCount: kingCount });
-                                challengers = [];
+                            if (reignChallenged && reignChallengers.length > 0) {
+                                events.push({ type: 'defense', memberId: ev.memberId, alsoIds: kingGroup.filter(i => i !== ev.memberId), count: ev.count, date: ev.date, ts: ev.ts, challengerIds: reignChallengers.slice(), challengerCount: kingCount });
+                                reignChallengers.length = 0;
+                                reignChallenged = false;
                                 challengedInReign.clear();
+                            }
+                            const dropped = kingGroup.filter(id => id !== ev.memberId && (latestCounts[id] ?? 0) === kingCount);
+                            if (dropped.length > 0 && !identicalThrough(ev.memberId, dropped[0], ev.date)) {
+                                events.push({ type: 'consolidate', memberId: ev.memberId, alsoIds: [], count: ev.count, date: ev.date, ts: ev.ts, prevKingIds: dropped.slice(), prevKingCount: kingCount });
                             }
                             kingCount = ev.count;
                         }
@@ -954,23 +985,23 @@ Object.assign(App, {
                     if (ev.count === kingCount) {
                         if (!challengedInReign.has(ev.memberId)) {
                             challengedInReign.add(ev.memberId);
-                            challengers.push(ev.memberId);
+                            reignChallengers.push(ev.memberId);
+                            reignChallenged = true;
                             events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
-                        } else if (!challengers.includes(ev.memberId)) {
-                            challengers.push(ev.memberId);
                         }
                     } else if (ev.count > kingCount) {
                         events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                         kingId = ev.memberId;
                         kingCount = ev.count;
                         kingGroup = [ev.memberId];
-                        challengers = [];
+                        reignChallengers.length = 0;
+                        reignChallenged = false;
                         challengedInReign.clear();
                         coronation = { date: ev.date, memberId: ev.memberId };
                     }
                 });
 
-                kingGroup = kingGroup.filter(id => (latestCounts[id] ?? 0) >= kingCount);
+                kingGroup = kingGroup.filter(id => (latestCounts[id] ?? 0) >= kingCount && identicalThrough(id, kingId, lastActivity));
 
                 let defenses = 0;
                 for (let i = events.length - 1; i >= 0; i--) {
@@ -1026,7 +1057,7 @@ Object.assign(App, {
                     const prevNames = (ev.prevKingIds && ev.prevKingIds.length ? ev.prevKingIds : [ev.prevKingId])
                         .map(id => nameById[id] || '?').join(' & ');
                     const chalNames = (ev.challengerIds || []).map(id => nameById[id] || '?').join(' & ');
-                    const emoji = ev.type === 'king' ? '👑' : (ev.type === 'defense' ? '🛡️' : '⚔️');
+                    const emoji = ev.type === 'king' || ev.type === 'consolidate' ? '👑' : (ev.type === 'defense' ? '🛡️' : '⚔️');
                     let action;
                     let detail;
                     if (ev.type === 'king') {
@@ -1037,6 +1068,9 @@ Object.assign(App, {
                             detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
                                 .replace('{k}', prevNames).replace('{c}', ev.count);
                         }
+                    } else if (ev.type === 'consolidate') {
+                        action = map.huntTookThrone || 'took the Throne alone';
+                        detail = (map.huntBrokeAway || 'Broke away from {k}.').replace('{k}', prevNames);
                     } else if (ev.type === 'defense') {
                         action = map.huntDefense || 'defended the Crown';
                         detail = (map.huntHeldOff || 'Held off the challenge ({k}) with {c} trainings.')
@@ -1088,36 +1122,59 @@ Object.assign(App, {
                 const section = document.getElementById('hall-of-kings-section');
                 if (!grid || !section) return;
                 const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
-                const until = new Date();
-                until.setHours(23, 59, 59, 999);
-                const series = App.getCumulativeTrainingSeries(members, new Date(0), until);
-                const result = App.getCrownEvents(series);
-                const events = result.events;
+                if (!members.length) { section.classList.add('hidden'); return; }
                 const nameById = {};
                 const allNames = App.kioskDisplayNames(members);
                 members.forEach((m, i) => { nameById[m.id] = allNames[i]; });
 
-                let highest = null;
-                series.forEach(s => {
-                    const c = s.points.length ? s.points[s.points.length - 1].count : 0;
-                    if (c > 0 && (!highest || c > highest.count)) highest = { id: s.member.id, count: c };
-                });
-
-                const kingEvents = events.filter(e => e.type === 'king');
                 const todayMid = new Date();
                 todayMid.setHours(0, 0, 0, 0);
+                const tomorrowMid = new Date(todayMid.getTime() + 86400000);
+                const firstActivity = (() => {
+                    let min = null;
+                    App.getCumulativeTrainingSeries(members, new Date(0), todayMid).forEach(s => {
+                        if (s.points.length && (!min || s.points[0].date < min)) min = s.points[0].date;
+                    });
+                    return min;
+                })();
+                if (!firstActivity) { section.classList.add('hidden'); return; }
+
+                const startYear = parseInt(firstActivity.slice(0, 4), 10) - 1;
+                const endYear = todayMid.getFullYear() + 1;
+                const periods = [];
+                for (let y = startYear; y <= endYear; y++) {
+                    periods.push({ n: 1, start: new Date(y, 10, 1), end: new Date(y + 1, 2, 1) });
+                    periods.push({ n: 2, start: new Date(y + 1, 2, 1), end: new Date(y + 1, 6, 1) });
+                    periods.push({ n: 3, start: new Date(y + 1, 6, 1), end: new Date(y + 1, 10, 1) });
+                }
+
+                let highest = null;
                 let longest = null;
-                kingEvents.forEach((ke, i) => {
-                    const start = new Date(ke.date + 'T00:00:00');
-                    const endExcl = i + 1 < kingEvents.length ? new Date(kingEvents[i + 1].date + 'T00:00:00') : new Date(todayMid.getTime() + 86400000);
-                    const days = Math.max(1, Math.round((endExcl - start) / 86400000));
-                    if (!longest || days > longest.days) longest = { id: ke.memberId, alsoIds: ke.alsoIds || [], days };
+                const defCounts = {};
+                let totalDefs = 0;
+                periods.forEach(p => {
+                    if (p.start > todayMid) return;
+                    const endBoundary = new Date(Math.min(p.end.getTime(), tomorrowMid.getTime()));
+                    const periodSeries = App.getCumulativeTrainingSeries(members, p.start, endBoundary);
+                    if (!periodSeries.length) return;
+                    periodSeries.forEach(s => {
+                        const c = s.points.length ? s.points[s.points.length - 1].count : 0;
+                        if (c > 0 && (!highest || c > highest.count)) highest = { id: s.member.id, count: c };
+                    });
+                    const res = App.getCrownEvents(periodSeries);
+                    res.events.filter(e => e.type === 'defense').forEach(de => {
+                        totalDefs++;
+                        [de.memberId].concat(de.alsoIds || []).forEach(id => { defCounts[id] = (defCounts[id] || 0) + 1; });
+                    });
+                    const kingEvents = res.events.filter(e => e.type === 'king');
+                    kingEvents.forEach((ke, i) => {
+                        const start = new Date(ke.date + 'T00:00:00');
+                        const endExcl = i + 1 < kingEvents.length ? new Date(kingEvents[i + 1].date + 'T00:00:00') : endBoundary;
+                        const days = Math.max(1, Math.round((endExcl - start) / 86400000));
+                        if (!longest || days > longest.days) longest = { id: ke.memberId, alsoIds: ke.alsoIds || [], days };
+                    });
                 });
 
-                const defCounts = {};
-                events.filter(e => e.type === 'defense').forEach(de => {
-                    [de.memberId].concat(de.alsoIds || []).forEach(id => { defCounts[id] = (defCounts[id] || 0) + 1; });
-                });
                 let mostDefs = null;
                 Object.keys(defCounts).forEach(id => {
                     if (!mostDefs || defCounts[id] > mostDefs.count) mostDefs = { id, count: defCounts[id] };
@@ -1139,24 +1196,28 @@ Object.assign(App, {
                 if (highest) cards.push(card(map.hallHighestScore || 'Highest Score', `${holder(highest.id)} — ${highest.count} ${Utils.escapeHTML(trainingsWord)}`));
                 if (longest) cards.push(card(map.hallLongestReign || 'Longest Reign', `${holder(longest.id, longest.alsoIds)} — ${longest.days} ${Utils.escapeHTML(daysWord)}`));
                 if (mostDefs) cards.push(card(map.hallMostDefenses || 'Most Crown Defenses', `${holder(mostDefs.id)} — ${mostDefs.count}`));
-                const totalDefs = events.filter(e => e.type === 'defense').length;
                 cards.push(card(map.hallTotalDefenses || 'Total Crown Defenses', `🛡️ — ${totalDefs}`));
 
-                if (!cards.length) { section.classList.add('hidden'); return; }
                 section.classList.remove('hidden');
                 grid.innerHTML = cards.join('');
-                App.renderPeriodWinners({ members, series, events, nameById });
             },
 
             // Crown Bounty periods (4 months each): Nov–Feb, Mar–Jun, Jul–Oct.
             // The Crown Holder on the final day of a period wins that period.
-            renderPeriodWinners: (ctx) => {
+            renderPeriodWinners: () => {
                 const list = document.getElementById('period-winners-list');
                 const section = document.getElementById('period-winners-section');
                 if (!list || !section) return;
-                if (!ctx || !ctx.events) { section.classList.add('hidden'); return; }
-                const kingEvents = ctx.events.filter(e => e.type === 'king');
+                const members = DB.getMembers().filter(m => !m.hideFromLeaderboard);
+                const until = new Date();
+                until.setHours(23, 59, 59, 999);
+                const series = App.getCumulativeTrainingSeries(members, new Date(0), until);
+                const result = App.getCrownEvents(series);
+                const kingEvents = result.events.filter(e => e.type === 'king');
                 if (!kingEvents.length) { section.classList.add('hidden'); return; }
+                const nameById = {};
+                const allNames = App.kioskDisplayNames(members);
+                members.forEach((m, i) => { nameById[m.id] = allNames[i]; });
 
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
@@ -1166,9 +1227,9 @@ Object.assign(App, {
                 todayMid.setHours(0, 0, 0, 0);
                 const firstActivity = (() => {
                     let min = null;
-                    ctx.series.forEach(s => {
-                        if (s.points.length && (!min || s.points[0].date < min)) min = s.points[0].date;
-                    });
+                series.forEach(s => {
+                    if (s.points.length && (!min || s.points[0].date < min)) min = s.points[0].date;
+                });
                     return min;
                 })();
                 if (!firstActivity) { section.classList.add('hidden'); return; }
@@ -1203,7 +1264,7 @@ Object.assign(App, {
                         const daysLeft = Math.max(0, Math.ceil((p.end.getTime() - todayMid.getTime()) / 86400000));
                         rightSide = `⏳ ${daysLeft} ${Utils.escapeHTML(map.periodDaysLeft || 'days left')}`;
                     } else {
-                        const names = [lastHolder.memberId].concat(lastHolder.alsoIds || []).map(id => ctx.nameById[id] || '?').join(' & ');
+                        const names = [lastHolder.memberId].concat(lastHolder.alsoIds || []).map(id => nameById[id] || '?').join(' & ');
                         rightSide = `👑 ${Utils.escapeHTML(names)}`;
                     }
                     rows.push(`
@@ -1272,7 +1333,9 @@ Object.assign(App, {
                 const p = App.getCurrentBountyPeriod();
                 const today = new Date();
                 today.setHours(0, 0, 0, 0);
-                const days = Math.max(0, Math.round((p.endExcl - today) / 86400000));
+                const endBoundary = new Date(p.endExcl.getTime());
+                endBoundary.setDate(endBoundary.getDate() + 1);
+                const days = Math.max(0, Math.ceil((endBoundary - today) / 86400000));
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
                 const dayWord = days === 1 ? (map.bountyDayWord || 'day') : (map.bountyDaysWord || 'days');
@@ -1437,18 +1500,24 @@ Object.assign(App, {
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
 
                 // Spread right-side labels so members tied on the same final count
-                // don't stack on top of one another. The king is placed at the top
-                // of its tied group so he always appears above his equals.
+                // don't stack on top of one another. Tied names are ordered by
+                // leaderboard ranking (count desc, earlier reach first), so the
+                // right side reads top-to-bottom in exact ranking order.
+                const rankOfMember = {};
+                series.slice().sort((a, b) => {
+                    const ca = a.points.length ? a.points[a.points.length - 1].count : 0;
+                    const cb = b.points.length ? b.points[b.points.length - 1].count : 0;
+                    if (ca !== cb) return cb - ca;
+                    const ta = (a.firstTimeAtCount && a.firstTimeAtCount[ca]) ? new Date(a.firstTimeAtCount[ca]).getTime() : Infinity;
+                    const tb = (b.firstTimeAtCount && b.firstTimeAtCount[cb]) ? new Date(b.firstTimeAtCount[cb]).getTime() : Infinity;
+                    return ta - tb;
+                }).forEach((s, i) => { rankOfMember[s.member.id] = i + 1; });
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
                 Object.values(yGroups).forEach(indices => {
                     const n = indices.length;
-                    indices.sort((a, b) => {
-                        const ak = kingIds.has(datasets[a]._memberId) ? 0 : 1;
-                        const bk = kingIds.has(datasets[b]._memberId) ? 0 : 1;
-                        return ak - bk;
-                    });
+                    indices.sort((a, b) => rankOfMember[datasets[a]._memberId] - rankOfMember[datasets[b]._memberId]);
                     indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 14; });
                 });
 
@@ -1508,7 +1577,7 @@ Object.assign(App, {
                             let off = 0;
                             while (placed.some(d => Math.abs(d.x - p.x) < 14 && Math.abs(d.y - (p.y - 8 - off)) < 15)) off += 16;
                             const y = p.y - 8 - off;
-                            const evEmoji = p.ev.type === 'king' ? '👑' : (p.ev.type === 'defense' ? '🛡️' : '⚔️');
+                            const evEmoji = p.ev.type === 'king' || p.ev.type === 'consolidate' ? '👑' : (p.ev.type === 'defense' ? '🛡️' : '⚔️');
                             ctx.fillText(evEmoji, p.x, y);
                             placed.push({ x: p.x, y });
                             markerHits.push({ x: p.x, y, ev: p.ev });
@@ -1617,6 +1686,10 @@ Object.assign(App, {
                             detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
                                 .replace('{k}', prevNames).replace('{c}', ev.count);
                         }
+                    } else if (ev.type === 'consolidate') {
+                        emoji = '👑';
+                        title = `${who} ${map.huntTookThrone || 'took the Throne alone'}`;
+                        detail = (map.huntBrokeAway || 'Broke away from {k}.').replace('{k}', prevNames);
                     } else if (ev.type === 'defense') {
                         emoji = '🛡️';
                         title = `${who} ${map.huntDefense || 'defended the Crown'}`;
@@ -1672,6 +1745,7 @@ Object.assign(App, {
                 App.renderHuntLog(crownEvents, displayNameById, crownResult);
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
                 App.renderHallOfKings && App.renderHallOfKings();
+                App.renderPeriodWinners && App.renderPeriodWinners();
                 App.renderBountyLeaderboard && App.renderBountyLeaderboard();
                 App.renderBountyCountdown();
             },
