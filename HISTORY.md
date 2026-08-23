@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.94 (15:46) — Crown Bounty rename, marker order, stable chart
+- Renamed «Crown Hunt / Κυνηγητό Στέμματος» to «Crown Bounty / Λάφυρο του Στέμματος» (title, i18n, fallbacks)
+- Takeover events now read «Stole the Crown / Άρπαξε το Στέμμα» instead of «became King» (first proclamation keeps «became King»)
+- Stacked chart markers ordered bottom-up: ⚔️ challenge below, 🛡️ defense, 👑 crown always on top
+- Fixed constant chart reloading: realtime visit pings (auto-checkout cron) no longer rebuild the chart — a data fingerprint skips the rebuild when nothing visible changed
+
 ## 2026-08-23 — v0.93 (15:16) — Crown Defense (🛡️) & Current King bar above the chart
 - New 🛡️ Crown Defense event: when an active Challenger has tied the King's record and the King then retakes the lead (+1 or more), a defense is recorded; plain King extensions without an active challenger stay silent
 - 🛡️ markers on the chart, entries in the Hunt Log («defended the Crown — Held off the challenge (Γιώργος) with 6 trainings») and marker tooltips, EN/EL

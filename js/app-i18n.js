@@ -35,7 +35,7 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Most trainings last 3 months.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Everyone',
-        chartTitle: 'Crown Hunt',
+        chartTitle: 'Crown Bounty',
         chartSubtitle: 'There can be only one King, break his record to steal his crown!',
         chartRange3m: '3 months',
         chartRange1m: 'Last month',
@@ -56,6 +56,7 @@ App.KIOSK_I18N = {
         huntBroke: 'Broke the record of {k} with {c} trainings.',
         huntDefense: 'defended the Crown',
         huntHeldOff: 'Held off the challenge ({k}) with {c} trainings.',
+        huntStoleCrown: 'Stole the Crown',
         kingInfoTitle: 'Current King',
         kingStatPoints: 'Points',
         kingStatDays: 'Days on Throne',
@@ -242,7 +243,7 @@ App.KIOSK_I18N = {
         leaderboardSubtitle: 'Οι περισσότερες προπονήσεις των τελευταίων 3 μηνών.',
         leaderboardBadge: 'Top 10',
         leaderboardAllBadge: 'Όλοι',
-        chartTitle: 'Κυνηγητό Στέμματος',
+        chartTitle: 'Λάφυρο του Στέμματος',
         chartSubtitle: 'Μόνο ένας μπορεί να είναι Βασιλιάς, σπάσε το ρεκόρ του για να του κλέψεις το στέμμα!',
         chartRange3m: '3 μήνες',
         chartRange1m: 'Τελευταίος μήνας',
@@ -263,6 +264,7 @@ App.KIOSK_I18N = {
         huntBroke: 'Έσπασε το ρεκόρ ({k}) με {c} προπονήσεις.',
         huntDefense: 'υπεράσπισε το Στέμμα',
         huntHeldOff: 'Άντεξε την πρόκληση ({k}) με {c} προπονήσεις.',
+        huntStoleCrown: 'Άρπαξε το Στέμμα',
         kingInfoTitle: 'Τρέχων Βασιλιάς',
         kingStatPoints: 'Πόντοι',
         kingStatDays: 'Ημέρες στο Θρόνο',
@@ -531,7 +533,7 @@ App.applyKioskTranslations = function() {
         const leaderboardSubtitle = document.getElementById('kiosk-leaderboard-subtitle'); if (leaderboardSubtitle) leaderboardSubtitle.innerText = map.leaderboardSubtitle || 'Most trainings last 3 months.';
         const leaderboardBadge = document.getElementById('kiosk-leaderboard-badge'); if (leaderboardBadge) leaderboardBadge.innerText = map.leaderboardBadge || 'Top 10';
 
-        const chartTitle = document.getElementById('kiosk-chart-title'); if (chartTitle) chartTitle.innerText = map.chartTitle || 'Crown Hunt';
+        const chartTitle = document.getElementById('kiosk-chart-title'); if (chartTitle) chartTitle.innerText = map.chartTitle || 'Crown Bounty';
         const chartSubtitle = document.getElementById('kiosk-chart-subtitle'); if (chartSubtitle) chartSubtitle.innerText = map.chartSubtitle || 'There can be only one King, break his record to steal his crown!';
         const chartNoTrainings = document.getElementById('kiosk-training-chart-empty'); if (chartNoTrainings) chartNoTrainings.innerText = map.chartNoTrainings || 'No trainings recorded in this period.';
         document.querySelectorAll('.kiosk-chart-range-btn').forEach(btn => {

@@ -872,7 +872,7 @@ Object.assign(App, {
                     let action;
                     let detail;
                     if (ev.type === 'king') {
-                        action = map.huntNewKing || 'became King';
+                        action = ev.prevKingId ? (map.huntStoleCrown || 'Stole the Crown') : (map.huntNewKing || 'became King');
                         if (!ev.prevKingId) {
                             detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
                         } else {
@@ -938,7 +938,7 @@ Object.assign(App, {
                 App.renderKioskChart();
             },
 
-            renderKioskChart: () => {
+            renderKioskChart: (force) => {
                 const canvas = document.getElementById('kiosk-training-chart');
                 if (!canvas) return;
                 if (typeof Chart === 'undefined') {
@@ -975,6 +975,17 @@ Object.assign(App, {
                 }
 
                 const series = App.getCumulativeTrainingSeries(members, since, until);
+
+                // Skip the full chart rebuild when nothing visible changed —
+                // realtime visit pings (e.g. the auto-checkout cron) would
+                // otherwise re-create the chart every few seconds.
+                const scrollProbe = canvas.parentElement ? canvas.parentElement.parentElement : null;
+                const fp = [App.currentKioskLang, range, since ? since.getTime() : '', until.getTime(), window.innerWidth,
+                    scrollProbe ? scrollProbe.clientWidth : 0,
+                    series.map(s => s.member.id + ':' + s.points.map(p => p.date + '=' + p.count).join(';')).join('|')].join('~');
+                if (!force && fp === App._kioskChartFp) return;
+                App._kioskChartFp = fp;
+
                 const holder = document.getElementById('kiosk-training-chart-container');
                 if (holder) holder.classList.remove('hidden');
                 const empty = document.getElementById('kiosk-training-chart-empty');
@@ -1168,7 +1179,8 @@ Object.assign(App, {
                             if (!pt || !isFinite(pt.x) || !isFinite(pt.y)) return;
                             pts.push({ x: pt.x, y: pt.y, ev });
                         });
-                        pts.sort((a, b) => a.x - b.x || a.y - b.y);
+                        pts.sort((a, b) => a.x - b.x || a.y - b.y ||
+                            ({ challenge: 0, defense: 1, king: 2 }[a.ev.type] || 0) - ({ challenge: 0, defense: 1, king: 2 }[b.ev.type] || 0));
                         const placed = [];
                         pts.forEach(p => {
                             let off = 0;
@@ -1272,7 +1284,7 @@ Object.assign(App, {
                     let detail;
                     if (ev.type === 'king') {
                         emoji = '👑';
-                        title = `${who} ${map.huntNewKing || 'became King'}`;
+                        title = `${who} ${ev.prevKingId ? (map.huntStoleCrown || 'Stole the Crown') : (map.huntNewKing || 'became King')}`;
                         if (!ev.prevKingId) {
                             detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
                         } else {
