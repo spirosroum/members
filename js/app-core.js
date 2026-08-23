@@ -1714,7 +1714,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 App.cleanupClassCheckins();
                 if (typeof App.setKioskChartRange === 'function') {
                     const saved = localStorage.getItem('kiosk_chart_range');
-                    App.chartRange = ['3m', '1m', 'all'].includes(saved) ? saved : '3m';
+                    App.chartRange = ['period', 'all'].includes(saved) ? saved : 'period';
                     const rangeBtn = document.querySelector('.kiosk-chart-range-btn[data-range="' + App.chartRange + '"]');
                     if (rangeBtn) rangeBtn.classList.add('active');
                     App.renderKioskChart && App.renderKioskChart();

@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.99 (18:42) — Period-based Crown Bounty, countdown, winners fixes
+- All Crown Hunt sections (chart, Hunt Log, Total Crown Hold Time, markers, king bar) now run on the current 4-month bounty period instead of the last 90 days; each new period starts fresh while past data lives on in the winners log
+- Chart range buttons: «Current Period» and «All-time» (stale saved ranges fall back to Current Period)
+- New countdown banner above the chart: «⚔️ Only N days until the Crown Bounty ends! 👑🔥» (EN/EL)
+- Crown Bounty Winners fixed: future periods no longer listed as ongoing; newest 3 shown with the rest scrollable (newest first)
+- Hall of Kings: added «Total Crown Defenses» all-time card
+
 ## 2026-08-23 — v0.98 (18:16) — Bounty periods, Hall tweaks, admin schedule toggle
 - Hall of Kings: removed Most Crowns; Highest Score now shows «— N Trainings», Longest Reign «— N days»
 - New «Crown Bounty Winners» log: 4-month periods (Nov–Feb, Mar–Jun, Jul–Oct); the Crown Holder on the final day of each period wins it; the running period is marked «ongoing»

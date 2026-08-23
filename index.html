@@ -147,6 +147,7 @@
                 <div id="kiosk-leaderboard-container" class="kiosk-card-body" style="max-height: 330px; overflow-y: auto;"></div>
             </div>
             <div class="kiosk-card hidden" id="kiosk-training-chart-container" style="grid-column: 1 / -1;">
+                <div id="bounty-countdown" class="hidden" style="background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 55%, #6d28d9 100%); color:#ffffff; padding:0.8rem 1.5rem; font-weight:800; font-size:1.05rem; text-align:center; letter-spacing:0.3px; border-radius: var(--border-radius) var(--border-radius) 0 0;"></div>
                 <div class="kiosk-card-header">
                     <div>
                         <h3 id="kiosk-chart-title" style="margin: 0;">Crown Bounty</h3>
@@ -154,7 +155,7 @@
                     </div>
                 </div>
                 <div class="flex gap-1 align-center mt-1" style="flex-wrap: wrap; padding: 0.75rem 1.5rem;">
-                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="3m" onclick="App.setKioskChartRange('3m')">Last 90 days</button>
+                    <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="period" onclick="App.setKioskChartRange('period')">Current Period</button>
                     <button class="btn-outline btn-small kiosk-chart-range-btn" data-range="all" onclick="App.setKioskChartRange('all')">All-time</button>
                 </div>
                 <div id="king-info-bar" class="hidden" style="display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:0.5rem 1.75rem; padding:0.85rem 1.5rem; border-top:1px solid var(--gray-light); border-bottom:1px solid var(--gray-light); background:#fffdf2; text-align:center;"></div>
@@ -1733,9 +1734,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20260823-21"></script>
+    <script src="js/app-core.js?v=20260823-23"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
-    <script src="js/app-kiosk.js?v=20260823-21"></script>
+    <script src="js/app-kiosk.js?v=20260823-23"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
@@ -1744,7 +1745,7 @@
     <script src="js/app-schedule.js?v=20260820-6"></script>
     <script src="js/app-payments.js?v=20260815-1"></script>
     <script src="js/app-admin.js?v=20260823-21"></script>
-    <script src="js/app-i18n.js?v=20260823-21"></script>
+    <script src="js/app-i18n.js?v=20260823-23"></script>
 
 
 </body>

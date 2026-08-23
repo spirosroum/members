@@ -995,6 +995,8 @@ Object.assign(App, {
                 if (highest) cards.push(card(map.hallHighestScore || 'Highest Score', `${holder(highest.id)} — ${highest.count} ${Utils.escapeHTML(trainingsWord)}`));
                 if (longest) cards.push(card(map.hallLongestReign || 'Longest Reign', `${holder(longest.id, longest.alsoIds)} — ${longest.days} ${Utils.escapeHTML(daysWord)}`));
                 if (mostDefs) cards.push(card(map.hallMostDefenses || 'Most Crown Defenses', `${holder(mostDefs.id)} — ${mostDefs.count}`));
+                const totalDefs = events.filter(e => e.type === 'defense').length;
+                if (totalDefs > 0) cards.push(card(map.hallTotalDefenses || 'Total Crown Defenses', `🛡️ — ${totalDefs}`));
 
                 if (!cards.length) { section.classList.add('hidden'); return; }
                 section.classList.remove('hidden');
@@ -1043,6 +1045,7 @@ Object.assign(App, {
                     const endExcl = new Date(p.end.getTime() - 1);
                     const endIso = iso(endExcl);
                     if (endExcl < new Date(firstActivity + 'T00:00:00')) return;
+                    if (p.start > todayMid) return;
                     while (evIdx < kingEvents.length && kingEvents[evIdx].date <= endIso) {
                         lastHolder = kingEvents[evIdx];
                         evIdx++;
@@ -1061,7 +1064,14 @@ Object.assign(App, {
                 });
                 if (!rows.length) { section.classList.add('hidden'); return; }
                 section.classList.remove('hidden');
-                list.innerHTML = rows.join('');
+                list.innerHTML = rows.reverse().join('');
+                const pr = list.children;
+                if (pr.length > 3 && pr[0]) {
+                    const top0 = pr[0].getBoundingClientRect().top;
+                    list.style.maxHeight = Math.ceil(pr[3].getBoundingClientRect().top - top0) + 'px';
+                } else {
+                    list.style.maxHeight = 'none';
+                }
             },
 
             setKioskChartRange: (range) => {
@@ -1075,6 +1085,48 @@ Object.assign(App, {
                 const rangeEl = document.getElementById('kiosk-chart-custom-range');
                 if (rangeEl) rangeEl.classList.toggle('hidden', !isCustom);
                 App.renderKioskChart();
+            },
+
+            // Crown Bounty periods (4 months each): Nov–Feb, Mar–Jun, Jul–Oct.
+            getCurrentBountyPeriod: () => {
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = now.getMonth();
+                let n;
+                let start;
+                let endExcl;
+                if (m >= 10) {
+                    n = 1;
+                    start = new Date(y, 10, 1);
+                    endExcl = new Date(y + 1, 2, 0);
+                } else if (m <= 1) {
+                    n = 1;
+                    start = new Date(y - 1, 10, 1);
+                    endExcl = new Date(y, 2, 0);
+                } else if (m <= 5) {
+                    n = 2;
+                    start = new Date(y, 2, 1);
+                    endExcl = new Date(y, 6, 0);
+                } else {
+                    n = 3;
+                    start = new Date(y, 6, 1);
+                    endExcl = new Date(y, 10, 0);
+                }
+                return { n, start, endExcl };
+            },
+
+            renderBountyCountdown: () => {
+                const el = document.getElementById('bounty-countdown');
+                if (!el) return;
+                const p = App.getCurrentBountyPeriod();
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const days = Math.max(0, Math.round((p.endExcl - today) / 86400000));
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const dayWord = days === 1 ? (map.bountyDayWord || 'day') : (map.bountyDaysWord || 'days');
+                el.innerHTML = `⚔️ ${map.bountyCountdownPre || 'Only'} <span style="font-size:1.4rem; color:#fde68a; padding:0 0.25rem;">${days}</span> ${Utils.escapeHTML(dayWord)} ${Utils.escapeHTML(map.bountyCountdownText || 'until the Crown Bounty ends!')} 👑🔥`;
+                el.classList.remove('hidden');
             },
 
             renderKioskChart: (force) => {
@@ -1096,20 +1148,15 @@ Object.assign(App, {
                     return;
                 }
 
-                const range = ['3m', '1m', 'all'].includes(App.chartRange) ? App.chartRange : '3m';
+                const range = ['period', 'all'].includes(App.chartRange) ? App.chartRange : 'period';
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
                 let since;
                 if (range === 'all') {
                     since = new Date(0);
-                } else if (range === 'custom') {
-                    const s = document.getElementById('kiosk-chart-custom-start').value;
-                    const e = document.getElementById('kiosk-chart-custom-end').value;
-                    since = s ? new Date(s + 'T00:00:00') : new Date(until.getTime() - 89 * 24 * 3600 * 1000);
-                    if (e) until = new Date(e + 'T23:59:59');
                 } else {
-                    const days = range === '1m' ? 30 : 90;
-                    since = new Date(until.getTime() - (days - 1) * 24 * 3600 * 1000);
+                    const p = App.getCurrentBountyPeriod();
+                    since = new Date(p.start.getTime());
                     since.setHours(0, 0, 0, 0);
                 }
 
@@ -1490,6 +1537,7 @@ Object.assign(App, {
                 App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
                 App.renderCrownHistory && App.renderCrownHistory();
                 App.renderHallOfKings && App.renderHallOfKings();
+                App.renderBountyCountdown();
             },
 
             renderCrownHistory: () => {
@@ -1504,7 +1552,8 @@ Object.assign(App, {
 
                 const until = new Date();
                 until.setHours(23, 59, 59, 999);
-                const since = new Date(until.getTime() - 89 * 24 * 3600 * 1000);
+                const p = App.getCurrentBountyPeriod();
+                const since = new Date(p.start.getTime());
                 since.setHours(0, 0, 0, 0);
 
                 const series = App.getCumulativeTrainingSeries(members, since, until);
