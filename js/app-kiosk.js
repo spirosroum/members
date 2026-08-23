@@ -795,24 +795,60 @@ Object.assign(App, {
                 // Pass B: challenges and takeovers from the proclamation onward.
                 // Co-kings with identical histories extending the record together
                 // are silent — only genuine rivals produce ⚔️/👑 events. Challenges
-                // and takeovers reference the whole reigning King group.
+                // and takeovers reference the whole reigning King group. A 🛡️
+                // defense is recorded when the King retakes the lead (+1 or more)
+                // over an active Challenger who had previously tied his record.
                 let kingGroup = [kingId].concat(coBreakers);
+                let challengers = [];
+                let coronation = { date: proclaimDate, memberId: kingId };
+                let lastActivity = proclaimDate;
+                const latestCounts = {};
                 stream.forEach(ev => {
+                    latestCounts[ev.memberId] = ev.count;
+                    if (ev.date > lastActivity) lastActivity = ev.date;
                     if (ev.date <= proclaimDate) return;
                     if (ev.memberId === kingId || identicalThrough(ev.memberId, kingId, ev.date)) {
-                        if (ev.count > kingCount) kingCount = ev.count;
+                        if (ev.count > kingCount) {
+                            if (challengers.length > 0) {
+                                events.push({ type: 'defense', memberId: ev.memberId, alsoIds: kingGroup.filter(i => i !== ev.memberId), count: ev.count, date: ev.date, ts: ev.ts, challengerIds: challengers.slice(), challengerCount: kingCount });
+                                challengers = [];
+                            }
+                            kingCount = ev.count;
+                        }
                         return;
                     }
                     if (ev.count === kingCount) {
+                        if (!challengers.includes(ev.memberId)) challengers.push(ev.memberId);
                         events.push({ type: 'challenge', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                     } else if (ev.count > kingCount) {
                         events.push({ type: 'king', memberId: ev.memberId, count: ev.count, date: ev.date, ts: ev.ts, prevKingId: kingId, prevKingIds: kingGroup.slice(), prevKingCount: kingCount });
                         kingId = ev.memberId;
                         kingCount = ev.count;
                         kingGroup = [ev.memberId];
+                        challengers = [];
+                        coronation = { date: ev.date, memberId: ev.memberId };
                     }
                 });
-                return events;
+
+                let defenses = 0;
+                for (let i = events.length - 1; i >= 0; i--) {
+                    if (events[i].type === 'king') break;
+                    if (events[i].type === 'defense') defenses++;
+                }
+                const alsoNow = series.map(s => s.member.id).filter(id => id !== kingId && identicalThrough(id, kingId, lastActivity));
+                const todayMid = new Date();
+                todayMid.setHours(0, 0, 0, 0);
+                const throneDays = coronation && coronation.date ? Math.max(1, Math.round((todayMid - new Date(coronation.date + 'T00:00:00')) / 86400000) + 1) : 0;
+                return {
+                    events,
+                    currentKing: kingId !== null ? {
+                        id: kingId,
+                        alsoIds: alsoNow,
+                        points: latestCounts[kingId] != null ? latestCounts[kingId] : kingCount,
+                        daysOnThrone: throneDays,
+                        defenses
+                    } : null
+                };
             },
 
             renderHuntLog: (events, nameById) => {
@@ -831,15 +867,24 @@ Object.assign(App, {
                     const name = [ev.memberId].concat(ev.alsoIds || []).map(id => nameById[id] || '?').join(' & ');
                     const prevNames = (ev.prevKingIds && ev.prevKingIds.length ? ev.prevKingIds : [ev.prevKingId])
                         .map(id => nameById[id] || '?').join(' & ');
-                    const emoji = ev.type === 'king' ? '👑' : '⚔️';
-                    const action = ev.type === 'king' ? (map.huntNewKing || 'became King') : (map.huntChallenge || 'challenged the Crown');
+                    const chalNames = (ev.challengerIds || []).map(id => nameById[id] || '?').join(' & ');
+                    const emoji = ev.type === 'king' ? '👑' : (ev.type === 'defense' ? '🛡️' : '⚔️');
+                    let action;
                     let detail;
-                    if (ev.type === 'king' && !ev.prevKingId) {
-                        detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
-                    } else if (ev.type === 'king') {
-                        detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
-                            .replace('{k}', prevNames).replace('{c}', ev.count);
+                    if (ev.type === 'king') {
+                        action = map.huntNewKing || 'became King';
+                        if (!ev.prevKingId) {
+                            detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
+                        } else {
+                            detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
+                                .replace('{k}', prevNames).replace('{c}', ev.count);
+                        }
+                    } else if (ev.type === 'defense') {
+                        action = map.huntDefense || 'defended the Crown';
+                        detail = (map.huntHeldOff || 'Held off the challenge ({k}) with {c} trainings.')
+                            .replace('{k}', chalNames).replace('{c}', ev.count);
                     } else {
+                        action = map.huntChallenge || 'challenged the Crown';
                         detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
                             .replace('{k}', prevNames).replace('{c}', ev.count);
                     }
@@ -863,6 +908,23 @@ Object.assign(App, {
                 }
             },
 
+            renderCurrentKingBar: (info, nameById) => {
+                const bar = document.getElementById('king-info-bar');
+                if (!bar) return;
+                if (!info || !info.id) { bar.classList.add('hidden'); return; }
+                bar.classList.remove('hidden');
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+                const names = [info.id].concat(info.alsoIds || []).map(id => (nameById && nameById[id]) || '?').join(' & ');
+                const stat = (label, value) => `<span class="text-gray" style="font-size:0.9rem; white-space:nowrap;">${Utils.escapeHTML(label)}: <strong style="color:var(--dark);">${Utils.escapeHTML(String(value))}</strong></span>`;
+                bar.innerHTML = `
+                    <span style="font-size:1.05rem;">👑 <span class="text-gray" style="font-weight:600; font-size:0.95rem;">${Utils.escapeHTML(map.kingInfoTitle || 'Current King')}:</span> <strong>${Utils.escapeHTML(names)}</strong></span>
+                    ${stat(map.kingStatPoints || 'Points', info.points)}
+                    ${stat(map.kingStatDays || 'Days on Throne', info.daysOnThrone)}
+                    ${stat(map.kingStatDefenses || 'Crown Defenses', info.defenses)}
+                `;
+            },
+
             setKioskChartRange: (range) => {
                 App.chartRange = range;
                 localStorage.setItem('kiosk_chart_range', range);
@@ -883,6 +945,7 @@ Object.assign(App, {
                     const holder = document.getElementById('kiosk-training-chart-container');
                     if (holder) holder.classList.add('hidden');
                     App.renderHuntLog && App.renderHuntLog([], {});
+                    App.renderCurrentKingBar && App.renderCurrentKingBar(null);
                     return;
                 }
                 const members = App._kioskLeaderboardMembers || [];
@@ -890,6 +953,7 @@ Object.assign(App, {
                     const holder = document.getElementById('kiosk-training-chart-container');
                     if (holder) holder.classList.add('hidden');
                     App.renderHuntLog && App.renderHuntLog([], {});
+                    App.renderCurrentKingBar && App.renderCurrentKingBar(null);
                     return;
                 }
 
@@ -919,6 +983,7 @@ Object.assign(App, {
                     if (App._kioskChartInstance) { App._kioskChartInstance.destroy(); App._kioskChartInstance = null; }
                     canvas.style.display = 'none';
                     App.renderHuntLog && App.renderHuntLog([], {});
+                    App.renderCurrentKingBar && App.renderCurrentKingBar(null);
                     return;
                 }
                 canvas.style.display = 'block';
@@ -1019,9 +1084,10 @@ Object.assign(App, {
                     return candidates;
                 };
 
-                // Crown Hunt event markers (⚔️ challenges / 👑 takeovers) share a
-                // single source of truth with the Hunt Log below the chart.
-                const crownEvents = App.getCrownEvents(series);
+                // Crown Hunt event markers (⚔️ challenges / 👑 takeovers / 🛡️
+                // defenses) share a single source of truth with the Hunt Log.
+                const crownResult = App.getCrownEvents(series);
+                const crownEvents = crownResult.events;
                 const displayNameById = {};
                 series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
@@ -1108,7 +1174,8 @@ Object.assign(App, {
                             let off = 0;
                             while (placed.some(d => Math.abs(d.x - p.x) < 14 && Math.abs(d.y - (p.y - 8 - off)) < 15)) off += 16;
                             const y = p.y - 8 - off;
-                            ctx.fillText(p.ev.type === 'king' ? '👑' : '⚔️', p.x, y);
+                            const evEmoji = p.ev.type === 'king' ? '👑' : (p.ev.type === 'defense' ? '🛡️' : '⚔️');
+                            ctx.fillText(evEmoji, p.x, y);
                             placed.push({ x: p.x, y });
                             markerHits.push({ x: p.x, y, ev: p.ev });
                         });
@@ -1199,17 +1266,26 @@ Object.assign(App, {
                     const who = [ev.memberId].concat(ev.alsoIds || []).map(id => displayNameById[id] || '?').join(' & ');
                     const prevNames = (ev.prevKingIds && ev.prevKingIds.length ? ev.prevKingIds : [ev.prevKingId])
                         .map(id => displayNameById[id] || '?').join(' & ');
-                    const emoji = ev.type === 'king' ? '👑' : '⚔️';
+                    const chalNames = (ev.challengerIds || []).map(id => displayNameById[id] || '?').join(' & ');
+                    let emoji;
                     let title;
                     let detail;
-                    if (ev.type === 'king' && !ev.prevKingId) {
+                    if (ev.type === 'king') {
+                        emoji = '👑';
                         title = `${who} ${map.huntNewKing || 'became King'}`;
-                        detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
-                    } else if (ev.type === 'king') {
-                        title = `${who} ${map.huntNewKing || 'became King'}`;
-                        detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
-                            .replace('{k}', prevNames).replace('{c}', ev.count);
+                        if (!ev.prevKingId) {
+                            detail = (map.huntFirstKing || 'Claimed the Crown with {c} trainings.').replace('{c}', ev.count);
+                        } else {
+                            detail = (map.huntBroke || "Broke {k}'s record with {c} trainings.")
+                                .replace('{k}', prevNames).replace('{c}', ev.count);
+                        }
+                    } else if (ev.type === 'defense') {
+                        emoji = '🛡️';
+                        title = `${who} ${map.huntDefense || 'defended the Crown'}`;
+                        detail = (map.huntHeldOff || 'Held off the challenge ({k}) with {c} trainings.')
+                            .replace('{k}', chalNames).replace('{c}', ev.count);
                     } else {
+                        emoji = '⚔️';
                         title = `${who} ${map.huntChallenge || 'challenged the Crown'}`;
                         detail = (map.huntMatched || "Matched {k}'s record of {c} trainings.")
                             .replace('{k}', prevNames).replace('{c}', ev.count);
@@ -1239,6 +1315,7 @@ Object.assign(App, {
                 canvas.onmouseleave = hideTip;
 
                 App.renderHuntLog(crownEvents, displayNameById);
+                App.renderCurrentKingBar(crownResult.currentKing, displayNameById);
                 App.renderCrownHistory && App.renderCrownHistory();
             },
 

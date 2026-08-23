@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v0.93 (15:16) — Crown Defense (🛡️) & Current King bar above the chart
+- New 🛡️ Crown Defense event: when an active Challenger has tied the King's record and the King then retakes the lead (+1 or more), a defense is recorded; plain King extensions without an active challenger stay silent
+- 🛡️ markers on the chart, entries in the Hunt Log («defended the Crown — Held off the challenge (Γιώργος) with 6 trainings») and marker tooltips, EN/EL
+- New Current King bar above the chart: 👑 king name(s) plus Points, Days on Throne and total Crown Defenses for the current reign; updates dynamically with every render/language switch
+
 ## 2026-08-23 — v0.92 (14:42) — Hunt Log shows 5 entries, scroll for the rest
 - Hunt Log list height now fits exactly 5 entries (measured per row) with vertical scrolling for older events
 
