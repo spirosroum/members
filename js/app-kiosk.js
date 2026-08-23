@@ -582,7 +582,10 @@ Object.assign(App, {
                     top = top.concat(standings.slice(size).filter(entry => entry.rank === lastRank));
                 }
                 const container = document.getElementById('kiosk-leaderboard-container');
-                if (!container) return;
+                if (!container) {
+                    App.renderKioskChart && App.renderKioskChart();
+                    return;
+                }
                 const lang = App.currentKioskLang || 'en';
                 const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
 
@@ -627,9 +630,9 @@ Object.assign(App, {
             // date via the built-in picker (+/- day arrows): neutral
             // (belt-free) cards, strictly ONE member per place (ties broken by
             // who reached the score first, then earliest first workout, then
-            // name), only members with at least one workout, ▲/▼ movement vs
-            // 7 days earlier (clamped to the period start), a gold box for the
-            // reigning Crown Holder, and FLIP slide animation on reorder.
+            // name), 👑 for 1st place, 💩 for last, only members with at least
+            // one workout, ▲/▼ movement vs the previous day (clamped to the
+            // period start), and FLIP slide animation on reorder.
             renderBountyLeaderboard: () => {
                 const container = document.getElementById('bounty-leaderboard-container');
                 const section = document.getElementById('bounty-leaderboard-section');
@@ -681,7 +684,7 @@ Object.assign(App, {
                 };
 
                 const refDate = new Date(selIso + 'T00:00:00');
-                refDate.setDate(refDate.getDate() - 7);
+                refDate.setDate(refDate.getDate() - 1);
                 const refIso = refDate < since ? minIso : Utils.dateToLocalIso(refDate);
 
                 const entries = members.map(m => {
@@ -698,9 +701,6 @@ Object.assign(App, {
                     assignPlaces(refActive);
                     refActive.forEach(e => { refRanks[e.id] = e.place; });
                 }
-
-                const result = App.getCrownEvents(series);
-                const kingIds = new Set(result.currentKing ? [result.currentKing.id].concat(result.currentKing.alsoIds || []) : []);
 
                 const prevTops = {};
                 container.querySelectorAll('.kiosk-lb-card[data-member-id]').forEach(el => {
@@ -720,7 +720,6 @@ Object.assign(App, {
                 container.innerHTML = `
                     <div class="kiosk-leaderboard">
                         ${active.map((entry, idx) => {
-                            const isKing = kingIds.has(entry.member.id);
                             const refRank = refRanks[entry.member.id];
                             let nameColor = 'var(--dark)';
                             let arrow = '';
@@ -728,10 +727,13 @@ Object.assign(App, {
                                 if (entry.place < refRank) { arrow = ' ▲'; nameColor = '#16a34a'; }
                                 else { arrow = ' ▼'; nameColor = '#dc2626'; }
                             }
+                            const rankCell = entry.place === 1
+                                ? '<span class="kiosk-lb-rank-num">👑</span>'
+                                : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                             return `
-                                <div class="kiosk-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}" style="${isKing ? 'background:#d4af37;' : ''}">
-                                    <div class="kiosk-lb-rank">${App.leaderboardRankCell(entry.place, entry.place === lastPlace)}</div>
-                                    <strong class="kiosk-lb-name" style="color:${isKing ? '#000000' : nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${isKing ? '#000000' : nameColor};">${arrow}</span></strong>
+                                <div class="kiosk-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                    <div class="kiosk-lb-rank">${rankCell}</div>
+                                    <strong class="kiosk-lb-name" style="color:${nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${nameColor};">${arrow}</span></strong>
                                     <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>
                                 </div>
                             `;
@@ -847,8 +849,9 @@ Object.assign(App, {
             // Single source of truth for Crown events — the Hunt Log and the
             // chart markers both render from this. Replays every training
             // increment in chronological order:
-            //  - No King exists until someone breaks away from a shared top
-            //    with 4+ sessions (opening-period ties never crown anyone).
+            //  - The Crown is claimable from the very first workout: the
+            //    end-of-day leader is King from that day on.
+            //  - Members with identical training histories share the Crown.
             //  - Reaching exactly the King's record -> ⚔️ challenge.
             //  - Exceeding it -> 👑 new King takes the Crown.
             //  - The King extending his own record stays King without an event.
@@ -861,8 +864,6 @@ Object.assign(App, {
                 });
                 if (!stream.length) return [];
                 stream.sort((a, b) => new Date(a.ts) - new Date(b.ts));
-
-                const INITIAL_KING_MIN_COUNT = 4;
 
                 // Two members share the Crown only while their training histories
                 // are identical (same cumulative count on every date up to `limit`).
@@ -884,23 +885,21 @@ Object.assign(App, {
                     return true;
                 };
 
-                // Pass A: find the first proclamation via end-of-day snapshots.
-                // Several members may break the record the same day; the one who
-                // reached the new record first (check-in timestamp) takes the Crown.
+                // Pass A: proclamation on the first active day. The end-of-day
+                // leader takes the Crown immediately; several members may share
+                // it when their histories are identical; otherwise the one who
+                // reached the top count first (check-in timestamp) wins it.
                 const sMap = {};
                 series.forEach(s => { sMap[s.member.id] = s; });
                 let kingId = null;
                 let kingCount = 0;
                 let proclaimDate = null;
                 let coBreakers = [];
-                let record = 0;
-                let prevTopIds = [];
                 const countsEndOfDay = {};
                 const byDate = {};
                 stream.forEach(ev => { (byDate[ev.date] = byDate[ev.date] || []).push(ev); });
-                Object.keys(byDate).sort().forEach(date => {
+                for (const date of Object.keys(byDate).sort()) {
                     byDate[date].forEach(ev => { countsEndOfDay[ev.memberId] = ev.count; });
-                    if (kingId !== null) return;
                     let maxC = 0;
                     const holders = [];
                     Object.keys(countsEndOfDay).forEach(id => {
@@ -908,31 +907,24 @@ Object.assign(App, {
                         if (c > maxC) { maxC = c; holders.length = 0; holders.push(id); }
                         else if (c === maxC) holders.push(id);
                     });
-                    if (maxC > record && record >= 1 && maxC >= INITIAL_KING_MIN_COUNT && prevTopIds.length > 0) {
-                        const droppedOut = prevTopIds.filter(id => (countsEndOfDay[id] ?? 0) < maxC);
-                        if (droppedOut.length > 0) {
-                            const tsOf = id => {
-                                const s = sMap[id];
-                                const t = (s && s.firstTimeAtCount && s.firstTimeAtCount[maxC]) || null;
-                                return t ? new Date(t).getTime() : Infinity;
-                            };
-                            let best = null;
-                            let bestT = Infinity;
-                            holders.forEach(id => {
-                                const t = tsOf(id);
-                                if (t < bestT) { bestT = t; best = id; }
-                            });
-                            if (best !== null) {
-                                kingId = best;
-                                kingCount = maxC;
-                                proclaimDate = date;
-                                coBreakers = holders.filter(id => id !== best && identicalThrough(id, best, date));
-                            }
-                        }
-                    }
-                    record = Math.max(record, maxC);
-                    prevTopIds = holders.slice();
-                });
+                    if (maxC < 1) continue;
+                    const tsOf = id => {
+                        const s = sMap[id];
+                        const t = (s && s.firstTimeAtCount && s.firstTimeAtCount[maxC]) || null;
+                        return t ? new Date(t).getTime() : Infinity;
+                    };
+                    let best = null;
+                    let bestT = Infinity;
+                    holders.forEach(id => {
+                        const t = tsOf(id);
+                        if (t < bestT) { bestT = t; best = id; }
+                    });
+                    kingId = best;
+                    kingCount = maxC;
+                    proclaimDate = date;
+                    coBreakers = holders.filter(id => id !== best && identicalThrough(id, best, date));
+                    break;
+                }
                 if (kingId === null) return [];
 
                 const events = [{
@@ -1024,7 +1016,7 @@ Object.assign(App, {
                         : [];
                     if (nearIds.length) {
                         const nearNames = nearIds.map(id => nameById[id] || '?').join(' & ');
-                        alertEl.innerHTML = `🔥 ${Utils.escapeHTML(nearNames)} — ${Utils.escapeHTML(map.huntOneAway || 'Only 1 point from the Crown!')}`;
+                        alertEl.innerHTML = `🔥 ${Utils.escapeHTML(nearNames)} — ${Utils.escapeHTML(map.huntOneAway || '1 point left to challenge the Throne!')}`;
                         alertEl.classList.remove('hidden');
                     } else {
                         alertEl.classList.add('hidden');

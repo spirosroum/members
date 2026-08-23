@@ -2,6 +2,15 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-23 — v1.05 (22:05) — Crown from day one, leaderboard reshuffle, alert rename
+
+- Crown logic: the Crown is claimable from the very first workout — the end-of-day leader becomes King immediately; members with exactly identical training histories share the Crown (chart 👑 labels/markers, Hunt Log, King bar and Hall of Kings all follow)
+- ▲/▼ movement in the Bounty Leaderboard now compares against the previous day — once a member holds their place, no arrow is shown
+- Crown Bounty Leaderboard moved above the Hunt Log (still inside the Crown Bounty card)
+- 1st place shows the 👑 emoji; removed the gold background from the top row
+- Removed the general Training Leaderboard card from the check-in portal (chart still renders; renderKioskLeaderboard now tolerates the missing container)
+- 🔥 alert renamed: «1 point left to challenge the Throne!» (EN/EL)
+
 ## 2026-08-23 — v1.04 (21:20) — Bounty Leaderboard: unique places, smoother slide, arrow fixes
 
 - Strictly ONE member per place now — ties on score are always broken (who reached the count first → earliest first workout → name); no shared ranks, ever
