@@ -26,7 +26,7 @@ where a.schedule_id = s.id
     or s.name ilike '%kids%');
 
 insert into public.schedule_activity (id, schedule_id, status, effective_from)
-select 'ACT-' || s.id || '-NEVER', s.id, 'hidden', '1970-01-01'
+select 'ACT-' || s.id || '-NEVER', s.id, 'hidden', '1970-01-01'::date
 from public.schedules s
 where s.name ilike 'advanced%'
    or s.name ilike 'competition%'
@@ -40,7 +40,7 @@ using public.schedules s
 where a.schedule_id = s.id and s.name ilike '%open mat%';
 
 insert into public.schedule_activity (id, schedule_id, status, effective_from)
-select 'ACT-' || s.id || '-OPENMAT', s.id, 'active', '2026-08-24'
+select 'ACT-' || s.id || '-OPENMAT', s.id, 'active', '2026-08-24'::date
 from public.schedules s
 where s.name ilike '%open mat%'
 on conflict (id) do nothing;
@@ -52,20 +52,20 @@ where a.schedule_id = s.id
   and (s.name ilike 'fundamentals%' or s.name ilike '%leg%lock%');
 
 insert into public.schedule_activity (id, schedule_id, status, effective_from)
-select 'ACT-' || s.id || '-ON-AUG03', s.id, 'active', '2026-08-03'
+select 'ACT-' || s.id || '-ON-AUG03', s.id, 'active', '2026-08-03'::date
 from public.schedules s where s.name ilike 'fundamentals%' or s.name ilike '%leg%lock%'
 union all
-select 'ACT-' || s.id || '-OFF-AUG24', s.id, 'hidden', '2026-08-24'
+select 'ACT-' || s.id || '-OFF-AUG24', s.id, 'hidden', '2026-08-24'::date
 from public.schedules s where s.name ilike 'fundamentals%' or s.name ilike '%leg%lock%'
 union all
-select 'ACT-' || s.id || '-ON-AUG31', s.id, 'active', '2026-08-31'
+select 'ACT-' || s.id || '-ON-AUG31', s.id, 'active', '2026-08-31'::date
 from public.schedules s where s.name ilike 'fundamentals%' or s.name ilike '%leg%lock%'
 on conflict (id) do nothing;
 
 -- 4) Leg Locks: cancelled on Tuesday 2026-08-18 (one-off override),
 --    unless that date already has an override recorded
 insert into public.schedule_overrides (id, schedule_id, date, cancelled)
-select 'OVR-' || s.id || '-20260818-CANCEL', s.id, '2026-08-18', true
+select 'OVR-' || s.id || '-20260818-CANCEL', s.id, '2026-08-18'::date, true
 from public.schedules s
 where s.name ilike '%leg%lock%'
   and not exists (
