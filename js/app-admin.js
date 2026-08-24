@@ -275,11 +275,11 @@ Object.assign(App, {
             // the window: not on closed dates, not in the future, and only for classes
             // whose available_from date had passed (so classes added later never penalize
             // a member who couldn't have attended them).
-            // Classes the app treats as active/visible: present in the schedule and not
-            // hidden (isPublic !== false). Soft-deleted classes are already absent from
-            // DB.getSchedules(). Hidden/inactive classes are excluded here so they are
-            // neither calculated into attendance % nor displayed in Day Details for
-            // today/future dates (past dates resolve against all classes — history).
+            // Classes the app treats as active/visible right now: present in the
+            // schedule and not hidden (isPublic !== false). Soft-deleted classes are
+            // already absent from DB.getSchedules(). Date-sensitive views (calendar,
+            // Day Details, attendance stats) must NOT use this — they resolve each
+            // date via the schedule_activity ledger instead.
             getActiveSchedules: () => (DB.getSchedules() || []).filter(s => s.isPublic !== false),
 
             // One-off override for a (schedule, date) instance, if any.
@@ -325,7 +325,7 @@ Object.assign(App, {
                 cursor.setHours(0, 0, 0, 0);
                 const end = new Date(until);
                 end.setHours(23, 59, 59, 999);
-                const schedules = App.getActiveSchedules();
+                const schedules = DB.getSchedules() || [];
                 const emittedKeys = new Set();
                 while (cursor <= end) {
                     const dayIso = Utils.dateToLocalIso(cursor);
@@ -333,7 +333,13 @@ Object.assign(App, {
                     if (!closedSet.has(dayIso)) {
                         const dayName = dayNames[cursor.getDay()];
                         schedules.forEach(cls => {
-                            if (cls.availableFrom && cls.availableFrom > dayIso) return;
+                            // Count a session only if the class was active ON that date,
+                            // per the activity ledger (hiding a class today must not
+                            // retroactively empty past windows). No ledger entry →
+                            // legacy current-state gates.
+                            const st = App.getClassStatusOn(cls.id, dayIso);
+                            const isActiveOnDate = st ? st === 'active' : (cls.isPublic !== false && !(cls.availableFrom && cls.availableFrom > dayIso));
+                            if (!isActiveOnDate) return;
                             (cls.slots || []).forEach(slot => {
                                 if (slot.day !== dayName) return;
                                 const eff = App.resolveInstance(cls, dayIso);

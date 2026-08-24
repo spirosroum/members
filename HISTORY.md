@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.26 (19:45) — Attendance stats: per-date ledger counting fixes empty denominators
+
+- Member portal attendance % used the ACTIVE classes only, so hiding Fundamentals/Leg Locks on Aug 24 emptied the session denominator for entire past windows («No class sessions were available in this period», e.g. May 27 – Aug 24)
+- `buildAvailableTrainings` now resolves each date through the schedule_activity ledger — a class counts toward a date's available sessions iff it was active on THAT date (Fundamentals/Leg Locks count Aug 3–23, stop Aug 24–30, return Aug 31); classes without ledger history keep the legacy gates
+- Same semantics as the calendar/Day Details; `getActiveSchedules` remains only for strictly current-state views
+
 ## 2026-08-24 — v1.25 (19:20) — Version guard fixed: stale cached pages can no longer strand themselves
 
 - The old guard stored the fetched version in localStorage and only reloaded on mismatch — a stale cached page would immediately store the NEW version while still running OLD JS, then never reload again (observed live: the kiosk kept rendering pre-ledger behavior after all fixes deployed)
