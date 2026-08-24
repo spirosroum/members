@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.19 (16:06) — Schedule: fixed editing a slot's day duplicating instead of moving
+
+- Training Schedules → Add / Edit Class → slot Edit: the slot's current day stayed pre-checked in the day picker, and because `querySelectorAll` returns days in DOM order (Mon…Sun), the OLD day was always `checkedDays[0]` — "Save Changes" kept the slot on its original day and silently created a duplicate slot on the newly checked day
+- Now, while editing a slot, the pre-checked original day is treated as current state rather than a selection: the first *newly* checked day moves the slot there; any further checked days still create additional slots; single-day edits (time changes only) behave exactly as before
+
 ## 2026-08-24 — v1.18 (00:45) — Winners rankings modal, marker stacking fix, hunt alert removed
 
 - Removed the «🔥 … — 1 point left to challenge the Throne!» alert from the Hunt Log (markup, renderer, i18n keys)

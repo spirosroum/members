@@ -18,11 +18,14 @@ Object.assign(App, {
                 if (editingId) {
                     const idx = App.draftClassSlots.findIndex(s => s.id === editingId);
                     if (idx > -1) {
-                        // Update the existing slot with the first selected day
-                        App.draftClassSlots[idx] = { ...App.draftClassSlots[idx], day: checkedDays[0], start, end };
-                        // Any additional checked days create new slots
-                        for (let i = 1; i < checkedDays.length; i++) {
-                            App.draftClassSlots.push({ id: 'SLOT-' + Date.now() + Math.random(), day: checkedDays[i], start, end });
+                        // While editing, the original day stays pre-checked in the picker;
+                        // treat it as "current state", not a selection — the first newly
+                        // checked day moves the slot, any further days create new slots.
+                        const origDay = App.draftClassSlots[idx].day;
+                        const days = checkedDays.length > 1 ? checkedDays.filter(d => d !== origDay) : checkedDays;
+                        App.draftClassSlots[idx] = { ...App.draftClassSlots[idx], day: days[0], start, end };
+                        for (let i = 1; i < days.length; i++) {
+                            App.draftClassSlots.push({ id: 'SLOT-' + Date.now() + Math.random(), day: days[i], start, end });
                         }
                     }
                     document.getElementById('draft-editing-id').value = '';
