@@ -318,7 +318,7 @@ Object.assign(App, {
             },
 
             renderCalendarView: (containerId, isAdminView) => {
-                const schedules = (DB.getSchedules() || []).filter(cls => isAdminView || cls.isPublic !== false);
+                const schedules = DB.getSchedules() || [];
                 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
                 const container = document.getElementById(containerId);
                 if (!container) return;
@@ -326,16 +326,22 @@ Object.assign(App, {
                 // Real dates for the displayed week (Mon-first, honoring the week offset),
                 // so the schedule reflects actual dates and stays in sync with cancellations.
                 const weekDates = App.getWeekDates(App._scheduleWeekOffset || 0);
+                const todayIso = Utils.todayLocalIso();
                 const renderedDayColumns = [];
 
                 days.forEach((day, i) => {
                     let daySlots = [];
                     const dateObj = weekDates[i];
                     const dateIso = Utils.dateToLocalIso(dateObj);
+                    // Strictly past dates are immutable history: classes that ran back then
+                    // keep showing even if they were later hidden or re-activated (which
+                    // bumps availableFrom). Current/future days respect both gates.
+                    const isPastDay = dateIso < todayIso;
                     schedules.forEach(cls => {
+                        if (!isAdminView && !isPastDay && cls.isPublic === false) return;
                         // A class is only shown from its activation date onward, so a class
                         // activated this week does not appear in earlier weeks' schedule.
-                        if (cls.availableFrom && cls.availableFrom > dateIso) return;
+                        if (!isPastDay && cls.availableFrom && cls.availableFrom > dateIso) return;
                         (cls.slots || []).filter(s => s.day === day).forEach(slot => {
                             daySlots.push({ ...slot, className: cls.name, classId: cls.id, color: cls.color || '#2563eb' });
                         });
@@ -389,7 +395,10 @@ Object.assign(App, {
                         let count = 0;
                         days.forEach((day, i) => {
                             const dateIso = Utils.dateToLocalIso(weekDates[i]);
+                            const isPastDay = dateIso < todayIso;
                             schedules.forEach(cls => {
+                                if (!isPastDay && cls.isPublic === false) return;
+                                if (!isPastDay && cls.availableFrom && cls.availableFrom > dateIso) return;
                                 (cls.slots || []).forEach(slot => {
                                     if (slot.day !== day) return;
                                     const ov = App.getOverrideFor(cls.id, dateIso);

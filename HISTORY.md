@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.21 (16:45) — Schedule calendar: past weeks show history regardless of hide/activation
+
+- The Training Schedule calendar (kiosk + admin master) dropped classes from past weeks once they were hidden or re-enabled: hiding filtered them out everywhere, and re-activating bumped their activation date (`availableFrom`) to today, so the whole prior week (e.g. 17–23 Aug after an Aug-24 change) rendered empty
+- Strictly past dates are now immutable history: they always show the classes that ran back then, regardless of current visibility or activation date; current and future days keep respecting both gates (hidden stays hidden ahead, newly activated classes don't retroactively appear)
+- The kiosk weekly 📅 badge counts with the same rules, so past-week badges reflect historical sessions
+
 ## 2026-08-24 — v1.20 (16:25) — Schedule builder: Save Entire Class now commits a pending slot edit
 
 - Follow-up to v1.19: pressing the big «Save Entire Class» button silently ignored any in-progress slot edit (day/time picker state was only consumed by the small «+ Add Time Slot / Save Changes» button), so changing a day via the picker then saving directly left the slot on its old day
