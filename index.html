@@ -11,6 +11,7 @@
     // string here AND in the asset URLs below on every deploy.
     (function () {
         var KEY = 'gym_app_version';
+        var BUILT = '20260824-52';
         var deployed = null;
         function load() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
@@ -18,19 +19,12 @@
                 .then(function (t) {
                     var v = (t || '').trim();
                     if (!v) return;
-                    if (deployed === null) {
-                        deployed = v;
-                        if (localStorage.getItem(KEY) && localStorage.getItem(KEY) !== v) {
-                            localStorage.setItem(KEY, v);
-                            location.reload();
-                        } else {
-                            localStorage.setItem(KEY, v);
-                        }
-                    } else if (v !== deployed) {
-                        deployed = v;
-                        localStorage.setItem(KEY, v);
-                        location.reload();
-                    }
+                    deployed = v;
+                    localStorage.setItem(KEY, v);
+                    // Compare against the version baked into THIS page, not the
+                    // stored one: a stale cached page would otherwise store the
+                    // new version and strand itself on old JS forever.
+                    if (deployed !== BUILT) location.reload();
                 })
                 .catch(function () {});
         }

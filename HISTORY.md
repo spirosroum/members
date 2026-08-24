@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.25 (19:20) — Version guard fixed: stale cached pages can no longer strand themselves
+
+- The old guard stored the fetched version in localStorage and only reloaded on mismatch — a stale cached page would immediately store the NEW version while still running OLD JS, then never reload again (observed live: the kiosk kept rendering pre-ledger behavior after all fixes deployed)
+- The guard now compares version.txt against the version baked into the running page (`BUILT` constant in index.html): any stale page self-reloads until the server serves matching HTML; `BUILT` must be bumped together with version.txt on every deploy
+
 ## 2026-08-24 — v1.24 (18:05) — Backfill migration: real class activation history into schedule_activity
 
 - New migration `20260824000013_schedule_activity_backfill_truth.sql` encodes the owner-provided truth, replacing the inferred seed rows for the affected classes: Advanced / Competition / Wrestling / Kids never active; Open Mat active from Aug 24; Fundamentals + Leg Locks active Aug 3–23, hidden from Aug 24, re-active from Aug 31 (future-dated ledger row); Leg Locks cancelled on Tue Aug 18 via a `schedule_overrides` row
