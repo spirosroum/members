@@ -278,7 +278,8 @@ Object.assign(App, {
             // Classes the app treats as active/visible: present in the schedule and not
             // hidden (isPublic !== false). Soft-deleted classes are already absent from
             // DB.getSchedules(). Hidden/inactive classes are excluded here so they are
-            // neither calculated into attendance % nor displayed in Day Details.
+            // neither calculated into attendance % nor displayed in Day Details for
+            // today/future dates (past dates resolve against all classes — history).
             getActiveSchedules: () => (DB.getSchedules() || []).filter(s => s.isPublic !== false),
 
             // One-off override for a (schedule, date) instance, if any.
@@ -863,7 +864,12 @@ Object.assign(App, {
                 const byVisit = {};
                 checkins.forEach(c => { (byVisit[c.visitId] = byVisit[c.visitId] || []).push(c); });
 
-                const schedules = App.getActiveSchedules();
+                // Past dates are immutable history: resolve against ALL classes so
+                // check-ins keep grouping under the class that actually ran, even if
+                // it was later hidden or re-activated (bumping availableFrom).
+                // Today/future keep the active-only view.
+                const dateIsPast = dateStr < Utils.todayLocalIso();
+                const schedules = dateIsPast ? (DB.getSchedules() || []) : App.getActiveSchedules();
                 const validClassIds = new Set(schedules.map(s => s.id));
 
                 const rowHtml = (visit) => {
@@ -920,7 +926,7 @@ Object.assign(App, {
                 // also get a section even if they have no recurring slot this weekday.
                 checkins.forEach(c => {
                     const cls = DB.getSchedules().find(s => s.id === c.classId);
-                    if (cls && cls.isPublic !== false) addInstance(cls);
+                    if (cls && (dateIsPast || cls.isPublic !== false)) addInstance(cls);
                 });
 
                 instances.forEach(inst => {
@@ -948,8 +954,9 @@ Object.assign(App, {
                     groups.push(sectionHtml(inst.name, inst.color, rows, actions));
                 });
 
-                // Check-ins whose class is no longer active (hidden or deleted) — time only,
-                // so full history is preserved without attributing to that class.
+                // Check-ins whose class no longer exists (deleted) — or whose class is
+                // currently hidden, on today/future views — shown time-only, so full
+                // history is preserved without attributing to that class.
                 const orphanedCheckins = checkins.filter(c => !validClassIds.has(c.classId));
                 const orphanVisitIds = new Set(orphanedCheckins.map(c => c.visitId));
                 if (orphanVisitIds.size) {

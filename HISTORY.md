@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.22 (17:10) — Day Details: past dates group check-ins under the class that ran
+
+- Check-in Activity Calendar → Day Details resolved sections against ACTIVE classes only, so hiding a class retroactively relabelled all its past-day check-ins to «Inactive / Removed classes» (e.g. 03 Aug showing the fallback bucket instead of Fundamentals)
+- For strictly past dates, Day Details now resolves against ALL classes: a hidden (or later re-activated) class keeps its own named section with its historical check-ins; only truly deleted classes stay in the fallback bucket
+- Classes appearing in a past day's check-ins also regain a section even if their slot no longer exists on that weekday (e.g. after moving a class's day)
+- Today/future dates keep the active-only view, consistent with the calendar history fix in v1.21; attendance % deliberately unchanged (hidden classes still excluded from stats)
+
 ## 2026-08-24 — v1.21 (16:45) — Schedule calendar: past weeks show history regardless of hide/activation
 
 - The Training Schedule calendar (kiosk + admin master) dropped classes from past weeks once they were hidden or re-enabled: hiding filtered them out everywhere, and re-activating bumped their activation date (`availableFrom`) to today, so the whole prior week (e.g. 17–23 Aug after an Aug-24 change) rendered empty
