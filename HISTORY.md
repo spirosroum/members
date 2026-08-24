@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.24 (18:05) — Backfill migration: real class activation history into schedule_activity
+
+- New migration `20260824000013_schedule_activity_backfill_truth.sql` encodes the owner-provided truth, replacing the inferred seed rows for the affected classes: Advanced / Competition / Wrestling / Kids never active; Open Mat active from Aug 24; Fundamentals + Leg Locks active Aug 3–23, hidden from Aug 24, re-active from Aug 31 (future-dated ledger row); Leg Locks cancelled on Tue Aug 18 via a `schedule_overrides` row
+- Run order in the Supabase SQL editor: `…000012_schedule_activity.sql` first (if not yet applied), then `…000013_schedule_activity_backfill_truth.sql`; both idempotent — the included verification SELECT should list each class's full timeline
+
 ## 2026-08-24 — v1.23 (17:45) — Class activity history ledger (schedule_activity) replaces state-inference
 
 - v1.21's "past weeks show everything" overcorrected: classes that never ran in a past week (e.g. newly added or long-hidden Kids/Advanced) appeared there, because the calendar could only infer history from each class's CURRENT state
