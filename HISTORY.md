@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.23 (17:45) — Class activity history ledger (schedule_activity) replaces state-inference
+
+- v1.21's "past weeks show everything" overcorrected: classes that never ran in a past week (e.g. newly added or long-hidden Kids/Advanced) appeared there, because the calendar could only infer history from each class's CURRENT state
+- New append-only history table `schedule_activity` (id, schedule_id, status active|hidden, effective_from, created_at): every visibility toggle and new class now WRITES a dated row, and the calendar / weekly badge / Day Details READ "was this class active on that date?" from it instead of guessing from today's state
+- Migration `20260824000012_schedule_activity.sql` MUST be applied to Supabase — it bootstraps one row per existing class (active since earliest real evidence: first check-in, else activation/creation date) plus hidden-from-today markers for currently hidden classes; client degrades gracefully to the old behavior until applied
+- Known bootstrap limitation: a class that was already hidden BEFORE today has no historical hidden marker; if needed, backdate one `schedule_activity` row manually (status 'hidden', effective_from = the date it was hidden)
+
 ## 2026-08-24 — v1.22 (17:10) — Day Details: past dates group check-ins under the class that ran
 
 - Check-in Activity Calendar → Day Details resolved sections against ACTIVE classes only, so hiding a class retroactively relabelled all its past-day check-ins to «Inactive / Removed classes» (e.g. 03 Aug showing the fallback bucket instead of Fundamentals)

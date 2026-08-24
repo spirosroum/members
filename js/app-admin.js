@@ -864,12 +864,15 @@ Object.assign(App, {
                 const byVisit = {};
                 checkins.forEach(c => { (byVisit[c.visitId] = byVisit[c.visitId] || []).push(c); });
 
-                // Past dates are immutable history: resolve against ALL classes so
-                // check-ins keep grouping under the class that actually ran, even if
-                // it was later hidden or re-activated (bumping availableFrom).
-                // Today/future keep the active-only view.
+                // Resolve each class's visibility AS OF this date via the activity
+                // ledger; classes without ledger history keep the legacy fallback
+                // (past dates show all, today/future show active only).
                 const dateIsPast = dateStr < Utils.todayLocalIso();
-                const schedules = dateIsPast ? (DB.getSchedules() || []) : App.getActiveSchedules();
+                const schedules = (DB.getSchedules() || []).filter(cls => {
+                    const st = App.getClassStatusOn(cls.id, dateStr);
+                    if (st) return st === 'active';
+                    return dateIsPast || cls.isPublic !== false;
+                });
                 const validClassIds = new Set(schedules.map(s => s.id));
 
                 const rowHtml = (visit) => {
@@ -922,11 +925,14 @@ Object.assign(App, {
                     if (!slotForDay) return;
                     addInstance(cls);
                 });
-                // Ensure classes that appear in today's check-ins (e.g. a replacement class)
-                // also get a section even if they have no recurring slot this weekday.
+                // Ensure classes that appear in this day's check-ins (e.g. a replacement
+                // class, or a class whose slot has since moved away from this weekday)
+                // also get a section.
                 checkins.forEach(c => {
                     const cls = DB.getSchedules().find(s => s.id === c.classId);
-                    if (cls && (dateIsPast || cls.isPublic !== false)) addInstance(cls);
+                    if (!cls) return;
+                    const st = App.getClassStatusOn(cls.id, dateStr);
+                    if (st ? st === 'active' : (dateIsPast || cls.isPublic !== false)) addInstance(cls);
                 });
 
                 instances.forEach(inst => {

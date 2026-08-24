@@ -116,7 +116,14 @@ Object.assign(App, {
                 const availableFrom = availVal ? availVal : (isNew ? Utils.todayLocalIso() : (schedules.find(c => c.id === id) || {}).availableFrom || null);
                 const newClass = { id, name, description, practitioners, requirements, color, capacity, isPublic: document.getElementById('form-sched-visible').checked, availableFrom, slots: App.draftClassSlots };
 
-                if (isNew) schedules.push(newClass);
+                if (isNew) {
+                    schedules.push(newClass);
+                    // Seed the activity ledger so this class is known active from
+                    // its activation date onward.
+                    const act = DB.getScheduleActivity();
+                    act.push({ id: 'ACT-' + id + '-' + Date.now() + Math.random().toString(36).slice(2, 6), scheduleId: id, status: 'active', effectiveFrom: availableFrom || Utils.todayLocalIso(), createdAt: new Date().toISOString() });
+                    DB.saveScheduleActivity(act);
+                }
                 else { const idx = schedules.findIndex(c => c.id === id); if(idx > -1) schedules[idx] = newClass; }
                 
                 DB.saveSchedules(schedules);
@@ -276,6 +283,10 @@ Object.assign(App, {
                 if (visible) {
                     cls.availableFrom = Utils.todayLocalIso();
                 }
+                // Record the change in the activity ledger so history renders truthfully.
+                const act = DB.getScheduleActivity();
+                act.push({ id: 'ACT-' + id + '-' + Date.now() + Math.random().toString(36).slice(2, 6), scheduleId: id, status: visible ? 'active' : 'hidden', effectiveFrom: Utils.todayLocalIso(), createdAt: new Date().toISOString() });
+                DB.saveScheduleActivity(act);
                 DB.saveSchedules(schedules);
                 App.renderClassList();
                 App.renderCalendarView('kiosk-schedule-container', false);
@@ -326,22 +337,19 @@ Object.assign(App, {
                 // Real dates for the displayed week (Mon-first, honoring the week offset),
                 // so the schedule reflects actual dates and stays in sync with cancellations.
                 const weekDates = App.getWeekDates(App._scheduleWeekOffset || 0);
-                const todayIso = Utils.todayLocalIso();
                 const renderedDayColumns = [];
 
                 days.forEach((day, i) => {
                     let daySlots = [];
                     const dateObj = weekDates[i];
                     const dateIso = Utils.dateToLocalIso(dateObj);
-                    // Strictly past dates are immutable history: classes that ran back then
-                    // keep showing even if they were later hidden or re-activated (which
-                    // bumps availableFrom). Current/future days respect both gates.
-                    const isPastDay = dateIso < todayIso;
                     schedules.forEach(cls => {
-                        if (!isAdminView && !isPastDay && cls.isPublic === false) return;
-                        // A class is only shown from its activation date onward, so a class
-                        // activated this week does not appear in earlier weeks' schedule.
-                        if (!isPastDay && cls.availableFrom && cls.availableFrom > dateIso) return;
+                        // Resolve whether this class was active on this date via the
+                        // activity ledger; classes without ledger history fall back to
+                        // their current visibility/activation state.
+                        const st = App.getClassStatusOn(cls.id, dateIso);
+                        const isActiveOnDate = st ? st === 'active' : (cls.isPublic !== false && !(cls.availableFrom && cls.availableFrom > dateIso));
+                        if (!isAdminView && !isActiveOnDate) return;
                         (cls.slots || []).filter(s => s.day === day).forEach(slot => {
                             daySlots.push({ ...slot, className: cls.name, classId: cls.id, color: cls.color || '#2563eb' });
                         });
@@ -395,10 +403,10 @@ Object.assign(App, {
                         let count = 0;
                         days.forEach((day, i) => {
                             const dateIso = Utils.dateToLocalIso(weekDates[i]);
-                            const isPastDay = dateIso < todayIso;
                             schedules.forEach(cls => {
-                                if (!isPastDay && cls.isPublic === false) return;
-                                if (!isPastDay && cls.availableFrom && cls.availableFrom > dateIso) return;
+                                const st = App.getClassStatusOn(cls.id, dateIso);
+                                const isActiveOnDate = st ? st === 'active' : (cls.isPublic !== false && !(cls.availableFrom && cls.availableFrom > dateIso));
+                                if (!isActiveOnDate) return;
                                 (cls.slots || []).forEach(slot => {
                                     if (slot.day !== day) return;
                                     const ov = App.getOverrideFor(cls.id, dateIso);

@@ -140,6 +140,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             schedules: JSON.parse(localStorage.getItem('gym_schedules') || '[]'),
             scheduleBin: JSON.parse(localStorage.getItem('gym_schedule_bin') || '[]'),
             scheduleOverrides: JSON.parse(localStorage.getItem('gym_schedule_overrides') || '[]'),
+            scheduleActivity: JSON.parse(localStorage.getItem('gym_schedule_activity') || '[]'),
             notifications: JSON.parse(localStorage.getItem('gym_notifications') || '[]'),
             notificationBin: JSON.parse(localStorage.getItem('gym_notification_bin') || '[]'),
             bin: JSON.parse(localStorage.getItem('gym_bin') || '[]'),
@@ -170,6 +171,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_schedules', JSON.stringify(STATE.schedules || []));
                 localStorage.setItem('gym_schedule_bin', JSON.stringify(STATE.scheduleBin || []));
                 localStorage.setItem('gym_schedule_overrides', JSON.stringify(STATE.scheduleOverrides || []));
+                localStorage.setItem('gym_schedule_activity', JSON.stringify(STATE.scheduleActivity || []));
                 localStorage.setItem('gym_notifications', JSON.stringify(STATE.notifications || []));
                 localStorage.setItem('gym_notification_bin', JSON.stringify(STATE.notificationBin || []));
                 localStorage.setItem('gym_bin', JSON.stringify(STATE.bin || []));
@@ -466,6 +468,16 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 this._markReady('closedDates');
             },
 
+            async loadScheduleActivity() {
+                try {
+                    const rows = await this._fetch('schedule_activity');
+                    STATE.scheduleActivity = rows.map(MAPS_EXTRA.activityFrom);
+                } catch (e) {
+                    console.warn('schedule_activity not available yet — apply migration 20260824000012; keeping cached history.', e);
+                }
+                this._markReady('scheduleActivity');
+            },
+
             async loadSettings() {
                 const rows = await this._fetch('settings');
                 const s = {};
@@ -531,7 +543,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 await Promise.all([
                     this.load('members'), this.load('visits'), this.load('plans'),
                     this.load('classCheckins'), this.loadSchedules(), this.loadScheduleOverrides(),
-                    this.loadClosedDates(), this.loadSettings()
+                    this.loadClosedDates(), this.loadScheduleActivity(), this.loadSettings()
                 ]);
                 if (isAdmin) {
                     await this.loadAdminOnly();
@@ -623,6 +635,18 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 (existing || []).forEach(e => { if (!keep.has(e.id)) sb.from('closed_dates').delete().eq('id', e.id); });
             },
 
+            // Append-only ledger: upsert rows, never delete history.
+            async persistScheduleActivity() {
+                if (!sb || !this.ready.scheduleActivity) return;
+                const rows = (STATE.scheduleActivity || []).map(MAPS_EXTRA.activityTo);
+                if (!rows.length) return;
+                try {
+                    for (const c of chunkRows(rows)) await sb.from('schedule_activity').upsert(c, { onConflict: 'id' });
+                } catch (e) {
+                    console.warn('schedule_activity persist failed — apply migration 20260824000012.', e);
+                }
+            },
+
             async persistScheduleOverrides() {
                 if (!sb || !this.ready.scheduleOverrides) return;
                 const rows = (STATE.scheduleOverrides || []).map(MAPS_EXTRA.overrideTo);
@@ -712,6 +736,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 ['members', 'visits', 'plans', 'classCheckins'].forEach(col => push(this.persist(col)));
                 push(this.persistSchedules());
                 push(this.persistClosedDates());
+                push(this.persistScheduleActivity());
                 push(this.persistScheduleOverrides());
                 if (isAdmin) {
                     // Payments are upsert-only here: the only legitimate way to remove a
@@ -851,6 +876,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 available_from: cls.availableFrom || null
             }),
             closedDateFrom: (r) => ({ date: r.date, dateEnd: r.date_end || undefined, repeat: !!r.repeat, reason: r.reason || '' }),
+            activityFrom: (r) => ({ id: r.id, scheduleId: r.schedule_id, status: r.status, effectiveFrom: r.effective_from, createdAt: r.created_at || '' }),
+            activityTo: (a) => ({ id: a.id, schedule_id: a.scheduleId, status: a.status, effective_from: a.effectiveFrom }),
             overrideFrom: (r) => ({
                 id: r.id,
                 scheduleId: r.schedule_id,
@@ -992,6 +1019,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             getPlans: () => STATE.plans || [],
             getPlanBin: () => STATE.planBin || [],
             getClosedDates: () => STATE.closedDates || [],
+            getScheduleActivity: () => STATE.scheduleActivity || [],
             getSchedules: () => STATE.schedules || [],
             getScheduleBin: () => STATE.scheduleBin || [],
             getScheduleOverrides: () => STATE.scheduleOverrides || [],
@@ -1037,6 +1065,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             savePlans: (data) => { STATE.plans = data || []; return saveToCloud(); },
             savePlanBin: (data) => { STATE.planBin = data || []; return saveToCloud(); },
             saveClosedDates: (data) => { STATE.closedDates = data || []; return saveToCloud(); },
+            saveScheduleActivity: (data) => { STATE.scheduleActivity = data || []; return saveToCloud(); },
             saveSchedules: (data) => { STATE.schedules = data || []; return saveToCloud(); },
             saveScheduleBin: (data) => { STATE.scheduleBin = data || []; return saveToCloud(); },
             saveScheduleOverrides: (data) => { STATE.scheduleOverrides = data || []; return saveToCloud(); },
@@ -1526,6 +1555,20 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const rawId = `checkin-slot-${classId}-${slotDay}-${slotStart}-${slotEnd}`;
                 return rawId.replace(/[^a-zA-Z0-9_-]/g, '_');
             },
+
+            // Status of a class AS OF a date, from the append-only activity ledger:
+            // 'active', 'hidden', or null when the class has no ledger history
+            // (callers fall back to current-state gates). Ties on effectiveFrom
+            // break by createdAt so the most recent toggle wins.
+            getClassStatusOn: (scheduleId, dateIso) => {
+                let latest = null;
+                (STATE.scheduleActivity || []).forEach(a => {
+                    if (!a || a.scheduleId !== scheduleId || !a.effectiveFrom || a.effectiveFrom > dateIso) return;
+                    if (!latest || (a.effectiveFrom + (a.createdAt || '')) > (latest.effectiveFrom + (latest.createdAt || ''))) latest = a;
+                });
+                return latest ? latest.status : null;
+            },
+
             getWeekdayDateForCurrentWeek: (dayName) => {
                 if (!dayName) return null;
                 const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
