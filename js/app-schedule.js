@@ -41,6 +41,7 @@ Object.assign(App, {
                 document.getElementById('draft-start-time').value = '';
                 document.getElementById('draft-end-time').value = '';
                 App.renderDraftSlots();
+                return true;
             },
 
 
@@ -92,9 +93,15 @@ Object.assign(App, {
             },
 
             saveClassSchedule: () => {
+                if (document.getElementById('draft-editing-id').value && !App.addDraftSlot()) return;
                 const name = document.getElementById('form-sched-class-name').value.trim();
                 if (!name) return alert('Enter a class name.');
                 if (App.draftClassSlots.length === 0) return alert('Add at least one time slot for this class.');
+                if (document.querySelector('#draft-days input:checked') ||
+                    document.getElementById('draft-start-time').value ||
+                    document.getElementById('draft-end-time').value) {
+                    return alert('You have an unfinished time-slot selection. Click "+ Add Time Slot to Class" to apply it (or clear the day/time fields), then save again.');
+                }
 
                 const schedules = DB.getSchedules();
                 const id = document.getElementById('form-sched-id').value || 'CLS-' + Date.now();

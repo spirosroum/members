@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-24 — v1.20 (16:25) — Schedule builder: Save Entire Class now commits a pending slot edit
+
+- Follow-up to v1.19: pressing the big «Save Entire Class» button silently ignored any in-progress slot edit (day/time picker state was only consumed by the small «+ Add Time Slot / Save Changes» button), so changing a day via the picker then saving directly left the slot on its old day
+- «Save Entire Class» now auto-commits a pending slot edit first (aborting if the selection is incomplete), so editing a day and hitting save works no matter which button is pressed
+- Any other leftover day/time selection now warns explicitly instead of being dropped silently
+
 ## 2026-08-24 — v1.19 (16:06) — Schedule: fixed editing a slot's day duplicating instead of moving
 
 - Training Schedules → Add / Edit Class → slot Edit: the slot's current day stayed pre-checked in the day picker, and because `querySelectorAll` returns days in DOM order (Mon…Sun), the OLD day was always `checkedDays[0]` — "Save Changes" kept the slot on its original day and silently created a duplicate slot on the newly checked day
