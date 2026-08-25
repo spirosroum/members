@@ -1647,6 +1647,59 @@ Object.assign(App, {
                     }
                 };
 
+                // Overlapping-segment renderer: when N ≥ 2 members share the exact
+                // same pixel segment (identical training history), their solid
+                // lines stack invisibly — so those segments are repainted as a
+                // dashed path alternating each member's own color
+                // (A→B→A→B… for any N), while all other segments stay solid.
+                // Runs after every dataset is drawn so it covers the topmost line.
+                const OVERLAP_DASH_LEN = 7;
+                const overlapDashPlugin = {
+                    id: 'kioskOverlapDash',
+                    afterDatasetsDraw(chart) {
+                        const segMap = new Map();
+                        chart.data.datasets.forEach((ds, di) => {
+                            const meta = chart.getDatasetMeta(di);
+                            if (!meta.visible) return;
+                            const pts = meta.data;
+                            let lastPt = null;
+                            for (let i = 0; i < ds.data.length; i++) {
+                                if (ds.data[i] == null) continue;
+                                const p = pts[i];
+                                if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+                                if (lastPt) {
+                                    const key = Math.round(lastPt.x * 2) / 2 + ',' + Math.round(lastPt.y * 2) / 2 +
+                                        '>' + Math.round(p.x * 2) / 2 + ',' + Math.round(p.y * 2) / 2;
+                                    if (!segMap.has(key)) segMap.set(key, { p0: lastPt, p1: p, entries: [] });
+                                    segMap.get(key).entries.push(ds);
+                                }
+                                lastPt = p;
+                            }
+                        });
+                        segMap.forEach(seg => {
+                            const n = seg.entries.length;
+                            if (n < 2) return;
+                            const ctx = chart.ctx;
+                            seg.entries.forEach((ds, k) => {
+                                const pat = [];
+                                for (let j = 0; j < n; j++) {
+                                    pat.push(j === k ? OVERLAP_DASH_LEN : 0);
+                                    pat.push(j === n - 1 ? 0 : OVERLAP_DASH_LEN);
+                                }
+                                ctx.save();
+                                ctx.beginPath();
+                                ctx.moveTo(seg.p0.x, seg.p0.y);
+                                ctx.lineTo(seg.p1.x, seg.p1.y);
+                                ctx.setLineDash(pat);
+                                ctx.strokeStyle = ds.borderColor;
+                                ctx.lineWidth = (ds.borderWidth || 2) + 0.6;
+                                ctx.stroke();
+                                ctx.restore();
+                            });
+                        });
+                    }
+                };
+
                 // Hunt event markers (⚔️/👑) drawn above the exact data point that
                 // triggered each event, with vertical offsets when they overlap.
                 // Positions come from the chart scales, so they follow resizes.
@@ -1726,7 +1779,7 @@ Object.assign(App, {
                 App._kioskChartInstance = new Chart(canvas, {
                     type: 'line',
                     data: { labels, datasets },
-                    plugins: [rightLabelsPlugin, eventsPlugin],
+                    plugins: [overlapDashPlugin, rightLabelsPlugin, eventsPlugin],
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,

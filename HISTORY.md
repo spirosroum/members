@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-25 — v1.27 (17:34) — Crown Bounty chart: overlapping lines drawn as multi-color dashes
+
+- Members with identical training histories rendered pixel-identical lines stacked on top of each other — only the topmost (highest-ranked) line was visible
+- New `kioskOverlapDash` Chart.js plugin detects segments where N ≥ 2 datasets share the exact same pixel coordinates and repaints them as a dashed path alternating each member's own color (A→B→A→B…, works for any N); non-overlapping segments stay solid
+- Dash pattern uses exact per-member slots (period N·7px) so the passes tile the segment with no gaps; slightly thicker stroke fully covers the underlying solid lines
+- Names, tooltips, hover states, legend, markers and all other chart behavior untouched
+
 ## 2026-08-24 — v1.26 (19:45) — Attendance stats: per-date ledger counting fixes empty denominators
 
 - Member portal attendance % used the ACTIVE classes only, so hiding Fundamentals/Leg Locks on Aug 24 emptied the session denominator for entire past windows («No class sessions were available in this period», e.g. May 27 – Aug 24)
