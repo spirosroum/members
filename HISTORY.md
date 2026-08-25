@@ -2,6 +2,10 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-25 — v1.28 (17:41) — Crown Bounty chart: longer overlap dash segments
+
+- OVERLAP_DASH_LEN bumped 7px → 11px so the alternating multi-color dashes on overlapping lines are easier on the eyes
+
 ## 2026-08-25 — v1.27 (17:34) — Crown Bounty chart: overlapping lines drawn as multi-color dashes
 
 - Members with identical training histories rendered pixel-identical lines stacked on top of each other — only the topmost (highest-ranked) line was visible

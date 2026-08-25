@@ -1653,7 +1653,7 @@ Object.assign(App, {
                 // dashed path alternating each member's own color
                 // (A→B→A→B… for any N), while all other segments stay solid.
                 // Runs after every dataset is drawn so it covers the topmost line.
-                const OVERLAP_DASH_LEN = 7;
+                const OVERLAP_DASH_LEN = 11;
                 const overlapDashPlugin = {
                     id: 'kioskOverlapDash',
                     afterDatasetsDraw(chart) {
