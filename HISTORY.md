@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.31 (12:55) — Crown Bounty chart: label spacing + column-first mobile legend
+
+- PC right-side labels: tied members' name spread widened 14px → 18px per row so stacked names at the same count no longer overlap
+- Mobile tap legend: grid now fills column-first (`grid-auto-flow: column` + explicit row count), so rankings read top-left → bottom-left, then top-right → bottom-right
+
 ## 2026-08-26 — v1.33 (14:10) — Hunt Log duplicate «took the Throne alone» + tied-king order flip fixed
 
 - Hunt Log: `kingGroup` was never pruned when co-kings fell behind, so every later record extension by the surviving group re-fired the `consolidate` event against long-gone members (Μαρία & Δημοσθένης «broke away from Fransisco & Reynaldo & Γιώργος Πα.» on both Aug 10 AND Aug 12). The reign is now pruned to the still-identical kings at each consolidation, so the event fires exactly once per actual reduction of the king group

@@ -1622,16 +1622,17 @@ Object.assign(App, {
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
 
                 // Spread right-side labels so members tied on the same final count
-                // don't stack on top of one another. Tied names are ordered by
-                // leaderboard ranking (shared engine), so the
-                // right side reads top-to-bottom in exact ranking order.
+                // don't stack on top of one another (18px pitch clears the 11px
+                // font). Tied names are ordered by leaderboard ranking (shared
+                // engine), so the right side reads top-to-bottom in exact
+                // ranking order.
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
                 Object.values(yGroups).forEach(indices => {
                     const n = indices.length;
                     indices.sort((a, b) => rankOfMember[datasets[a]._memberId] - rankOfMember[datasets[b]._memberId]);
-                    indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 14; });
+                    indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 18; });
                 });
 
                 // Draw each athlete's name at the far right, aligned with their
@@ -1901,6 +1902,8 @@ Object.assign(App, {
                         <span style="font-weight:700; color:var(--dark); flex-shrink:0;">#${rank}</span>
                         <span style="color:var(--dark); overflow-wrap:anywhere;">${Utils.escapeHTML(ds.label.replace('👑 ', ''))}</span>
                     </div>`).join('');
+                lg.style.gridAutoFlow = 'column';
+                lg.style.gridTemplateRows = `repeat(${Math.max(1, Math.ceil(datasets.length / 2))}, auto)`;
                 lg.style.display = 'none';
                 canvas.onmousemove = e => {
                     const rect = canvas.getBoundingClientRect();
