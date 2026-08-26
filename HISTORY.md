@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.30 (12:15) — Fix: kiosk reload loop from stale version guard
+
+- The v1.29 deploy bumped `version.txt` but not the `BUILT` constant baked into `index.html`, so the version guard saw a mismatch every check and reloaded the page forever (most visible in the always-on check-in portal)
+- `BUILT` and the app-kiosk.js cache-buster are now synced to `20260826-57` along with `version.txt`
+
 ## 2026-08-26 — v1.29 (12:00) — Crown Bounty chart: ranked hover/tap member lists
 
 - PC hover tooltip: members now listed strictly top-to-bottom by ranking (highest position/most workouts first) via Chart.js `itemSort` on the shared rank map; each row shows its explicit `#N` position right beside the color indicator
