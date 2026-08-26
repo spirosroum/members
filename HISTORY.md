@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.29 (12:00) — Crown Bounty chart: ranked hover/tap member lists
+
+- PC hover tooltip: members now listed strictly top-to-bottom by ranking (highest position/most workouts first) via Chart.js `itemSort` on the shared rank map; each row shows its explicit `#N` position right beside the color indicator
+- Mobile tap legend: same strict ranking order, each entry now shows color swatch + `#N` position + name (crown prefix stripped, 👑 stays on the chart labels)
+
 ## 2026-08-25 — v1.28 (17:41) — Crown Bounty chart: longer overlap dash segments
 
 - OVERLAP_DASH_LEN bumped 7px → 11px so the alternating multi-color dashes on overlapping lines are easier on the eyes

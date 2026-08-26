@@ -1792,6 +1792,7 @@ Object.assign(App, {
                             legend: { display: false },
                             tooltip: {
                                 enabled: isDesktop,
+                                itemSort: (a, b) => (rankOfMember[a.dataset._memberId] || 9999) - (rankOfMember[b.dataset._memberId] || 9999),
                                 filter: item => {
                                     const d = datasets.find(x => x._memberId === item.dataset._memberId);
                                     const v = d && countAt[d._memberId][item.label];
@@ -1801,7 +1802,7 @@ Object.assign(App, {
                                     title: items => items.length ? dateFmt(items[0].label) : '',
                                     label: ctx => {
                                         const v = countAt[ctx.dataset._memberId][ctx.label];
-                                        return ` ${ctx.dataset.label}: ${v} ${map.chartTooltipTrainings || 'trainings'}`;
+                                        return ` #${rankOfMember[ctx.dataset._memberId]} ${ctx.dataset.label}: ${v} ${map.chartTooltipTrainings || 'trainings'}`;
                                     }
                                 }
                             }
@@ -1882,9 +1883,12 @@ Object.assign(App, {
                     lg.id = 'kiosk-chart-legend';
                     wrap.appendChild(lg);
                 }
-                lg.innerHTML = datasets.map(ds => `
+                lg.innerHTML = datasets.map(ds => ({ ds, rank: rankOfMember[ds._memberId] || 9999 }))
+                    .sort((a, b) => a.rank - b.rank)
+                    .map(({ ds, rank }) => `
                     <div style="display:flex; align-items:center; gap:0.45rem; min-width:0;">
                         <span style="width:13px; height:13px; border-radius:4px; background:${ds.borderColor}; flex-shrink:0;"></span>
+                        <span style="font-weight:700; color:var(--dark); flex-shrink:0;">#${rank}</span>
                         <span style="color:var(--dark); overflow-wrap:anywhere;">${Utils.escapeHTML(ds.label.replace('👑 ', ''))}</span>
                     </div>`).join('');
                 lg.style.display = 'none';
