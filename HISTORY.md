@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.33 (14:10) — Hunt Log duplicate «took the Throne alone» + tied-king order flip fixed
+
+- Hunt Log: `kingGroup` was never pruned when co-kings fell behind, so every later record extension by the surviving group re-fired the `consolidate` event against long-gone members (Μαρία & Δημοσθένης «broke away from Fransisco & Reynaldo & Γιώργος Πα.» on both Aug 10 AND Aug 12). The reign is now pruned to the still-identical kings at each consolidation, so the event fires exactly once per actual reduction of the king group
+- Leaderboard/chart: tied members with identical histories (e.g. Μαρία & Δημοσθένης at 5 on Aug 12) could flip display order because the tie-break compared only who reached the CURRENT count first. New shared `crownReachDiff()` seniority comparator decides by the first count at which their reach times differ — order between identical histories never flips when they extend on the same day. Applied to `rankPeriodSeries` (leaderboard, modal, chart) and the ▲/▼ yesterday comparison
+- `BUILT` and the app-kiosk.js cache-buster synced to `20260826-60`
+
 ## 2026-08-26 — v1.32 (13:35) — Fix: false «took the Throne alone» in the Hunt Log
 
 - When a co-king group extended the record on the same day but the actor's entry was replayed first (earliest `entryTime`, e.g. the others were backfilled later), the `consolidate` event decided «who broke away» from the replay-time `latestCounts` snapshot — the not-yet-replayed co-kings still showed their old count and were all falsely listed as broken away (e.g. «Γιώργος took the Throne alone — broke away from Fransisco & Reynaldo & Μαρία & Δημοσθένης» on Aug 5, while Reynaldo/Μαρία/Δημοσθένης had in fact extended together with him to 2)

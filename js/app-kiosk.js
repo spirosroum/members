@@ -698,18 +698,18 @@ Object.assign(App, {
                 // displaced shows ▼ red, holding steady shows nothing.
                 const refPlaces = {};
                 if (refIso !== selIso) {
-                    const firstTsAt = (e, c) => (e.firstTimeAtCount && e.firstTimeAtCount[c]) ? new Date(e.firstTimeAtCount[c]).getTime() : Infinity;
                     const refEntries = active.map(e => ({
                         id: e.id,
                         member: e.member,
                         c: countAtSeries(e.series, refIso),
-                        ts: firstTsAt(e, countAtSeries(e.series, refIso)),
+                        firstTimeAtCount: e.firstTimeAtCount,
                         points: e.points.filter(pt => pt.date <= refIso)
                     }))
                         .filter(x => x.c > 0)
                         .sort((a, b) => {
                             if (b.c !== a.c) return b.c - a.c;
-                            if (a.ts !== b.ts) return a.ts - b.ts;
+                            const rd = App.crownReachDiff(a, b);
+                            if (rd !== 0) return rd;
                             const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
                             const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
                             if (fa !== fb) return fa - fb;
@@ -894,10 +894,26 @@ Object.assign(App, {
                 return result;
             },
 
+            // Seniority comparison for tied members: the FIRST count at which
+            // their reach times differ decides. Comparing only the current
+            // count would flip the order between members with identical
+            // histories every time they extend on the same day in a different
+            // time-of-day order.
+            crownReachDiff: (a, b) => {
+                const at = (e, k) => (e.firstTimeAtCount && e.firstTimeAtCount[k]) ? new Date(e.firstTimeAtCount[k]).getTime() : Infinity;
+                const n = Math.min(a.count || 0, b.count || 0);
+                for (let k = 1; k <= n; k++) {
+                    const ta = at(a, k);
+                    const tb = at(b, k);
+                    if (ta !== tb) return ta - tb;
+                }
+                return 0;
+            },
+
             // Shared ranking engine for every period standings view (Bounty
             // Leaderboard, period rankings modal, chart rankings/crown):
-            // count desc; ties broken by
-            // who reached the score first (session-anchored), then first
+            // count desc; ties broken by seniority — the first count at
+            // which reach times differ (session-anchored), then first
             // training date, then name/id. One holder per position; only
             // members whose entire history is exactly identical share a place.
             // e.crown marks the reigning group (top count + identical to the
@@ -917,9 +933,8 @@ Object.assign(App, {
                 const active = entries.filter(e => e.count > 0);
                 active.sort((a, b) => {
                     if (b.count !== a.count) return b.count - a.count;
-                    const ta = firstTs(a);
-                    const tb = firstTs(b);
-                    if (ta !== tb) return ta - tb;
+                    const rd = App.crownReachDiff(a, b);
+                    if (rd !== 0) return rd;
                     const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
                     const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
                     if (fa !== fb) return fa - fb;
@@ -1080,6 +1095,12 @@ Object.assign(App, {
                             const dropped = kingGroup.filter(id => id !== ev.memberId && !stillWith.includes(id));
                             if (dropped.length > 0) {
                                 events.push({ type: 'consolidate', memberId: ev.memberId, alsoIds: stillWith.slice(), count: ev.count, date: ev.date, ts: ev.ts, prevKingIds: dropped.slice(), prevKingCount: kingCount });
+                                // Prune the reign to the kings that are still
+                                // identical — otherwise every later record
+                                // extension re-emits the same «broke away»
+                                // event for members that left long ago.
+                                kingId = ev.memberId;
+                                kingGroup = [ev.memberId].concat(stillWith);
                             }
                             kingCount = ev.count;
                         }
