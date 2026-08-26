@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.32 (13:20) — Crown Bounty chart: collision-packed right-side name labels
+
+- Real cause of the bottom-right overlap: names of the lowest group extended below the chart area into the x-axis date-label zone — not tight tie-spread spacing
+- Right-side labels now go through a packing pass at draw time: desired y (line endpoint + tie spread) → 18px minimum gap enforced between ALL names top-to-bottom (fixes hypothetical 20-members-on-two-adjacent-counts interleaving) → whole stack clamped above the x-axis tick zone
+- Bottom chart padding reduced to tick-only height (18px) since names no longer render below the axis
+
 ## 2026-08-26 — v1.31 (12:55) — Crown Bounty chart: label spacing + column-first mobile legend
 
 - PC right-side labels: tied members' name spread widened 14px → 18px per row so stacked names at the same count no longer overlap

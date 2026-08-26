@@ -1643,10 +1643,10 @@ Object.assign(App, {
                 const maxNameLen = Math.max(0, ...datasets.map(d => d.label.length));
 
                 // Spread right-side labels so members tied on the same final count
-                // don't stack on top of one another (18px pitch clears the 11px
-                // font). Tied names are ordered by leaderboard ranking (shared
-                // engine), so the right side reads top-to-bottom in exact
-                // ranking order.
+                // start centered on their line (18px pitch clears the 11px font),
+                // ordered by leaderboard ranking (shared engine) so ties read
+                // top-to-bottom in exact ranking order. Final collision-free
+                // placement happens in the label plugin at draw time.
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};
@@ -1656,24 +1656,49 @@ Object.assign(App, {
                     indices.forEach((i, k) => { labelOffsets[i] = (k - (n - 1) / 2) * 18; });
                 });
 
-                // Draw each athlete's name at the far right, aligned with their
-                // line's final value (PC only). On mobile the bottom legend is used.
+                // Draw each athlete's name at the far right (PC only; mobile uses
+                // the bottom legend). Desired y = line endpoint + tie-spread
+                // offset; a packing pass then enforces an 18px minimum gap
+                // between ALL names (top-to-bottom in ranking order), so even 20
+                // members crowded on two adjacent counts can never overlap each
+                // other. The stack is finally clamped above the x-axis tick zone,
+                // so the lowest names can never collide with the date labels.
                 const rightLabelsPlugin = {
                     id: 'kioskRightLabels',
                     afterDatasetsDraw(chart) {
                         if (!isDesktop) return;
                         const ctx = chart.ctx;
-                        ctx.save();
-                        ctx.font = '600 11px system-ui, sans-serif';
-                        ctx.textBaseline = 'middle';
-                        ctx.textAlign = 'left';
+                        const area = chart.chartArea;
+                        const GAP = 18;
+                        const topLimit = area.top + 7;
+                        const bottomLimit = area.bottom - 7;
+                        const items = [];
                         chart.data.datasets.forEach((ds, di) => {
                             const meta = chart.getDatasetMeta(di);
                             if (!meta.visible) return;
                             const lastPt = meta.data[meta.data.length - 1];
                             if (!lastPt || !isFinite(lastPt.x) || !isFinite(lastPt.y)) return;
-                            ctx.fillStyle = ds.borderColor;
-                            ctx.fillText(ds.label, chart.chartArea.right + 6, lastPt.y + (labelOffsets[di] || 0));
+                            items.push({ ds, y: lastPt.y + (labelOffsets[di] || 0) });
+                        });
+                        items.sort((a, b) => (a.y - b.y) || (rankOfMember[a.ds._memberId] - rankOfMember[b.ds._memberId]));
+                        const pack = () => {
+                            for (let i = 1; i < items.length; i++) {
+                                if (items[i].y < items[i - 1].y + GAP) items[i].y = items[i - 1].y + GAP;
+                            }
+                        };
+                        pack();
+                        if (items.length && items[items.length - 1].y > bottomLimit) {
+                            const excess = items[items.length - 1].y - bottomLimit;
+                            items.forEach(it => { it.y -= excess; });
+                            pack();
+                        }
+                        ctx.save();
+                        ctx.font = '600 11px system-ui, sans-serif';
+                        ctx.textBaseline = 'middle';
+                        ctx.textAlign = 'left';
+                        items.forEach(it => {
+                            ctx.fillStyle = it.ds.borderColor;
+                            ctx.fillText(it.ds.label, area.right + 6, Math.max(it.y, topLimit));
                         });
                         ctx.restore();
                     }
@@ -1787,18 +1812,19 @@ Object.assign(App, {
 
                 if (App._kioskChartInstance) App._kioskChartInstance.destroy();
                 // Make the chart tall enough to fit every member's line + labels,
-                // even with 50 athletes. Top/bottom padding reserve room for the
-                // staggered right-side names (and crowns) of the highest/lowest
-                // groups, plus headroom so stacked event markers are never clipped.
+                // even with 50 athletes. Top padding reserves room for the
+                // staggered right-side names (and crowns) of the highest group,
+                // plus headroom so stacked event markers are never clipped.
+                // Bottom padding only needs x-axis tick room: the label plugin
+                // clamps all names above the tick zone.
                 const offs = Object.values(labelOffsets);
                 const upSpread = offs.length ? Math.max(0, ...offs.map(o => -o)) : 0;
-                const downSpread = offs.length ? Math.max(0, ...offs) : 0;
                 const evPerDate = {};
                 crownEvents.forEach(ev => { evPerDate[ev.date] = (evPerDate[ev.date] || 0) + 1; });
                 const maxStack = Object.keys(evPerDate).length ? Math.max(...Object.values(evPerDate)) : 0;
                 const markerHeadroom = maxStack > 1 ? 30 + 16 * (maxStack - 1) : 0;
                 const topPad = Math.max(34, upSpread + 16, markerHeadroom);
-                const bottomPad = Math.max(18, downSpread + 16);
+                const bottomPad = 18;
                 const chartH = Math.max(280, series.length * 30 + topPad + bottomPad);
                 const wrap = canvas.parentElement;
                 if (wrap) wrap.style.height = chartH + 'px';
