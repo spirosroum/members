@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.32 (13:35) — Fix: false «took the Throne alone» in the Hunt Log
+
+- When a co-king group extended the record on the same day but the actor's entry was replayed first (earliest `entryTime`, e.g. the others were backfilled later), the `consolidate` event decided «who broke away» from the replay-time `latestCounts` snapshot — the not-yet-replayed co-kings still showed their old count and were all falsely listed as broken away (e.g. «Γιώργος took the Throne alone — broke away from Fransisco & Reynaldo & Μαρία & Δημοσθένης» on Aug 5, while Reynaldo/Μαρία/Δημοσθένης had in fact extended together with him to 2)
+- The split now uses the full per-date histories via `identicalThrough` (complete series, not the replay cursor): co-kings still identical through the event date are credited as the new king group (`alsoIds`), only genuinely diverged members are listed as broken away
+- Same scenario now logs: «Γιώργος & Reynaldo & Μαρία & Δημοσθένης took the Throne alone — Broke away from Fransisco. · August 5» — matching the leaderboard (4 crowned at 2, Fransisco at 1)
+- `BUILT` and the app-kiosk.js cache-buster synced to `20260826-59`
+
 ## 2026-08-26 — v1.31 (13:05) — Chart now uses the shared Crown Bounty ranking engine
 
 - `renderKioskChart` no longer reimplements ranking/crown logic: `rankOfMember` ordering and the 👑 group now come straight from the shared `rankPeriodSeries()` engine (same source of truth as the Bounty Leaderboard and the Period Rankings modal), removing the duplicated inline tie-break code

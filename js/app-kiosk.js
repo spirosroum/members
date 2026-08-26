@@ -1070,9 +1070,16 @@ Object.assign(App, {
                                 reignChallenged = false;
                                 challengedInReign.clear();
                             }
-                            const dropped = kingGroup.filter(id => id !== ev.memberId && (latestCounts[id] ?? 0) === kingCount);
-                            if (dropped.length > 0 && !identicalThrough(ev.memberId, dropped[0], ev.date)) {
-                                events.push({ type: 'consolidate', memberId: ev.memberId, alsoIds: [], count: ev.count, date: ev.date, ts: ev.ts, prevKingIds: dropped.slice(), prevKingCount: kingCount });
+                            // Who truly broke away is decided by the full
+                            // per-date histories (identicalThrough reads the
+                            // complete series), NOT by latestCounts — same-day
+                            // co-kings whose entries are replayed later would
+                            // otherwise look dropped while still extending
+                            // together with the actor.
+                            const stillWith = kingGroup.filter(id => id !== ev.memberId && identicalThrough(id, ev.memberId, ev.date));
+                            const dropped = kingGroup.filter(id => id !== ev.memberId && !stillWith.includes(id));
+                            if (dropped.length > 0) {
+                                events.push({ type: 'consolidate', memberId: ev.memberId, alsoIds: stillWith.slice(), count: ev.count, date: ev.date, ts: ev.ts, prevKingIds: dropped.slice(), prevKingCount: kingCount });
                             }
                             kingCount = ev.count;
                         }
