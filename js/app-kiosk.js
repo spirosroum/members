@@ -1658,11 +1658,13 @@ Object.assign(App, {
 
                 // Draw each athlete's name at the far right (PC only; mobile uses
                 // the bottom legend). Desired y = line endpoint + tie-spread
-                // offset; a packing pass then enforces an 18px minimum gap
-                // between ALL names (top-to-bottom in ranking order), so even 20
-                // members crowded on two adjacent counts can never overlap each
-                // other. The stack is finally clamped above the x-axis tick zone,
-                // so the lowest names can never collide with the date labels.
+                // offset. A two-sided packing pass then makes the layout
+                // collision-free: an 18px minimum gap between ALL names
+                // (top-to-bottom in ranking order — even 20 members crowded on
+                // two adjacent counts can never overlap), the lowest name kept
+                // above the x-axis tick zone (no date-label collisions), and the
+                // highest kept inside the chart — inter-group gaps compress
+                // where needed instead of shifting the whole stack off its line.
                 const rightLabelsPlugin = {
                     id: 'kioskRightLabels',
                     afterDatasetsDraw(chart) {
@@ -1680,17 +1682,24 @@ Object.assign(App, {
                             if (!lastPt || !isFinite(lastPt.x) || !isFinite(lastPt.y)) return;
                             items.push({ ds, y: lastPt.y + (labelOffsets[di] || 0) });
                         });
+                        if (!items.length) return;
                         items.sort((a, b) => (a.y - b.y) || (rankOfMember[a.ds._memberId] - rankOfMember[b.ds._memberId]));
-                        const pack = () => {
+                        const pushDown = () => {
                             for (let i = 1; i < items.length; i++) {
                                 if (items[i].y < items[i - 1].y + GAP) items[i].y = items[i - 1].y + GAP;
                             }
                         };
-                        pack();
-                        if (items.length && items[items.length - 1].y > bottomLimit) {
-                            const excess = items[items.length - 1].y - bottomLimit;
-                            items.forEach(it => { it.y -= excess; });
-                            pack();
+                        pushDown();
+                        for (let iter = 0; iter < 4; iter++) {
+                            if (items[items.length - 1].y > bottomLimit) {
+                                items[items.length - 1].y = bottomLimit;
+                                for (let i = items.length - 2; i >= 0; i--) {
+                                    if (items[i].y > items[i + 1].y - GAP) items[i].y = items[i + 1].y - GAP;
+                                }
+                            }
+                            if (items[0].y >= topLimit) break;
+                            items[0].y = topLimit;
+                            pushDown();
                         }
                         ctx.save();
                         ctx.font = '600 11px system-ui, sans-serif';

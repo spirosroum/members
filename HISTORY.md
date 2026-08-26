@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.33 (15:10) — Fix: chart label packing collapsed top names, labels off their lines
+
+- The v1.32 packing shifted the whole label stack up when the lowest names hit the x-axis zone, then clamped each top item individually — pushing the top names above the chart top where the per-item clamp dropped them onto the SAME pixel (👑 names rendered on top of each other) and dragged every label off its line
+- Replaced with a two-sided packing: forward 18px-gap pass → backward clamp from the bottom limit (compressing inter-group gaps only as much as needed) → top clamp → forward pass again, iterated to convergence — labels stay near their lines, no name ever leaves the chart area or enters the tick zone
+- Added an empty-dataset guard in the label plugin
+
 ## 2026-08-26 — v1.32 (13:20) — Crown Bounty chart: collision-packed right-side name labels
 
 - Real cause of the bottom-right overlap: names of the lowest group extended below the chart area into the x-axis date-label zone — not tight tie-spread spacing
