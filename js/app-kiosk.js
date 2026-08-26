@@ -698,17 +698,21 @@ Object.assign(App, {
                 // displaced shows ▼ red, holding steady shows nothing.
                 const refPlaces = {};
                 if (refIso !== selIso) {
-                    const refEntries = active.map(e => ({
-                        id: e.id,
-                        member: e.member,
-                        c: countAtSeries(e.series, refIso),
-                        firstTimeAtCount: e.firstTimeAtCount,
-                        points: e.points.filter(pt => pt.date <= refIso)
-                    }))
+                    const refEntries = active.map(e => {
+                        const c = countAtSeries(e.series, refIso);
+                        return {
+                            id: e.id,
+                            member: e.member,
+                            c,
+                            count: c,
+                            firstTimeAtCount: e.firstTimeAtCount,
+                            points: e.points.filter(pt => pt.date <= refIso)
+                        };
+                    })
                         .filter(x => x.c > 0)
                         .sort((a, b) => {
                             if (b.c !== a.c) return b.c - a.c;
-                            const rd = App.crownReachDiff(a, b);
+                            const rd = App.crownTieCompare(a, b);
                             if (rd !== 0) return rd;
                             const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
                             const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;
@@ -894,12 +898,28 @@ Object.assign(App, {
                 return result;
             },
 
-            // Seniority comparison for tied members: the FIRST count at which
-            // their reach times differ decides. Comparing only the current
-            // count would flip the order between members with identical
-            // histories every time they extend on the same day in a different
-            // time-of-day order.
-            crownReachDiff: (a, b) => {
+            // Tie-break for members holding the SAME count: places are
+            // claimed, not taken by matching — the holder of a count keeps
+            // the better place until someone exceeds it. Walk the counts
+            // from the top down: the first count the two members reached on
+            // DIFFERENT dates decides (earlier date = the original claimant).
+            // Reaching a new count on the same day preserves the previous
+            // standing between the two. When every count was reached on the
+            // same dates (identical histories — they share the place anyway)
+            // seniority falls back to the first reach-time difference, which
+            // never flips on same-day extensions.
+            crownTieCompare: (a, b) => {
+                const reachedDate = (e, k) => {
+                    for (let i = 0; i < e.points.length; i++) {
+                        if (e.points[i].count >= k) return e.points[i].date;
+                    }
+                    return null;
+                };
+                for (let k = a.count || 0; k >= 1; k--) {
+                    const da = reachedDate(a, k);
+                    const db = reachedDate(b, k);
+                    if (da !== db) return da < db ? -1 : 1;
+                }
                 const at = (e, k) => (e.firstTimeAtCount && e.firstTimeAtCount[k]) ? new Date(e.firstTimeAtCount[k]).getTime() : Infinity;
                 const n = Math.min(a.count || 0, b.count || 0);
                 for (let k = 1; k <= n; k++) {
@@ -912,8 +932,9 @@ Object.assign(App, {
 
             // Shared ranking engine for every period standings view (Bounty
             // Leaderboard, period rankings modal, chart rankings/crown):
-            // count desc; ties broken by seniority — the first count at
-            // which reach times differ (session-anchored), then first
+            // count desc; ties broken by claim seniority (crownTieCompare —
+            // the holder of a count keeps the place until someone exceeds
+            // it), then first
             // training date, then name/id. One holder per position; only
             // members whose entire history is exactly identical share a place.
             // e.crown marks the reigning group (top count + identical to the
@@ -933,7 +954,7 @@ Object.assign(App, {
                 const active = entries.filter(e => e.count > 0);
                 active.sort((a, b) => {
                     if (b.count !== a.count) return b.count - a.count;
-                    const rd = App.crownReachDiff(a, b);
+                    const rd = App.crownTieCompare(a, b);
                     if (rd !== 0) return rd;
                     const fa = a.points.length ? new Date(a.points[0].date + 'T00:00:00').getTime() : Infinity;
                     const fb = b.points.length ? new Date(b.points[0].date + 'T00:00:00').getTime() : Infinity;

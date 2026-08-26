@@ -7,6 +7,14 @@ Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is 
 - PC right-side labels: tied members' name spread widened 14px → 18px per row so stacked names at the same count no longer overlap
 - Mobile tap legend: grid now fills column-first (`grid-auto-flow: column` + explicit row count), so rankings read top-left → bottom-left, then top-right → bottom-right
 
+## 2026-08-26 — v1.34 (14:55) — Ranking rewritten: claim-seniority tie-break (holder keeps the place)
+
+- The v1.33 tie-break compared reach times from count 1 upward, so a member who trained early in the period was deemed «senior» and jumped to 1st by merely MATCHING the top count (Reynaldo took 1st on Aug 19 with 5 while Μανός, 3rd with 5 since Aug 18, dropped to 4th) — violating the core rule that matching a score never takes the place
+- New `crownTieCompare()` (replaces `crownReachDiff`): for members tied at count N, walk counts top-down — the first count they reached on DIFFERENT dates decides (earlier date = the original claimant); reaching a new count on the same day preserves the previous standing between them; fully identical histories (shared place) fall back to the stable first reach-time difference
+- Verified against the reported dates: Aug 19 → Δημοσθένης/Μαρία share 1st, Μανός 3rd, Reynaldo 4th (no arrows, nobody moves); Aug 20 → Μανός 1st 👑, Reynaldo 2nd (both hit 6 the same day, Μανός was above at 5), Δημοσθένης/Μαρία share 3rd
+- Applied to `rankPeriodSeries` (Bounty Leaderboard, rankings modal, chart) and the ▲/▼ yesterday comparison; Hunt Log logic untouched (already correct)
+- `BUILT` and the app-kiosk.js cache-buster synced to `20260826-61`
+
 ## 2026-08-26 — v1.33 (14:10) — Hunt Log duplicate «took the Throne alone» + tied-king order flip fixed
 
 - Hunt Log: `kingGroup` was never pruned when co-kings fell behind, so every later record extension by the surviving group re-fired the `consolidate` event against long-gone members (Μαρία & Δημοσθένης «broke away from Fransisco & Reynaldo & Γιώργος Πα.» on both Aug 10 AND Aug 12). The reign is now pruned to the still-identical kings at each consolidation, so the event fires exactly once per actual reduction of the king group
