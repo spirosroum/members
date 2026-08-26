@@ -895,7 +895,8 @@ Object.assign(App, {
             },
 
             // Shared ranking engine for every period standings view (Bounty
-            // Leaderboard, period rankings modal): count desc; ties broken by
+            // Leaderboard, period rankings modal, chart rankings/crown):
+            // count desc; ties broken by
             // who reached the score first (session-anchored), then first
             // training date, then name/id. One holder per position; only
             // members whose entire history is exactly identical share a place.
@@ -1576,26 +1577,16 @@ Object.assign(App, {
                 const displayNameById = {};
                 series.forEach((s, i) => { displayNameById[s.member.id] = displayNames[i]; });
 
-                // Final king(s): everyone tied at the top final count whose
-                // training history is exactly identical to the earliest top
-                // holder — matching the Crown Bounty Leaderboard.
+                // Rankings and the reigning Crown group come straight from the
+                // shared ranking engine — the same source of truth as the
+                // Bounty Leaderboard and the period rankings modal.
+                const rankedEntries = App.rankPeriodSeries(series, Utils.dateToLocalIso(until));
+                const rankOfMember = {};
+                rankedEntries.forEach(e => { rankOfMember[e.member.id] = e.place; });
+                const kingIds = new Set(rankedEntries.filter(e => e.crown).map(e => e.member.id));
+
                 const lastDate = labels[labels.length - 1];
                 const finalCounts = datasets.map(d => countAt[d._memberId][lastDate]);
-                const maxFinal = Math.max(...finalCounts);
-                const ptsKeyOf = (id) => {
-                    const s = series.find(x => x.member.id === id);
-                    return s ? s.points.map(p => p.date + '=' + p.count).join('|') : '';
-                };
-                const tiedIds = datasets
-                    .filter(d => countAt[d._memberId][lastDate] === maxFinal)
-                    .map(d => d._memberId);
-                const tsOfCount = (id, c) => {
-                    const s = series.find(x => x.member.id === id);
-                    const t = (s && s.firstTimeAtCount && s.firstTimeAtCount[c]) || null;
-                    return t ? new Date(t).getTime() : Infinity;
-                };
-                const primaryId = tiedIds.reduce((b, id) => (tsOfCount(id, maxFinal) < tsOfCount(b, maxFinal) ? id : b), tiedIds[0]);
-                const kingIds = new Set(tiedIds.filter(id => ptsKeyOf(id) === ptsKeyOf(primaryId)));
                 datasets.forEach(d => {
                     if (kingIds.has(d._memberId)) d.label = '👑 ' + d.label;
                 });
@@ -1604,17 +1595,8 @@ Object.assign(App, {
 
                 // Spread right-side labels so members tied on the same final count
                 // don't stack on top of one another. Tied names are ordered by
-                // leaderboard ranking (count desc, earlier reach first), so the
+                // leaderboard ranking (shared engine), so the
                 // right side reads top-to-bottom in exact ranking order.
-                const rankOfMember = {};
-                series.slice().sort((a, b) => {
-                    const ca = a.points.length ? a.points[a.points.length - 1].count : 0;
-                    const cb = b.points.length ? b.points[b.points.length - 1].count : 0;
-                    if (ca !== cb) return cb - ca;
-                    const ta = (a.firstTimeAtCount && a.firstTimeAtCount[ca]) ? new Date(a.firstTimeAtCount[ca]).getTime() : Infinity;
-                    const tb = (b.firstTimeAtCount && b.firstTimeAtCount[cb]) ? new Date(b.firstTimeAtCount[cb]).getTime() : Infinity;
-                    return ta - tb;
-                }).forEach((s, i) => { rankOfMember[s.member.id] = i + 1; });
                 const yGroups = {};
                 finalCounts.forEach((c, i) => { (yGroups[c] = yGroups[c] || []).push(i); });
                 const labelOffsets = {};

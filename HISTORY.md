@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-26 — v1.31 (13:05) — Chart now uses the shared Crown Bounty ranking engine
+
+- `renderKioskChart` no longer reimplements ranking/crown logic: `rankOfMember` ordering and the 👑 group now come straight from the shared `rankPeriodSeries()` engine (same source of truth as the Bounty Leaderboard and the Period Rankings modal), removing the duplicated inline tie-break code
+- Side benefit: chart tooltips/legend now display shared places (e.g. two members with identical histories both show #1) exactly like the Bounty Leaderboard
+- No behavior change to Hunt Log, Winners list or period scoping — verified they already derive from `getCrownEvents` / `getCumulativeTrainingSeries`
+- `BUILT` and the app-kiosk.js cache-buster synced to `20260826-58`
+
 ## 2026-08-26 — v1.30 (12:15) — Fix: kiosk reload loop from stale version guard
 
 - The v1.29 deploy bumped `version.txt` but not the `BUILT` constant baked into `index.html`, so the version guard saw a mismatch every check and reloaded the page forever (most visible in the always-on check-in portal)
