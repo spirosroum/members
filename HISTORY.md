@@ -2,13 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-28 — v1.38 (17:45) — Crown Bounty: fix clickable profiles for rescued members
+
+- `getPlayerWinsDefeats()` now accepts optional `precomputedSeries` parameter
+- `openPlayerProfile()` builds member list with rescued members (from check-ins/visits) matching `renderBountyLeaderboard` and `openPeriodRankings` logic
+- Clicking any member in Bounty Leaderboard, Period Rankings, or Period Winners now works correctly, including rescued members not in the members table
+
 ## 2026-08-28 — v1.37 (17:15) — Crown Bounty: fix clickable profiles (broken by getPlayerWinsDefeats signature change)
-
-- `getPlayerWinsDefeats()` signature changed to accept only `(memberId, periodStartIso)` and internally fetch series/period bounds
-- `openPlayerProfile()` call updated to match new signature
-- Profile cards in Bounty Leaderboard and Period Rankings modal are clickable again
-
-## 2026-08-28 — v1.36 (16:45) — Crown Bounty: fix wins/defeats/ties calculation, remove Executioner/Defender badges
 
 - Rewrote `getPlayerWinsDefeats()` to calculate from daily ranking movements (not just Crown events):
   - Win = moved UP positions in daily ranking (sum of rank improvements day-over-day)

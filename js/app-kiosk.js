@@ -1337,35 +1337,51 @@ Object.assign(App, {
             // Win = moved UP one position in the daily ranking.
             // Defeat = moved DOWN one position in the daily ranking.
             // Tie = trained on the same day as another member with identical training history (same points on all dates up to that day).
-            getPlayerWinsDefeats: (memberId, periodStartIso = null) => {
-                // Determine the period and fetch series
-                let series;
+            getPlayerWinsDefeats: (memberId, periodStartIso = null, precomputedSeries = null) => {
+                // Determine the period and fetch series (unless precomputed)
+                let series = precomputedSeries;
                 let periodStart;
                 let periodEnd;
-                if (periodStartIso) {
-                    // Specific period requested (from period winners click)
-                    const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
-                    if (p) {
-                        const todayMid = new Date();
-                        todayMid.setHours(0, 0, 0, 0);
-                        const lastDay = new Date(p.end.getTime() - 86400000);
-                        periodEnd = lastDay < todayMid ? lastDay : todayMid;
-                        periodStart = p.start;
+                if (!series) {
+                    if (periodStartIso) {
+                        // Specific period requested (from period winners click)
+                        const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
+                        if (p) {
+                            const todayMid = new Date();
+                            todayMid.setHours(0, 0, 0, 0);
+                            const lastDay = new Date(p.end.getTime() - 86400000);
+                            periodEnd = lastDay < todayMid ? lastDay : todayMid;
+                            periodStart = p.start;
+                            const allMembers = DB.getMembers();
+                            const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                            series = App.getCumulativeTrainingSeries(members, periodStart, periodEnd);
+                        }
+                    } else {
+                        // Current viewed period (from bounty leaderboard/chart) — use same member collection as renderBountyLeaderboard (includes rescued members)
+                        const vp = App.getViewedBountyPeriod();
+                        const todayEnd = new Date();
+                        todayEnd.setHours(23, 59, 59, 999);
+                        periodEnd = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
+                        periodStart = new Date(vp.start.getTime());
+                        periodStart.setHours(0, 0, 0, 0);
                         const allMembers = DB.getMembers();
                         const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                        const knownIds = new Set(allMembers.map(m => m.id));
+                        DB.getClassCheckins().forEach(ci => {
+                            if (ci.entryTime && !knownIds.has(ci.memberId)) {
+                                knownIds.add(ci.memberId);
+                                members.push({ id: ci.memberId, firstName: '', lastName: String(ci.memberId) });
+                            }
+                        });
+                        const checkinVisitIds = new Set(DB.getClassCheckins().map(c => c.visitId));
+                        DB.getVisits().forEach(v => {
+                            if (v.entryTime && !checkinVisitIds.has(v.id) && !knownIds.has(v.memberId)) {
+                                knownIds.add(v.memberId);
+                                members.push({ id: v.memberId, firstName: '', lastName: String(v.memberId) });
+                            }
+                        });
                         series = App.getCumulativeTrainingSeries(members, periodStart, periodEnd);
                     }
-                } else {
-                    // Current viewed period (from bounty leaderboard/chart)
-                    const vp = App.getViewedBountyPeriod();
-                    const todayEnd = new Date();
-                    todayEnd.setHours(23, 59, 59, 999);
-                    periodEnd = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
-                    periodStart = new Date(vp.start.getTime());
-                    periodStart.setHours(0, 0, 0, 0);
-                    const allMembers = DB.getMembers();
-                    const members = allMembers.filter(m => !m.hideFromLeaderboard);
-                    series = App.getCumulativeTrainingSeries(members, periodStart, periodEnd);
                 }
 
                 let wins = 0;
@@ -1502,8 +1518,9 @@ Object.assign(App, {
                 // Determine the period to analyze
                 let series;
                 let periodLabel = '';
+                let series;
                 if (periodStartIso) {
-                    // Specific period requested (from period winners click)
+                    // Specific period requested (from period winners/rankings click) — use same member collection as renderBountyLeaderboard (includes rescued members)
                     const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
                     if (p) {
                         const todayMid = new Date();
@@ -1512,11 +1529,25 @@ Object.assign(App, {
                         const endDay = lastDay < todayMid ? lastDay : todayMid;
                         const allMembers = DB.getMembers();
                         const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                        const knownIds = new Set(allMembers.map(m => m.id));
+                        DB.getClassCheckins().forEach(ci => {
+                            if (ci.entryTime && !knownIds.has(ci.memberId)) {
+                                knownIds.add(ci.memberId);
+                                members.push({ id: ci.memberId, firstName: '', lastName: String(ci.memberId) });
+                            }
+                        });
+                        const checkinVisitIds = new Set(DB.getClassCheckins().map(c => c.visitId));
+                        DB.getVisits().forEach(v => {
+                            if (v.entryTime && !checkinVisitIds.has(v.id) && !knownIds.has(v.memberId)) {
+                                knownIds.add(v.memberId);
+                                members.push({ id: v.memberId, firstName: '', lastName: String(v.memberId) });
+                            }
+                        });
                         series = App.getCumulativeTrainingSeries(members, p.start, endDay);
                         periodLabel = `${map.periodWord || 'Period'} ${p.n}`;
                     }
                 } else {
-                    // Current viewed period (from bounty leaderboard/chart)
+                    // Current viewed period (from bounty leaderboard/chart) — use same member collection as renderBountyLeaderboard (includes rescued members)
                     const vp = App.getViewedBountyPeriod();
                     const todayEnd = new Date();
                     todayEnd.setHours(23, 59, 59, 999);
@@ -1525,6 +1556,20 @@ Object.assign(App, {
                     since.setHours(0, 0, 0, 0);
                     const allMembers = DB.getMembers();
                     const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                    const knownIds = new Set(allMembers.map(m => m.id));
+                    DB.getClassCheckins().forEach(ci => {
+                        if (ci.entryTime && !knownIds.has(ci.memberId)) {
+                            knownIds.add(ci.memberId);
+                            members.push({ id: ci.memberId, firstName: '', lastName: String(ci.memberId) });
+                        }
+                    });
+                    const checkinVisitIds = new Set(DB.getClassCheckins().map(c => c.visitId));
+                    DB.getVisits().forEach(v => {
+                        if (v.entryTime && !checkinVisitIds.has(v.id) && !knownIds.has(v.memberId)) {
+                            knownIds.add(v.memberId);
+                            members.push({ id: v.memberId, firstName: '', lastName: String(v.memberId) });
+                        }
+                    });
                     series = App.getCumulativeTrainingSeries(members, since, until);
                     periodLabel = `${map.periodWord || 'Period'} ${vp.n}`;
                 }
@@ -1537,7 +1582,7 @@ Object.assign(App, {
                 const crownResult = App.getCrownEvents(series);
                 const events = crownResult.events;
 
-                const stats = App.getPlayerWinsDefeats(memberId, periodStartIso);
+                const stats = App.getPlayerWinsDefeats(memberId, periodStartIso, series);
 
                 // Get member name
                 const allMembers = DB.getMembers();
