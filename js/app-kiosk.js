@@ -1337,7 +1337,37 @@ Object.assign(App, {
             // Win = moved UP one position in the daily ranking.
             // Defeat = moved DOWN one position in the daily ranking.
             // Tie = trained on the same day as another member with identical training history (same points on all dates up to that day).
-            getPlayerWinsDefeats: (memberId, series, periodStart, periodEnd) => {
+            getPlayerWinsDefeats: (memberId, periodStartIso = null) => {
+                // Determine the period and fetch series
+                let series;
+                let periodStart;
+                let periodEnd;
+                if (periodStartIso) {
+                    // Specific period requested (from period winners click)
+                    const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
+                    if (p) {
+                        const todayMid = new Date();
+                        todayMid.setHours(0, 0, 0, 0);
+                        const lastDay = new Date(p.end.getTime() - 86400000);
+                        periodEnd = lastDay < todayMid ? lastDay : todayMid;
+                        periodStart = p.start;
+                        const allMembers = DB.getMembers();
+                        const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                        series = App.getCumulativeTrainingSeries(members, periodStart, periodEnd);
+                    }
+                } else {
+                    // Current viewed period (from bounty leaderboard/chart)
+                    const vp = App.getViewedBountyPeriod();
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    periodEnd = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
+                    periodStart = new Date(vp.start.getTime());
+                    periodStart.setHours(0, 0, 0, 0);
+                    const allMembers = DB.getMembers();
+                    const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                    series = App.getCumulativeTrainingSeries(members, periodStart, periodEnd);
+                }
+
                 let wins = 0;
                 let defeats = 0;
                 let ties = 0;
@@ -1507,27 +1537,7 @@ Object.assign(App, {
                 const crownResult = App.getCrownEvents(series);
                 const events = crownResult.events;
 
-                // Determine period start/end for getPlayerWinsDefeats
-                let periodStart, periodEnd;
-                if (periodStartIso) {
-                    const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
-                    if (p) {
-                        const todayMid = new Date();
-                        todayMid.setHours(0, 0, 0, 0);
-                        const lastDay = new Date(p.end.getTime() - 86400000);
-                        periodEnd = lastDay < todayMid ? lastDay : todayMid;
-                        periodStart = p.start;
-                    }
-                } else {
-                    const vp = App.getViewedBountyPeriod();
-                    const todayEnd = new Date();
-                    todayEnd.setHours(23, 59, 59, 999);
-                    periodEnd = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
-                    periodStart = new Date(vp.start.getTime());
-                    periodStart.setHours(0, 0, 0, 0);
-                }
-
-                const stats = App.getPlayerWinsDefeats(memberId, series, periodStart, periodEnd);
+                const stats = App.getPlayerWinsDefeats(memberId, periodStartIso);
 
                 // Get member name
                 const allMembers = DB.getMembers();

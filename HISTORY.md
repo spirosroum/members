@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-28 — v1.37 (17:15) — Crown Bounty: fix clickable profiles (broken by getPlayerWinsDefeats signature change)
+
+- `getPlayerWinsDefeats()` signature changed to accept only `(memberId, periodStartIso)` and internally fetch series/period bounds
+- `openPlayerProfile()` call updated to match new signature
+- Profile cards in Bounty Leaderboard and Period Rankings modal are clickable again
+
 ## 2026-08-28 — v1.36 (16:45) — Crown Bounty: fix wins/defeats/ties calculation, remove Executioner/Defender badges
 
 - Rewrote `getPlayerWinsDefeats()` to calculate from daily ranking movements (not just Crown events):
