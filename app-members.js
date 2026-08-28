@@ -1,0 +1,1049 @@
+// =====================================================================
+// app-members.js
+// App methods: generateRandomId, setDirectorySort, switchDirStatus, renderMemberDirectory, renderColumnConfigurator, toggleColumn, dragStart, dragOver, drop, renderMemberBin, restoreMember, deleteBinMember, exportFields, openExportModal, toggleExportField, toggleAllExportFields, exportMembersToExcel, massFreeze, hasUsableCoverage, massUnfreeze, openMemberModal, applyPlan, updateBeltColor, memberBeltValue, saveMember, deleteMemberFromModal, clearMemberDebt
+// Plain script (no ES modules). Methods attach to the global App object
+// created in app-core.js. Load order is fixed in index.html.
+// =====================================================================
+// Tracks whether the admin has manually edited the Starting Date in the member
+// modal. When not overridden, applyPlan() stacks the new membership window onto
+// the member's current unexpired expiration (renewal), and the prefilled
+// "today" value never pins the window to today.
+let memberStartOverridden = false;
+
+Object.assign(App, {
+            // --- ADMIN MEMBERS DIRECTORY ---
+            // ── Export Members to Excel (CSV) ──────────────────────────
+            generateRandomId: () => {
+                const members = DB.getMembers();
+                let newId;
+                while (true) {
+                    newId = Math.floor(1000 + Math.random() * 9000).toString();
+                    if (!members.find(m => m.id === newId)) break;
+                }
+                return newId;
+            },
+
+            setDirectorySort: (colId) => {
+                if (App.dirSortCol === colId) { App.dirSortAsc = !App.dirSortAsc; } 
+                else { App.dirSortCol = colId; App.dirSortAsc = true; }
+                App.renderMemberDirectory();
+            },
+
+            switchDirStatus: (status) => {
+                App.dirStatus = status;
+                document.querySelectorAll('.tab-link-members').forEach(el => el.classList.remove('active'));
+                const link = document.getElementById(`tab-link-members-${status}`);
+                if (link) link.classList.add('active');
+                document.querySelectorAll('.tab-content-members').forEach(el => el.classList.add('hidden'));
+                const content = document.getElementById('tab-content-members-directory');
+                if (content) content.classList.remove('hidden');
+                App.renderMemberDirectory();
+            },
+
+            searchMemberDirectory: () => {
+                const query = document.getElementById('member-directory-search').value.trim();
+                if (query) {
+                    App.switchTab('members', 'directory');
+                }
+                App.renderMemberDirectory();
+            },
+
+            clearMemberSearch: () => {
+                const input = document.getElementById('member-directory-search');
+                if (input) input.value = '';
+                App.renderMemberDirectory();
+            },
+
+            // Auto-move Active members whose status is "No sessions" (out of sessions)
+            // and who haven't trained for 28+ days over to Inactive.
+            autoDeactivateDormant: () => {
+                const members = DB.getMembers();
+                const visits = DB.getVisits();
+                const cutoff = Date.now() - 28 * 24 * 60 * 60 * 1000;
+                let changed = false;
+                members.forEach(m => {
+                    if ((m.accountStatus || 'Active') !== 'Active') return;
+                    if (!(m.sessionsTotal && parseInt(m.sessionsLeft) <= 0)) return;
+                    const lastVisit = visits.filter(v => v.memberId === m.id).sort((x, y) => new Date(y.entryTime) - new Date(x.entryTime))[0];
+                    const lastTime = lastVisit ? new Date(lastVisit.entryTime).getTime() : 0;
+                    if (!lastTime || lastTime < cutoff) {
+                        m.accountStatus = 'Inactive';
+                        changed = true;
+                    }
+                });
+                if (changed) DB.saveMembers(members);
+            },
+
+            renderMemberDirectory: () => {
+                const members = DB.getMembers();
+                const visits = DB.getVisits();
+                const rawQuery = document.getElementById('member-directory-search').value.trim();
+                const query = Utils.normalizeSearch(rawQuery);
+                const activeCols = App.columnsConfig.filter(c => c.checked);
+
+                // Setup headers based on active columns
+                const headers = document.getElementById('directory-headers');
+                let headersHTML = activeCols.map(c => {
+                    const isSorted = App.dirSortCol === c.id;
+                    const arrow = isSorted ? (App.dirSortAsc ? ' ↑' : ' ↓') : '';
+                    return `<th class="sortable" onclick="App.setDirectorySort('${c.id}')">${c.label}${arrow}</th>`;
+                }).join('');
+                headersHTML += '<th>Action</th>';
+                headers.innerHTML = headersHTML;
+                
+                // Filter members by query — match ID, first/last name, the combined
+                // "First Last" (and "Last First") full name, phone, or email.
+                let filtered = members.filter(m => {
+                    if (!query) return true;
+                    const fullName = Utils.normalizeSearch(`${m.firstName || ''} ${m.lastName || ''}`);
+                    const revName = Utils.normalizeSearch(`${m.lastName || ''} ${m.firstName || ''}`);
+                    return Utils.normalizeSearch(m.id || '').includes(query)
+                        || Utils.normalizeSearch(m.firstName || '').includes(query)
+                        || Utils.normalizeSearch(m.lastName || '').includes(query)
+                        || fullName.includes(query)
+                        || revName.includes(query)
+                        || (m.phone && m.phone.includes(query))
+                        || (m.email && Utils.normalizeSearch(m.email).includes(query));
+                });
+
+                // Filter by selected status submenu (active / inactive / frozen / cancelled).
+                // When searching, ignore status so frozen/inactive members still show up.
+                const dirStatus = App.dirStatus || 'active';
+                if (!query && dirStatus === 'active') {
+                    filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Active');
+                } else if (!query && dirStatus === 'inactive') {
+                    filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Inactive');
+                } else if (!query && dirStatus === 'frozen') {
+                    filtered = filtered.filter(m => (m.accountStatus || 'Active') === 'Frozen');
+                } else if (!query && dirStatus === 'cancelled') {
+                    // Only members whose displayed status is actually "Cancelled" — mirror
+                    // the badge priority so an Expired/Inactive/No-Sessions member who also
+                    // happens to be inactive for 90 days doesn't appear under Cancelled.
+                    filtered = filtered.filter(m => {
+                        if (m.accountStatus === 'Cancelled') return true;
+                        if (m.accountStatus !== 'Active') return false;
+                        const isExpired = m.expirationDate ? Utils.getDaysRemaining(m.expirationDate) < 0 : false;
+                        if (isExpired) return false;
+                        if (m.sessionsTotal && parseInt(m.sessionsLeft) <= 0) return false;
+                        return App.isMemberCancelled(m.id);
+                    });
+                }
+
+                // While a search is active the status sub-filter is ignored, so drop the
+                // status tab highlight to avoid implying the results belong to one status.
+                document.querySelectorAll('.tab-link-members').forEach(el => el.classList.remove('active'));
+                if (!query) {
+                    const statusTab = document.getElementById(`tab-link-members-${dirStatus}`);
+                    if (statusTab) statusTab.classList.add('active');
+                }
+
+                // Show a friendly summary + clear button while searching
+                const hintEl = document.getElementById('member-search-hint');
+                const hintTextEl = document.getElementById('member-search-hint-text');
+                if (hintEl && hintTextEl) {
+                    if (query) {
+                        hintEl.classList.remove('hidden');
+                        hintTextEl.innerHTML = `Found <strong>${filtered.length}</strong> member${filtered.length === 1 ? '' : 's'} matching &quot;<strong>${Utils.escapeHTML(rawQuery)}</strong>&quot; — includes all statuses.`;
+                    } else {
+                        hintEl.classList.add('hidden');
+                    }
+                }
+
+                filtered.sort((a, b) => {
+                    let valA, valB;
+                    let groupA = 0, groupB = 0;
+                    switch(App.dirSortCol) {
+                        case 'firstName': {
+                            const keyA = Utils.sortKey(a.firstName || '');
+                            const keyB = Utils.sortKey(b.firstName || '');
+                            groupA = Utils.isGreek(a.firstName) ? 0 : 1;
+                            groupB = Utils.isGreek(b.firstName) ? 0 : 1;
+                            valA = keyA; valB = keyB;
+                            break;
+                        }
+                        case 'lastName': {
+                            // Greek-script names always sort first (α→ω or ω→α), Latin/English
+                            // names always last, in both directions. Within each block the
+                            // per-direction order still applies.
+                            const keyLastA = Utils.sortKey(a.lastName || '');
+                            const keyLastB = Utils.sortKey(b.lastName || '');
+                            const keyFirstA = Utils.sortKey(a.firstName || '');
+                            const keyFirstB = Utils.sortKey(b.firstName || '');
+                            groupA = Utils.isGreek(a.lastName) ? 0 : 1;
+                            groupB = Utils.isGreek(b.lastName) ? 0 : 1;
+                            if (keyLastA !== keyLastB) { valA = keyLastA; valB = keyLastB; break; }
+                            valA = keyFirstA; valB = keyFirstB;
+                            break;
+                        }
+                        case 'id': {
+                            // ID and Belt were merged into one column — clicking the ID header
+                            // sorts by belt rank (white → black) first, then by numeric ID.
+                            const beltOrder = { 'white': 0, 'blue': 1, 'purple': 2, 'brown': 3, 'black': 4 };
+                            const beltA = beltOrder[(a.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            const beltB = beltOrder[(b.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            if (beltA !== beltB) { valA = beltA; valB = beltB; break; }
+                            const na = parseInt(a.id, 10), nb = parseInt(b.id, 10);
+                            if (!isNaN(na) && !isNaN(nb)) { valA = na; valB = nb; break; }
+                            valA = a.id; valB = b.id;
+                            break;
+                        }
+                        case 'belt': {
+                            const beltOrder = { 'white': 0, 'blue': 1, 'purple': 2, 'brown': 3, 'black': 4 };
+                            valA = beltOrder[(a.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            valB = beltOrder[(b.belt || 'White').split('/')[0].trim().toLowerCase()] ?? 99;
+                            break;
+                        }
+                        case 'gender': valA = a.gender || ''; valB = b.gender || ''; break;
+                        case 'age': valA = a.dob ? new Date(a.dob).getTime() : 0; valB = b.dob ? new Date(b.dob).getTime() : 0; break;
+                        case 'status': valA = a.accountStatus; valB = b.accountStatus; break;
+                        case 'exp': valA = a.expirationDate ? new Date(a.expirationDate).getTime() : 0; valB = b.expirationDate ? new Date(b.expirationDate).getTime() : 0; break;
+                        case 'last-visit': 
+                            const vA = visits.filter(v=>v.memberId===a.id).sort((x,y)=>new Date(y.entryTime)-new Date(x.entryTime))[0];
+                            const vB = visits.filter(v=>v.memberId===b.id).sort((x,y)=>new Date(y.entryTime)-new Date(x.entryTime))[0];
+                            valA = vA ? new Date(vA.entryTime).getTime() : 0;
+                            valB = vB ? new Date(vB.entryTime).getTime() : 0;
+                            break;
+                        default: valA = a.id; valB = b.id;
+                    }
+                    if (typeof valA === 'string' && typeof valB === 'string') {
+                        if (groupA !== groupB) return groupA < groupB ? -1 : 1;
+                        const keyA = Utils.sortKey(valA);
+                        const keyB = Utils.sortKey(valB);
+                        if (keyA !== keyB) return App.dirSortAsc ? (keyA < keyB ? -1 : 1) : (keyA < keyB ? 1 : -1);
+                        return 0;
+                    }
+                    if (valA < valB) return App.dirSortAsc ? -1 : 1;
+                    if (valA > valB) return App.dirSortAsc ? 1 : -1;
+                    return 0;
+                });
+                
+                const list = document.getElementById('member-directory-list');
+                list.innerHTML = filtered.map(m => {
+                    // Member-level expiration and sessions state
+                    const isMemberExpired = m.expirationDate ? Utils.getDaysRemaining(m.expirationDate) < 0 : false;
+                    const isOutOfSessions = m.sessionsTotal && parseInt(m.sessionsLeft) <= 0;
+
+                    let statBadge = '';
+                    if (m.accountStatus === 'Frozen') statBadge = `<span class="badge badge-frozen">Frozen</span>`;
+                    else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
+                    else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
+                    else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
+                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">Active (No Sessions)</span>`;
+                    else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
+                    else statBadge = `<span class="badge badge-active">Active</span>`;
+                    const trialBadge = m.trialParticipant
+                        ? `<span class="badge badge-trial" style="margin-left:0.4rem;">Trial${m.trialConverted ? ' · converted' : ''}</span>`
+                        : '';
+
+                    let rowHTML = '';
+                    activeCols.forEach(c => {
+                        switch(c.id) {
+                            case 'firstName': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.firstName)}</strong>${trialBadge}</td>`; break;
+                            case 'lastName': rowHTML += `<td data-label="${c.label}"><strong>${Utils.escapeHTML(m.lastName)}</strong></td>`; break;
+                            case 'id': rowHTML += `<td data-label="${c.label}">${Utils.getMemberIdBadge(m)}</td>`; break;
+                            case 'gender': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.gender || 'Unspecified')}</td>`; break;
+                            case 'age': rowHTML += `<td data-label="${c.label}">${Utils.calcAge(m.dob)}</td>`; break;
+                            case 'phone': rowHTML += `<td data-label="${c.label}">${Utils.escapeHTML(m.phone || 'N/A')}</td>`; break;
+                            case 'status': rowHTML += `<td data-label="${c.label}">${statBadge}</td>`; break;
+                            case 'exp': {
+                                // For session-only packages with no validity days, prefer showing a blank expiration field
+                                let expDisplay = '';
+                                if (m.expirationDate) expDisplay = Utils.formatDate(m.expirationDate);
+                                else if (!m.sessionsTotal) expDisplay = 'N/A';
+                                else expDisplay = '';
+                                rowHTML += `<td data-label="${c.label}">${expDisplay}</td>`;
+                                break;
+                            }
+                            case 'last-visit':
+                                const lv = visits.filter(v=>v.memberId===m.id).sort((x,y)=>new Date(y.entryTime)-new Date(x.entryTime))[0];
+                                rowHTML += `<td data-label="${c.label}">${lv ? Utils.formatDate(lv.entryTime) : 'Never'}</td>`;
+                                break;
+                        }
+                    });
+
+                    return `
+                    <tr class="${isMemberExpired && m.accountStatus !== 'Frozen' && m.accountStatus !== 'Inactive' && m.accountStatus !== 'Cancelled' ? 'bg-red-50' : ''}">
+                        ${rowHTML}
+                        <td data-label="Action" class="cell-actions"><button class="btn-primary btn-small" onclick="App.openMemberModal('${m.id}')">Manage</button></td>
+                    </tr>
+                `}).join('') || `<tr><td colspan="${activeCols.length + 1}" class="text-center text-gray">${query ? `No members found matching &quot;${Utils.escapeHTML(query)}&quot;.` : 'No members found.'}</td></tr>`;
+
+                // Phone view: a friendly card list instead of the dense table. Rendered
+                // alongside the desktop table — CSS shows one or the other per breakpoint.
+                const cardsContainer = document.getElementById('member-directory-cards');
+                cardsContainer.innerHTML = filtered.map(m => {
+                    const isMemberExpired = m.expirationDate ? Utils.getDaysRemaining(m.expirationDate) < 0 : false;
+                    const isOutOfSessions = m.sessionsTotal && parseInt(m.sessionsLeft) <= 0;
+
+                    let statBadge = '';
+                    if (m.accountStatus === 'Frozen') statBadge = `<span class="badge badge-frozen">Frozen</span>`;
+                    else if (m.accountStatus === 'Cancelled') statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
+                    else if (m.accountStatus === 'Inactive') statBadge = `<span class="badge badge-inactive">Inactive</span>`;
+                    else if (isMemberExpired) statBadge = `<span class="badge badge-inactive">Expired</span>`;
+                    else if (isOutOfSessions) statBadge = `<span class="badge badge-warning">Active (No Sessions)</span>`;
+                    else if (App.isMemberCancelled(m.id)) statBadge = `<span class="badge badge-cancelled">Cancelled</span>`;
+                    else statBadge = `<span class="badge badge-active">Active</span>`;
+                    const trialBadge = m.trialParticipant
+                        ? `<span class="badge badge-trial">Trial${m.trialConverted ? ' · converted' : ''}</span>`
+                        : '';
+
+                    // Match the desktop table: the status badge only renders when the
+                    // "status" column is enabled in the column configurator.
+                    const statusColEnabled = activeCols.some(c => c.id === 'status');
+
+                    const chips = [];
+                    activeCols.forEach(c => {
+                        switch(c.id) {
+                            case 'firstName': case 'lastName': case 'id': case 'status': break;
+                            case 'gender':
+                                if (m.gender) chips.push(`<span class="member-chip"><span class="chip-label">Gender</span>${Utils.escapeHTML(m.gender)}</span>`);
+                                break;
+                            case 'age': {
+                                const age = Utils.calcAge(m.dob);
+                                if (age !== 'N/A') chips.push(`<span class="member-chip"><span class="chip-label">Age</span>${age}</span>`);
+                                break;
+                            }
+                            case 'phone':
+                                if (m.phone) chips.push(`<span class="member-chip"><span class="chip-label">Phone</span><a href="tel:${Utils.escapeHTML(m.phone)}">${Utils.escapeHTML(m.phone)}</a></span>`);
+                                break;
+                            case 'exp': {
+                                if (m.expirationDate) {
+                                    chips.push(`<span class="member-chip ${isMemberExpired ? 'is-danger' : ''}"><span class="chip-label">Expires</span>${Utils.formatDate(m.expirationDate)}</span>`);
+                                } else if (m.sessionsTotal) {
+                                    chips.push(`<span class="member-chip ${isOutOfSessions ? 'is-warn' : ''}"><span class="chip-label">Sessions left</span>${parseInt(m.sessionsLeft) || 0}</span>`);
+                                }
+                                break;
+                            }
+                            case 'last-visit': {
+                                const lv = visits.filter(v => v.memberId === m.id).sort((x, y) => new Date(y.entryTime) - new Date(x.entryTime))[0];
+                                chips.push(`<span class="member-chip"><span class="chip-label">Last visit</span>${lv ? Utils.formatDate(lv.entryTime) : 'Never'}</span>`);
+                                break;
+                            }
+                        }
+                    });
+
+                    return `
+                    <div class="member-card ${isMemberExpired && m.accountStatus !== 'Frozen' && m.accountStatus !== 'Inactive' && m.accountStatus !== 'Cancelled' ? 'is-alert' : ''}">
+                        <div class="member-card-head">
+                            <div class="member-card-title">
+                                <div class="member-card-name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</div>
+                                <div class="member-card-id">${Utils.getMemberIdBadge(m)}</div>
+                            </div>
+                            <div class="member-card-status">${statusColEnabled ? statBadge : ''}${trialBadge}</div>
+                        </div>
+                        <div class="member-card-meta">${chips.join('')}</div>
+                        <button class="btn-primary member-card-btn" onclick="App.openMemberModal('${m.id}')">Manage</button>
+                    </div>
+                `}).join('') || `<div class="member-cards-empty text-center text-gray">${query ? `No members found matching &quot;${Utils.escapeHTML(query)}&quot;.` : 'No members found.'}</div>`;
+            },
+
+            renderColumnConfigurator: () => {
+                const container = document.getElementById('column-order-container');
+                if(!container) return;
+                
+                container.innerHTML = App.columnsConfig.map((col, idx) => `
+                    <label draggable="true" ondragstart="App.dragStart(${idx})" ondragover="App.dragOver(event)" ondrop="App.drop(${idx})" ondragenter="event.preventDefault()">
+                        <input type="checkbox" ${col.checked ? 'checked' : ''} onchange="App.toggleColumn(${idx}, this.checked)"> ${col.label}
+                    </label>
+                `).join('');
+            },
+
+            toggleColumn: (idx, isChecked) => {
+                App.columnsConfig[idx].checked = isChecked;
+                App.saveColumnsConfig();
+                App.renderMemberDirectory();
+            },
+
+            dragStart: (idx) => { App.draggedColIndex = idx; },
+            dragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; },
+            drop: (targetIdx) => {
+                const srcIdx = App.draggedColIndex;
+                if (srcIdx === null || srcIdx === targetIdx) return;
+                const item = App.columnsConfig.splice(srcIdx, 1)[0];
+                App.columnsConfig.splice(targetIdx, 0, item);
+                App.saveColumnsConfig();
+                App.renderColumnConfigurator();
+                App.renderMemberDirectory();
+            },
+
+            saveColumnsConfig: () => {
+                try { localStorage.setItem('gym_columns_config', JSON.stringify(App.columnsConfig)); } catch (e) {}
+            },
+
+            renderMemberBin: () => {
+                const bin = DB.getBin();
+                document.getElementById('member-bin-list').innerHTML = bin.map(m => `
+                    <tr>
+                        <td data-label="ID">${Utils.getMemberIdBadge(m)}</td>
+                        <td data-label="Name">${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</td>
+                        <td data-label="Deleted Date">${Utils.formatDate(m.deletedAt)}</td>
+                        <td data-label="Action" class="cell-actions">
+                            <div class="flex gap-1">
+                                <button class="btn-success btn-small" onclick="App.restoreMember('${m.id}')">Restore</button>
+                                <button class="btn-danger btn-small" onclick="App.deleteBinMember('${m.id}')">Delete</button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="4" class="text-center text-gray">Recycle bin empty.</td></tr>';
+            },
+
+            restoreMember: (id) => {
+                const bin = DB.getBin();
+                const idx = bin.findIndex(m => m.id === id);
+                if (idx > -1) {
+                    const members = DB.getMembers();
+                    if (members.find(m => m.id === id)) return alert('A member with this ID already exists. Cannot restore.');
+                    members.push(bin[idx]);
+                    DB.saveMembers(members);
+                    bin.splice(idx, 1);
+                    DB.saveBin(bin);
+                    App.renderMemberDirectory();
+                    App.renderMemberBin();
+                }
+            },
+            
+            deleteBinMember: (id) => {
+                if(confirm('Permanently delete member?')) {
+                    DB.saveBin(DB.getBin().filter(m => m.id !== id));
+                    App.renderMemberBin();
+                }
+            },
+
+            exportFields: [
+                { id: 'id', label: 'ID', checked: true, getter: m => m.id },
+                { id: 'firstName', label: 'First Name', checked: true, getter: m => m.firstName || '' },
+                { id: 'lastName', label: 'Last Name', checked: true, getter: m => m.lastName || '' },
+                { id: 'belt', label: 'Belt', checked: true, getter: m => m.belt || 'White' },
+                { id: 'gender', label: 'Gender', checked: false, getter: m => m.gender || '' },
+                { id: 'dob', label: 'Date of Birth', checked: false, getter: m => m.dob || '' },
+                { id: 'age', label: 'Age', checked: false, getter: m => Utils.calcAge(m.dob) },
+                { id: 'phone', label: 'Phone', checked: true, getter: m => m.phone || '' },
+                { id: 'email', label: 'Email', checked: true, getter: m => m.email || '' },
+                { id: 'accountStatus', label: 'Account Status', checked: true, getter: m => m.accountStatus || '' },
+                { id: 'expirationDate', label: 'Expiration Date', checked: false, getter: m => m.expirationDate ? Utils.formatDate(m.expirationDate) : '' },
+                { id: 'notes', label: 'Notes', checked: false, getter: m => m.notes || '' },
+            ],
+
+            openExportModal: () => {
+                const container = document.getElementById('export-fields-container');
+                container.innerHTML = App.exportFields.map((f, i) => `
+                    <label style="display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.85rem; background: ${f.checked ? 'var(--bg-info-soft)' : 'var(--gray-light)'}; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 0.9rem; transition: 0.2s; border: 2px solid ${f.checked ? 'var(--primary)' : 'transparent'}; user-select: none;">
+                        <input type="checkbox" ${f.checked ? 'checked' : ''} onchange="App.toggleExportField(${i}, this.checked)" style="display:none;">
+                        <span style="color: ${f.checked ? 'var(--primary)' : 'var(--dark)'};">${f.label}</span>
+                    </label>
+                `).join('');
+                container.style.display = 'flex';
+                container.style.flexWrap = 'wrap';
+                container.style.gap = '0.5rem';
+                App.openModal('modal-export');
+            },
+
+            toggleExportField: (index, checked) => {
+                App.exportFields[index].checked = checked;
+                App.openExportModal(); // re-render pills
+            },
+
+            toggleAllExportFields: (state) => {
+                App.exportFields.forEach(f => f.checked = state);
+                App.openExportModal(); // re-render pills
+            },
+
+            exportMembersToExcel: () => {
+                const selected = App.exportFields.filter(f => f.checked);
+                if (selected.length === 0) return alert('Please select at least one field to export.');
+
+                const members = DB.getMembers();
+                if (members.length === 0) return alert('No members to export.');
+
+                // CSV escape helper: neutralize spreadsheet formulas (=, +, -, @) that
+                // Excel/LibreOffice would otherwise execute when the file is opened.
+                const esc = (val) => {
+                    let str = String(val == null ? '' : val);
+                    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+                    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                        return '"' + str.replace(/"/g, '""') + '"';
+                    }
+                    return str;
+                };
+
+                // Build CSV
+                const header = selected.map(f => esc(f.label)).join(',');
+                const rows = members.map(m => selected.map(f => esc(f.getter(m))).join(','));
+                const csv = '\uFEFF' + header + '\n' + rows.join('\n'); // UTF-8 BOM for Excel compat
+
+                // Trigger download
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `members_export_${Utils.todayLocalIso()}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                App.closeModal('modal-export');
+            },
+
+            massFreeze: () => {
+                if(!confirm('Are you sure you want to FREEZE ALL currently active members? Expired members will not be affected.')) return;
+                const members = DB.getMembers();
+                let count = 0;
+                members.forEach(m => {
+                    // Only freeze members who actually have usable coverage (unexpired
+                    // time or sessions left). Session-based members are included too —
+                    // the old date-only check silently skipped them.
+                    if (m.accountStatus === 'Active' && !App.computeVisitUnpaid(m)) {
+                        m.accountStatus = 'Frozen';
+                        count++;
+                    }
+                });
+                DB.saveMembers(members);
+                App.renderMemberDirectory();
+                alert(`Successfully froze ${count} active members.`);
+            },
+
+            // Usable coverage independent of the stored account status — used before
+            // deciding a reactivation, because computeVisitUnpaid() short-circuits
+            // on Frozen/Cancelled/Inactive statuses.
+            hasUsableCoverage: (m) => {
+                if (!m) return false;
+                return (m.sessionsTotal && (parseInt(m.sessionsLeft, 10) || 0) > 0)
+                    || (m.expirationDate && Utils.getDaysRemaining(m.expirationDate) >= 0);
+            },
+
+            massUnfreeze: () => {
+                if(!confirm('Are you sure you want to UNFREEZE ALL currently frozen members?')) return;
+                const members = DB.getMembers();
+                let count = 0;
+                members.forEach(m => {
+                    if (m.accountStatus === 'Frozen') {
+                        // Unfreezing must not resurrect a stale "Active" for a member whose
+                        // coverage lapsed while frozen — they lapse to Inactive instead.
+                        m.accountStatus = App.hasUsableCoverage(m) ? 'Active' : 'Inactive';
+                        count++;
+                    }
+                });
+                DB.saveMembers(members);
+                App.renderMemberDirectory();
+                alert(`Successfully unfroze ${count} members.`);
+            },
+
+            openMemberModal: (id = null) => {
+                document.getElementById('member-form').reset();
+                memberStartOverridden = false;
+                const memberSaveBtn = document.getElementById('btn-save-member');
+                if (memberSaveBtn) { memberSaveBtn.disabled = false; memberSaveBtn.innerText = 'Save Member'; }
+                document.getElementById('form-original-id').value = '';
+                document.getElementById('btn-delete-member').classList.add('hidden');
+                document.getElementById('admin-member-calendar-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-payments-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-stats-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-stats').innerHTML = '';
+                document.getElementById('admin-member-attendance-wrapper').classList.add('hidden');
+                document.getElementById('admin-member-attendance').innerHTML = '';
+                document.getElementById('attendance-custom-range').classList.add('hidden');
+                document.querySelectorAll('.attendance-period-btn').forEach(b => b.classList.toggle('active', b.dataset.days === '90'));
+                App.attendanceDays = 90;
+                App.updateBeltColor(document.getElementById('form-belt'));
+                
+                const planSelect = document.getElementById('form-plan-select');
+                planSelect.innerHTML = '<option value="">-- Custom/No Plan Update --</option>' + DB.getPlans().map(p => `<option value="${p.id}">${Utils.escapeHTML(p.name)}${p.isTrial ? ' (Trial)' : ''} - ${DB.getCurrency()}${p.price}</option>`).join('');
+
+                if (id) {
+                    const m = DB.getMembers().find(x => x.id === id);
+                    if (m) {
+                        document.getElementById('modal-title').innerText = 'Edit Member Profile';
+                        document.getElementById('form-original-id').value = m.id;
+                        document.getElementById('form-member-id').value = m.id;
+                        document.getElementById('form-first-name').value = m.firstName;
+                        document.getElementById('form-last-name').value = m.lastName;
+                        document.getElementById('form-dob').value = m.dob || '';
+                        document.getElementById('form-belt').value = m.belt ? m.belt.split('/')[0].trim() : 'White';
+                        document.getElementById('form-gender').value = m.gender || 'Unspecified';
+                        document.getElementById('form-phone').value = m.phone || '';
+                        document.getElementById('form-email').value = m.email || '';
+                        document.getElementById('form-expiration').value = m.expirationDate || '';
+                        document.getElementById('form-account-status').value = m.accountStatus || 'Active';
+                        document.getElementById('form-notes').value = m.notes || '';
+                        document.getElementById('form-start-date').value = Utils.todayLocalIso();
+                        document.getElementById('btn-delete-member').classList.remove('hidden');
+                        document.getElementById('admin-member-calendar-wrapper').classList.remove('hidden');
+                        document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
+                        document.getElementById('admin-member-stats-wrapper').classList.remove('hidden');
+                        document.getElementById('admin-member-attendance-wrapper').classList.remove('hidden');
+                        App.renderMemberAttendance();
+                        
+                        const expInput = document.getElementById('form-expiration');
+                        expInput.style.backgroundColor = m.expirationDate
+                            ? (Utils.getDaysRemaining(m.expirationDate) < 0 ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)')
+                            : 'var(--white)';
+
+                        if(m.sessionsTotal) {
+                            document.getElementById('member-sessions-wrapper').style.display = 'flex';
+                            document.getElementById('form-sessions-left').value = m.sessionsLeft;
+                        } else {
+                            document.getElementById('member-sessions-wrapper').style.display = 'none';
+                        }
+                        
+                        const unpaidVisits = DB.getVisits().filter(v => v.memberId === m.id && v.isUnpaid).sort((a,b)=>new Date(b.entryTime)-new Date(a.entryTime));
+                        const unpaidCount = unpaidVisits.length;
+                        const warnDiv = document.getElementById('member-unpaid-warning');
+                        const unpaidAnalyticEl = document.getElementById('member-unpaid-analytic');
+                        if (unpaidCount > 0) {
+                            warnDiv.innerHTML = `<div class="kiosk-msg danger mt-1">This member has ${unpaidCount} unpaid trainings on record!</div>`;
+                            // Build an analytical list of unpaid training dates for staff to review
+                            unpaidAnalyticEl.innerHTML = `<strong>Unpaid Training Dates:</strong><ul style="margin-top:6px; padding-left:18px;">` + unpaidVisits.map(v => `<li>${Utils.formatDate(v.entryTime)} ${Utils.formatTime(v.entryTime)}</li>`).join('') + `</ul>`;
+                            document.getElementById('btn-clear-member-debt').classList.remove('hidden');
+                        } else {
+                            warnDiv.innerHTML = '';
+                            unpaidAnalyticEl.innerHTML = '';
+                            document.getElementById('btn-clear-member-debt').classList.add('hidden');
+                        }
+                         
+                        App.updateBeltColor(document.getElementById('form-belt'));
+                        App.renderMemberHistory(m.id, 'admin-member-personal-history');
+                        App.renderMemberPayments(m.id);
+                        document.getElementById('admin-member-stats').innerHTML = App.getMemberStatsHTML(m.id);
+                    }
+                } else {
+                    document.getElementById('modal-title').innerText = 'Register New Member';
+                    document.getElementById('form-member-id').value = App.generateRandomId();
+                    document.getElementById('form-start-date').value = Utils.todayLocalIso();
+                    document.getElementById('form-expiration').style.backgroundColor = 'var(--white)';
+                    document.getElementById('member-unpaid-warning').innerHTML = '';
+                    document.getElementById('member-sessions-wrapper').style.display = 'none';
+                    // Default new registrations to Inactive so they cannot check in until staff activates / applies a plan
+                    const statusEl = document.getElementById('form-account-status');
+                    if (statusEl) statusEl.value = 'Inactive';
+                }
+                App.openModal('modal-member');
+            },
+
+            // Trial conversion tracking: a member becomes a trial participant when a trial
+            // plan is applied to them; if they later get a paid (non-trial) plan, they're
+            // marked as converted (used by the Trial Conversion KPI).
+            applyPlanTrialTracking: (m, appliedPlan) => {
+                if (!m || !appliedPlan) return;
+                if (appliedPlan.isTrial) {
+                    m.trialParticipant = true;
+                } else {
+                    if (m.trialParticipant && !m.trialConverted) {
+                        m.trialConverted = true;
+                    }
+                }
+            },
+
+            // A member is "cancelled" when they haven't trained in more than 90 days
+            // (no class check-in or visit in that window). Never-trained members are not
+            // cancelled — they show their normal account status. Computed, not stored.
+            isMemberCancelled: (memberId) => {
+                const checkins = DB.getClassCheckins().filter(ci => ci.memberId === memberId && ci.entryTime);
+                const visits = DB.getVisits().filter(v => v.memberId === memberId && v.entryTime);
+                const allDates = [
+                    ...checkins.map(ci => new Date(ci.entryTime)),
+                    ...visits.map(v => new Date(v.entryTime))
+                ].filter(d => !isNaN(d.getTime()));
+                if (!allDates.length) return false;
+                const last = new Date(Math.max(...allDates.map(d => d.getTime())));
+                return (Date.now() - last.getTime()) > 90 * 24 * 60 * 60 * 1000;
+            },
+
+            applyPlan: () => {
+                const planId = document.getElementById('form-plan-select').value;
+                const startInput = document.getElementById('form-start-date');
+                const payInput = document.getElementById('form-last-payment');
+                const expInput = document.getElementById('form-expiration');
+                const sessWrap = document.getElementById('member-sessions-wrapper');
+                const sessInput = document.getElementById('form-sessions-left');
+                const mId = document.getElementById('form-original-id').value;
+                const member = mId ? DB.getMembers().find(x => x.id === mId) : null;
+
+                // Deselecting the plan must restore the member's original expiration and
+                // session balance instead of leaving the form half-cleared.
+                if (!planId) {
+                    payInput.value = '0.00';
+                    if (member && member.expirationDate) {
+                        expInput.value = member.expirationDate;
+                        expInput.style.backgroundColor = (Utils.getDaysRemaining(member.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
+                    } else {
+                        expInput.value = '';
+                        expInput.style.backgroundColor = 'var(--white)';
+                    }
+                    if (member && member.sessionsTotal) {
+                        sessWrap.style.display = 'flex';
+                        sessInput.value = member.sessionsLeft;
+                    } else {
+                        sessWrap.style.display = 'none';
+                        sessInput.value = '';
+                    }
+                    return;
+                }
+                const plan = DB.getPlans().find(p => p.id === planId);
+                let start = startInput.value;
+                if (plan && start) {
+                    // Stack onto the member's current unexpired membership when it ends later
+                    // than the given start date — unless the admin explicitly overrode the
+                    // start. Without this, renewals get anchored to the prefilled "today" and
+                    // silently shorten the total coverage window.
+                    if (!memberStartOverridden) {
+                        if (member && member.expirationDate && Utils.getDaysRemaining(member.expirationDate) >= 0) {
+                            const curExp = new Date(member.expirationDate);
+                            const startObj = new Date(start);
+                            if (curExp > startObj) {
+                                start = member.expirationDate;
+                                startInput.value = start;
+                            }
+                        }
+                    }
+                    if (plan.days) {
+                        expInput.value = Utils.calculateExpirationDate(start, plan.days);
+                        expInput.style.backgroundColor = 'var(--bg-info-soft)';
+                    }
+                    payInput.value = parseFloat(plan.price).toFixed(2);
+
+                    if (plan.sessions) {
+                        sessWrap.style.display = 'flex';
+                        // Stack the purchased sessions onto any remaining balance instead of
+                        // overwriting it — a renewal of an 8-session bundle with 4 left shows 12.
+                        const prevSessions = member && member.sessionsTotal
+                            ? (parseInt(member.sessionsLeft, 10) || 0) : 0;
+                        sessInput.value = memberStartOverridden
+                            ? plan.sessions
+                            : prevSessions + (parseInt(plan.sessions, 10) || 0);
+                    } else {
+                        sessWrap.style.display = 'none';
+                        sessInput.value = '';
+                    }
+                }
+            },
+
+            markMemberStartOverridden: () => { memberStartOverridden = true; },
+
+            updateBeltColor: (selectEl) => {
+                const colors = {
+                    'White': {bg: 'var(--white)', text: 'var(--dark-panel)'},
+                    'Blue': {bg: 'var(--primary-hover)', text: 'var(--white)'},
+                    'Purple': {bg: '#6b21a8', text: 'var(--white)'},
+                    'Brown': {bg: '#78350f', text: 'var(--white)'},
+                    'Black': {bg: 'var(--dark)', text: 'var(--white)'}
+                };
+                const val = selectEl.value;
+                if(colors[val]) {
+                    selectEl.style.backgroundColor = colors[val].bg;
+                    selectEl.style.color = colors[val].text;
+                }
+            },
+
+            // The belt dropdown only offers plain belts, but members can carry a
+            // stripe suffix (e.g. "Purple/2"). When the admin saves without changing
+            // the base belt, preserve the full original value so stripes are not
+            // silently erased. Changing the base belt resets to the plain belt.
+            memberBeltValue: (originalId, members, beltBase) => {
+                if (!originalId) return beltBase;
+                const prev = members.find(m => m.id === originalId);
+                if (!prev || !prev.belt) return beltBase;
+                const prevBase = prev.belt.split('/')[0].trim();
+                if (prevBase.toLowerCase() === (beltBase || '').trim().toLowerCase()) return prev.belt;
+                return beltBase;
+            },
+
+            saveMember: async (e) => {
+                e.preventDefault();
+                // Re-entrancy guard: rapid double-clicks on Save Member would otherwise
+                // create duplicate member records AND duplicate auto-log payments.
+                if (App.memberSaveBusy) return;
+                App.memberSaveBusy = true;
+                const saveBtn = document.getElementById('btn-save-member');
+                if (saveBtn) { saveBtn.disabled = true; saveBtn.innerText = 'Saving…'; }
+                try {
+                const members = DB.getMembers();
+                const originalId = document.getElementById('form-original-id').value;
+                const id = document.getElementById('form-member-id').value;
+                const beltBase = document.getElementById('form-belt').value;
+                
+                if (originalId !== id && members.find(m => m.id === id)) {
+                    return alert("Member ID already exists.");
+                }
+                if (originalId !== id && DB.getBin().find(m => m.id === id)) {
+                    return alert("This ID belongs to a member in the Recycle Bin. Restore or permanently delete them first.");
+                }
+
+                // Rename first, server-side (single UPDATE + ON UPDATE CASCADE), so the
+                // new id exists before any member/payment/visit writes reference it.
+                if (originalId && originalId !== id) {
+                    try {
+                        await FSEngine.notifyRename(originalId, id);
+                    } catch (err) {
+                        return alert('ID update failed: ' + (err && err.message ? err.message : err));
+                    }
+                }
+
+                const mData = {
+                    id,
+                    firstName: document.getElementById('form-first-name').value,
+                    lastName: document.getElementById('form-last-name').value,
+                    dob: document.getElementById('form-dob').value,
+                    gender: document.getElementById('form-gender').value,
+                    belt: App.memberBeltValue(originalId, members, beltBase),
+                    phone: document.getElementById('form-phone').value,
+                    email: document.getElementById('form-email').value,
+                    expirationDate: document.getElementById('form-expiration').value,
+                    accountStatus: document.getElementById('form-account-status').value,
+                    notes: document.getElementById('form-notes').value,
+                };
+
+                // Add sessions tracking if visible
+                const sessWrap = document.getElementById('member-sessions-wrapper');
+                if (sessWrap.style.display !== 'none') {
+                    mData.sessionsTotal = true;
+                    mData.sessionsLeft = document.getElementById('form-sessions-left').value;
+                } else {
+                    // Applying a non-session plan hides the sessions field, but that must NOT
+                    // erase a pre-existing session balance (e.g. an unlimited monthly plan applied
+                    // on top of a leftover 4-session bundle). Preserve the member's current balance.
+                    const prevMember = originalId ? members.find(m => m.id === originalId) : null;
+                    if (prevMember && prevMember.sessionsTotal) {
+                        mData.sessionsTotal = true;
+                        mData.sessionsLeft = prevMember.sessionsLeft;
+                    } else {
+                        mData.sessionsTotal = false;
+                        mData.sessionsLeft = null;
+                    }
+                }
+
+                const paymentAmt = parseFloat(document.getElementById('form-last-payment').value) || 0;
+                const planId = document.getElementById('form-plan-select').value || '';
+
+                // Mark members with a pure time-based plan (validity days, no sessions) so the
+                // check-in logic knows this member is on an unlimited membership and must not
+                // consume their leftover session bundles during the active period.
+                const appliedPlan = planId ? DB.getPlans().find(p => p.id === planId) : null;
+                const isTimeBasedPlan = !!(appliedPlan && appliedPlan.days != null && appliedPlan.days !== ''
+                    && !(appliedPlan.sessions != null && appliedPlan.sessions !== ''));
+                mData.planDays = isTimeBasedPlan ? parseInt(appliedPlan.days, 10) : null;
+
+                // Carry trial tracking forward on edits, then apply it to the selected plan.
+                // A member becomes a trial participant when a trial plan is applied; if they
+                // later get a paid (non-trial) plan, they're marked as converted.
+                const prevTrialMember = originalId ? members.find(x => x.id === originalId) : null;
+                if (prevTrialMember) {
+                    mData.trialParticipant = !!prevTrialMember.trialParticipant;
+                    mData.trialConverted = !!prevTrialMember.trialConverted;
+                }
+                App.applyPlanTrialTracking(mData, appliedPlan);
+
+                // If a plan/payment is provided at registration, activate the account automatically
+                if (paymentAmt > 0 && planId) {
+                    mData.accountStatus = 'Active';
+                }
+
+                // Ensure new registrations default to Inactive when no plan/payment was provided
+                if (!originalId && !(paymentAmt > 0 && planId)) {
+                    mData.accountStatus = 'Inactive';
+                }
+
+                // Close the loophole: an edited member whose expiration date is cleared
+                // (and who has no remaining sessions to fall back on) cannot stay Active.
+                if (originalId && mData.accountStatus === 'Active' && !mData.expirationDate
+                    && !(mData.sessionsTotal && parseInt(mData.sessionsLeft) > 0)) {
+                    mData.accountStatus = 'Inactive';
+                }
+
+                let isNewRegistration = false;
+                if (!originalId) { members.push(mData); isNewRegistration = true; }
+                else { const idx = members.findIndex(m => m.id === originalId); if (idx > -1) { mData.hideFromLeaderboard = !!members[idx].hideFromLeaderboard; members[idx] = mData; } }
+
+                // If the member's ID changed, rewrite class check-ins so attendance records
+                // keep following the member (visits are rewritten below by the caller paths).
+                if (originalId && originalId !== id) {
+                    // The rename already cascaded server-side; rewrite local references
+                    // only for immediate UI consistency (idempotent upserts).
+                    const checkins = DB.getClassCheckins();
+                    let ccChanged = false;
+                    checkins.forEach(c => { if (c.memberId === originalId) { c.memberId = id; ccChanged = true; } });
+                    if (ccChanged) DB.saveClassCheckins(checkins);
+
+                    // Payments and notifications reference the old id too — rewrite them so
+                    // the payment ledger / notifications render without waiting for a reload.
+                    const payments = DB.getPayments();
+                    let payChanged = false;
+                    payments.forEach(p => { if (p.memberId === originalId) { p.memberId = id; payChanged = true; } });
+                    if (payChanged) DB.savePayments(payments);
+
+                    const notifications = DB.getNotifications();
+                    let notifChanged = false;
+                    notifications.forEach(n => { if (n.memberId === originalId) { n.memberId = id; notifChanged = true; } });
+                    if (notifChanged) DB.saveNotifications(notifications);
+                }
+
+                // Ensure new registration accountStatus is enforced based on payment+plan
+                if (isNewRegistration) {
+                    const mIdx = members.findIndex(m => m.id === id);
+                    if (mIdx > -1) {
+                        if (paymentAmt > 0 && planId) {
+                            members[mIdx].accountStatus = 'Active';
+                        } else {
+                            members[mIdx].accountStatus = 'Inactive';
+                        }
+                    }
+                }
+
+                // Process automatic payment log — server-side, atomic, via the same RPC the
+                // payment modal uses. recompute_member derives sessions/expiration/status from
+                // the ledger (single source of truth) instead of the legacy client-side
+                // reconciliation engine. The member row must be committed before the RPC runs.
+                if (paymentAmt > 0 && planId) {
+                    const plan = DB.getPlans().find(p=>p.id === planId);
+                    const planSessions = plan && plan.sessions != null && plan.sessions !== '' ? (parseInt(plan.sessions, 10) || 0) : null;
+                    const appliedExp = mData.expirationDate || null;
+                    const appliedStartDate = document.getElementById('form-start-date') ? document.getElementById('form-start-date').value : null;
+                    const autoLogPay = {
+                        id: 'PAY-' + Date.now(),
+                        memberId: id,
+                        date: Utils.todayLocalIso(),
+                        amount: paymentAmt,
+                        note: `System Auto-Log: Applied Plan '${plan ? plan.name : 'Unknown'}'`,
+                        planId,
+                        sessionsGranted: planSessions,
+                        appliedExpiration: appliedExp,
+                        appliedStartDate: appliedStartDate,
+                        prevExpiration: prevTrialMember ? (prevTrialMember.expirationDate || null) : null
+                    };
+                    await DB.saveMembers(members);
+                    await FSEngine.flush();
+                    await Sync.applyPayment(autoLogPay);
+                    await Sync.reloadPaymentData();
+                } else {
+                    DB.saveMembers(members);
+
+                    // A member must not be Active without usable coverage (an edited member
+                    // whose expiration/sessions were cleared and who received no plan).
+                    const savedMember = members.find(x => x.id === id);
+                    if (savedMember && savedMember.accountStatus === 'Active'
+                        && !(savedMember.sessionsTotal && (parseInt(savedMember.sessionsLeft, 10) || 0) > 0)
+                        && !(savedMember.expirationDate && Utils.getDaysRemaining(savedMember.expirationDate) >= 0)) {
+                        savedMember.accountStatus = 'Inactive';
+                        DB.saveMembers(members);
+                    }
+                }
+
+                // Update local visit references if the member's ID changed (the server-side
+                // rename cascades, but the local cache needs it for immediate UI consistency).
+                if (originalId && originalId !== id) {
+                    const visits = DB.getVisits();
+                    visits.forEach(v => { if(v.memberId === originalId) v.memberId = id; });
+                    DB.saveVisits(visits);
+                }
+
+                // Debug: log saved member status to console to verify Inactive enforcement
+                try {
+                    const saved = DB.getMembers().find(x => x.id === id);
+                    console.log('[saveMember] saved member', id, 'accountStatus=', saved ? saved.accountStatus : '(not found)', 'expirationDate=', saved ? saved.expirationDate : '(n/a)');
+                } catch (e) { console.warn('[saveMember] log failed', e); }
+
+                if(isNewRegistration) App.addNotification('New Member Registered', `${mData.firstName} ${mData.lastName} was registered manually.`, 'success', mData.id);
+
+                App.closeModal('modal-member');
+                App.renderMemberDirectory();
+                if (!document.getElementById('pane-admin-retention').classList.contains('hidden')) {
+                    App.renderKPIs();
+                    App.renderRetentionStats();
+                }
+                } finally {
+                    App.memberSaveBusy = false;
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerText = 'Save Member'; }
+                }
+            },
+
+            deleteMemberFromModal: () => {
+                if(!confirm('Move this member to the Recycle Bin? (Kept for 1 year)')) return;
+                const id = document.getElementById('form-original-id').value;
+                if(id) {
+                    const members = DB.getMembers();
+                    const bin = DB.getBin();
+                    const m = members.find(x => x.id === id);
+                    if(m) {
+                        // Mark deleted and move to bin
+                        m.deletedAt = new Date().toISOString();
+                        bin.push(m);
+
+                        // Auto-checkout any active visits for this member so they are not counted as "Currently Inside"
+                        const visits = DB.getVisits();
+                        let updated = false;
+                        visits.forEach(v => {
+                            if (v.memberId === id && !v.exitTime) {
+                                v.exitTime = new Date().toISOString();
+                                updated = true;
+                            }
+                        });
+                        if (updated) DB.saveVisits(visits);
+
+                        DB.saveBin(bin);
+                        DB.saveMembers(members.filter(x => x.id !== id));
+                    }
+                    App.closeModal('modal-member');
+                    App.renderMemberDirectory();
+                    App.renderMemberBin();
+                    // Refresh live lists and dashboard so deleted member is not counted
+                    App.renderLivePresent();
+                    const dashboardPane = document.getElementById('pane-admin-dashboard');
+                    if (dashboardPane && !dashboardPane.classList.contains('hidden')) App.renderAdminDashboard();
+                }
+            },
+ 
+            /**
+             * Clears all outstanding unpaid training visits for a given member.
+             * 
+             * WHY IT BEHAVES THIS WAY:
+             * Staff members frequently need to forgive or clear outstanding visit debts manually.
+             * To ensure debt clearance is preserved across future payment reconciliations, we set
+             * `isUnpaid = false` on all currently unpaid visits AND append a zero-amount system log
+             * payment containing `clearedVisitIds`. This guarantees that future reconciliation passes
+             * recognise these visits as explicitly cleared and will not mark them unpaid again.
+             */
+            clearMemberDebt: () => {
+                const memberId = document.getElementById('form-original-id').value || document.getElementById('form-member-id').value;
+                if (!memberId) return;
+                if (!confirm('Clear all unpaid debt for this member? This will mark unpaid trainings as paid but keep their history.')) return;
+
+                const visits = DB.getVisits();
+                const unpaidVisits = visits.filter(v => v.memberId === memberId && v.isUnpaid);
+                if (unpaidVisits.length === 0) return alert('No unpaid trainings found for this member.');
+
+                // Step 1: Collect IDs of all visits being cleared and update local visit objects
+                const clearedVisitIds = unpaidVisits.map(v => v.id);
+                unpaidVisits.forEach(v => { v.isUnpaid = false; });
+                DB.saveVisits(visits);
+
+                // Step 2: Record a system debt-clearance payment entry so explicit clearance persists
+                const payments = DB.getPayments();
+                payments.push({
+                    id: 'PAY-DEBT-' + Date.now(),
+                    memberId,
+                    date: Utils.todayLocalIso(),
+                    amount: 0,
+                    note: 'System Log: Debt Clearance',
+                    clearedVisitIds
+                });
+                DB.savePayments(payments);
+
+                // Step 3: Refresh all UI views across Payment Ledger, Visit Log, Calendar & Member History
+                App.syncPaymentViews(memberId);
+                if (document.getElementById('form-original-id').value === memberId) {
+                    App.openMemberModal(memberId);
+                }
+                App.addNotification('Debt Cleared', `Unpaid trainings have been cleared for member ${memberId}.`, 'success', memberId);
+            },
+  
+            // --- PAYMENTS SYSTEM ---
+
+            /**
+             * Opens the Add/Edit Payment modal and populates member & plan dropdown options.
+             * 
+             * HOW & WHY:
+             * Populates the member dropdown and plan dropdown with available plans (including data-days
+             * and data-sessions attributes). If a paymentId is passed, it loads existing payment values
+             * into the form for editing.
+             */
+});
