@@ -762,7 +762,7 @@ Object.assign(App, {
                                 ? '<span class="kiosk-lb-rank-num">👑</span>'
                                 : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                             return `
-                                <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}" onclick="App.openPlayerProfile('${Utils.escapeHTML(entry.member.id)}')" style="cursor:pointer;" onmouseover="this.style.background='var(--gray-light)'" onmouseout="this.style.background=''">
                                     <span class="bounty-belt-bar" style="background:${Utils.getBeltColor(entry.member.belt)};" title="${Utils.escapeHTML((entry.member.belt || 'White').split('/')[0])} belt"></span>
                                     <div class="kiosk-lb-rank">${rankCell}</div>
                                     <strong class="kiosk-lb-name" style="color:${nameColor};">${Utils.escapeHTML(displayNames[idx])}<span style="color:${nameColor};">${arrow}</span></strong>
@@ -1333,6 +1333,186 @@ Object.assign(App, {
                 }
             },
 
+            // Calculate wins and defeats for a member from Crown Bounty events.
+            // Win = overtook another player's position (king takeover or consolidate).
+            // Defeat = lost position to another player (was king/co-king, got overtaken or dropped).
+            getPlayerWinsDefeats: (memberId, events) => {
+                let wins = 0;
+                let defeats = 0;
+                if (!events || !events.length) return { wins, defeats };
+
+                events.forEach(ev => {
+                    if (ev.type === 'king' && ev.prevKingId) {
+                        // New king overtook previous king(s)
+                        if (ev.memberId === memberId) wins++;
+                        if (ev.prevKingIds && ev.prevKingIds.includes(memberId)) defeats++;
+                        else if (ev.prevKingId === memberId) defeats++;
+                    } else if (ev.type === 'consolidate') {
+                        // King broke away from co-kings
+                        if (ev.memberId === memberId) wins++;
+                        if (ev.prevKingIds && ev.prevKingIds.includes(memberId)) defeats++;
+                    }
+                    // challenge and defense don't change positions
+                });
+                return { wins, defeats };
+            },
+
+            // Open player profile modal with wins, defeats, and extensible roles/badges.
+            openPlayerProfile: (memberId, periodStartIso = null) => {
+                const lang = App.currentKioskLang || 'en';
+                const map = App.KIOSK_I18N[lang] || App.KIOSK_I18N.en;
+
+                // Determine the period to analyze
+                let series;
+                let periodLabel = '';
+                if (periodStartIso) {
+                    // Specific period requested (from period winners click)
+                    const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
+                    if (p) {
+                        const todayMid = new Date();
+                        todayMid.setHours(0, 0, 0, 0);
+                        const lastDay = new Date(p.end.getTime() - 86400000);
+                        const endDay = lastDay < todayMid ? lastDay : todayMid;
+                        const allMembers = DB.getMembers();
+                        const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                        series = App.getCumulativeTrainingSeries(members, p.start, endDay);
+                        periodLabel = `${map.periodWord || 'Period'} ${p.n}`;
+                    }
+                } else {
+                    // Current viewed period (from bounty leaderboard/chart)
+                    const vp = App.getViewedBountyPeriod();
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    const until = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
+                    const since = new Date(vp.start.getTime());
+                    since.setHours(0, 0, 0, 0);
+                    const allMembers = DB.getMembers();
+                    const members = allMembers.filter(m => !m.hideFromLeaderboard);
+                    series = App.getCumulativeTrainingSeries(members, since, until);
+                    periodLabel = `${map.periodWord || 'Period'} ${vp.n}`;
+                }
+
+                if (!series || !series.length) {
+                    App.showKioskMessage('No data available for this period.', 'warning');
+                    return;
+                }
+
+                const crownResult = App.getCrownEvents(series);
+                const events = crownResult.events;
+                const stats = App.getPlayerWinsDefeats(memberId, events);
+
+                // Get member name
+                const allMembers = DB.getMembers();
+                const member = allMembers.find(m => m.id === memberId);
+                const displayName = member ? `${member.firstName} ${member.lastName}` : memberId;
+
+                // Extensible roles/badges system
+                // Each role: { id, label, icon, condition: (memberId, events, series, stats) => boolean }
+                const roles = [
+                    {
+                        id: 'executioner',
+                        label: map.playerProfileExecutioner || 'Executioner',
+                        icon: '⚔️',
+                        condition: (id, evts, ser) => {
+                            // Highest total wins (overtakes) in this period
+                            let maxWins = -1;
+                            let topId = null;
+                            ser.forEach(s => {
+                                const w = App.getPlayerWinsDefeats(s.member.id, evts).wins;
+                                if (w > maxWins) { maxWins = w; topId = s.member.id; }
+                            });
+                            return topId === id && maxWins > 0;
+                        }
+                    },
+                    {
+                        id: 'king',
+                        label: map.playerProfileKing || 'Crown Holder',
+                        icon: '👑',
+                        condition: (id, evts, ser) => {
+                            const current = crownResult.currentKing;
+                            return current && (current.id === id || (current.alsoIds && current.alsoIds.includes(id)));
+                        }
+                    },
+                    {
+                        id: 'defender',
+                        label: map.playerProfileDefender || 'Defender',
+                        icon: '🛡️',
+                        condition: (id, evts) => {
+                            // Most crown defenses in this period
+                            let maxDef = -1;
+                            let topId = null;
+                            const defenseCounts = {};
+                            evts.forEach(ev => {
+                                if (ev.type === 'defense') {
+                                    defenseCounts[ev.memberId] = (defenseCounts[ev.memberId] || 0) + 1;
+                                }
+                            });
+                            Object.entries(defenseCounts).forEach(([id, c]) => {
+                                if (c > maxDef) { maxDef = c; topId = id; }
+                            });
+                            return topId === id && maxDef > 0;
+                        }
+                    },
+                    {
+                        id: 'challenger',
+                        label: map.playerProfileChallenger || 'Challenger',
+                        icon: '⚔️',
+                        condition: (id, evts) => {
+                            // Most challenges issued in this period
+                            let maxChal = -1;
+                            let topId = null;
+                            const challengeCounts = {};
+                            evts.forEach(ev => {
+                                if (ev.type === 'challenge') {
+                                    challengeCounts[ev.memberId] = (challengeCounts[ev.memberId] || 0) + 1;
+                                }
+                            });
+                            Object.entries(challengeCounts).forEach(([id, c]) => {
+                                if (c > maxChal) { maxChal = c; topId = id; }
+                            });
+                            return topId === id && maxChal > 0;
+                        }
+                    }
+                ];
+
+                const earnedRoles = roles.filter(r => r.condition(memberId, events, series, stats));
+
+                // Build modal content
+                const nameEl = document.getElementById('player-profile-name');
+                const contentEl = document.getElementById('player-profile-content');
+                if (nameEl) nameEl.innerText = `${Utils.escapeHTML(displayName)} — ${Utils.escapeHTML(periodLabel)}`;
+                if (contentEl) {
+                    contentEl.innerHTML = `
+                        <div style="display:flex; flex-direction:column; gap:1rem;">
+                            <div style="display:flex; gap:1.5rem; justify-content:center;">
+                                <div style="text-align:center;">
+                                    <div style="font-size:2rem; font-weight:800; color:#16a34a;">${stats.wins}</div>
+                                    <div class="text-gray" style="font-size:0.85rem;">${Utils.escapeHTML(map.playerProfileWins || 'Wins')}</div>
+                                </div>
+                                <div style="text-align:center;">
+                                    <div style="font-size:2rem; font-weight:800; color:#dc2626;">${stats.defeats}</div>
+                                    <div class="text-gray" style="font-size:0.85rem;">${Utils.escapeHTML(map.playerProfileDefeats || 'Defeats')}</div>
+                                </div>
+                            </div>
+                            <hr style="border:none; border-top:1px solid var(--gray-light);">
+                            <div>
+                                <div style="font-weight:700; margin-bottom:0.5rem;">${Utils.escapeHTML(map.playerProfileRoles || 'Roles')}</div>
+                                ${earnedRoles.length > 0 ? `
+                                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                                        ${earnedRoles.map(r => `
+                                            <span style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.35rem 0.7rem; border-radius:999px; background:#fffbeb; border:1px solid #fde68a; color:#92400e; font-weight:600; font-size:0.85rem;">
+                                                ${Utils.escapeHTML(r.icon)} ${Utils.escapeHTML(r.label)}
+                                            </span>
+                                        `).join('')}
+                                    </div>
+                                ` : `<div class="text-gray" style="font-size:0.9rem;">${Utils.escapeHTML(map.playerProfileNoRoles || 'No roles assigned yet')}</div>`}
+                            </div>
+                        </div>
+                    `;
+                }
+                App.openModal('modal-player-profile');
+            },
+
             // Period rankings modal — the final standings of a finished
             // period, or the standings so far for the ongoing one.
             openPeriodRankings: (startIso) => {
@@ -1383,7 +1563,7 @@ Object.assign(App, {
                                     ? '<span class="kiosk-lb-rank-num">👑</span>'
                                     : App.leaderboardRankCell(entry.place, entry.place === lastPlace);
                                 return `
-                                    <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}">
+                                    <div class="kiosk-lb-card bounty-lb-card" data-member-id="${Utils.escapeHTML(entry.member.id)}" onclick="App.openPlayerProfile('${Utils.escapeHTML(entry.member.id)}', '${Utils.escapeHTML(Utils.dateToLocalIso(p.start))}')" style="cursor:pointer;" onmouseover="this.style.background='var(--gray-light)'" onmouseout="this.style.background=''">
                                         <div class="kiosk-lb-rank">${rankCell}</div>
                                         <strong class="kiosk-lb-name" style="color:var(--dark);">${Utils.escapeHTML(displayNames[idx])}</strong>
                                         <span class="kiosk-lb-count-badge" title="${entry.count} trainings">${entry.count}</span>

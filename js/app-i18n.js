@@ -87,6 +87,15 @@ App.KIOSK_I18N = {
         bountyLeaderboardNoTrainings: 'No trainings recorded for this date.',
         periodRankingsTitle: 'Period Rankings',
         periodRankingsClose: 'Close',
+        playerProfileTitle: 'Player Profile',
+        playerProfileWins: 'Wins',
+        playerProfileDefeats: 'Defeats',
+        playerProfileRoles: 'Roles',
+        playerProfileNoRoles: 'No roles assigned yet',
+        playerProfileExecutioner: 'Executioner',
+        playerProfileKing: 'Crown Holder',
+        playerProfileDefender: 'Defender',
+        playerProfileChallenger: 'Challenger',
         leaderboardRankColumn: 'Rank',
         leaderboardNoTrainings: 'No trainings recorded in this period.',
         leaderboardMemberColumn: 'Name',
@@ -321,6 +330,15 @@ App.KIOSK_I18N = {
         bountyLeaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις για αυτή την ημερομηνία.',
         periodRankingsTitle: 'Κατάταξη Περιόδου',
         periodRankingsClose: 'Κλείσιμο',
+        playerProfileTitle: 'Προφίλ Παίκτη',
+        playerProfileWins: 'Νίκες',
+        playerProfileDefeats: 'Ήττες',
+        playerProfileRoles: 'Ρόλους',
+        playerProfileNoRoles: 'Δεν έχουν ανατεθεί ρόλοι ακόμα',
+        playerProfileExecutioner: 'Εκτελεστής',
+        playerProfileKing: 'Κάτοχος Στέμματος',
+        playerProfileDefender: 'Αμυντής',
+        playerProfileChallenger: 'Προκαλούμενος',
         leaderboardRankColumn: 'Θέση',
         leaderboardNoTrainings: 'Δεν υπάρχουν προπονήσεις σε αυτή την περίοδο.',
         leaderboardMemberColumn: 'Όνομα',
@@ -602,6 +620,8 @@ App.applyKioskTranslations = function() {
         const bountyNextBtn = document.getElementById('bounty-next-period'); if (bountyNextBtn) { bountyNextBtn.title = map.bountyNextPeriodTitle || 'Next period'; bountyNextBtn.setAttribute('aria-label', bountyNextBtn.title); }
         const periodRankingsTitle = document.getElementById('period-rankings-title'); if (periodRankingsTitle) periodRankingsTitle.innerText = map.periodRankingsTitle || 'Period Rankings';
         const periodRankingsClose = document.querySelector('#modal-period-rankings .btn-outline'); if (periodRankingsClose) periodRankingsClose.innerText = map.periodRankingsClose || 'Close';
+
+        const playerProfileTitleEl = document.getElementById('player-profile-name'); if (playerProfileTitleEl) playerProfileTitleEl.innerText = map.playerProfileTitle || 'Player Profile';
 
         const classDetailsTitle = document.getElementById('class-details-title'); if (classDetailsTitle) classDetailsTitle.innerText = map.classDetailsTitle || 'Class Details';
         const classDetailsCloseBtn = document.querySelector('#modal-class-details .btn-primary'); if (classDetailsCloseBtn) classDetailsCloseBtn.innerText = map.classDetailsClose || 'Close';

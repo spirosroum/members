@@ -2,6 +2,15 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-28 — v1.35 (14:30) — Crown Bounty: clickable player profiles with wins/defeats/roles modal
+
+- Added player profile modal for Crown Bounty leaderboard: click any player in the Bounty Leaderboard, Period Rankings modal, or Period Winners list to open their profile
+- Modal shows dynamically calculated Wins (overtook another player's position via king takeover or consolidate) and Defeats (lost position to another player) from Crown Bounty event history
+- Extensible roles/badges system: Executioner (most wins/overtakes in period), Crown Holder (current king/co-king), Defender (most crown defenses), Challenger (most challenges issued) — structured for easy addition of future roles
+- Full i18n support (EN/EL) for all new UI text
+- Cards in Bounty Leaderboard and Period Rankings now have hover highlight, cursor pointer, and click handler
+- Maintains strict period scoping: profile stats reflect the viewed period (current, historical, or specific period from winners list)
+
 ## 2026-08-26 — v1.33 (15:10) — Fix: chart label packing collapsed top names, labels off their lines
 
 - The v1.32 packing shifted the whole label stack up when the lowest names hit the x-axis zone, then clamped each top item individually — pushing the top names above the chart top where the per-item clamp dropped them onto the SAME pixel (👑 names rendered on top of each other) and dragged every label off its line
