@@ -1333,28 +1333,135 @@ Object.assign(App, {
                 }
             },
 
-            // Calculate wins and defeats for a member from Crown Bounty events.
-            // Win = overtook another player's position (king takeover or consolidate).
-            // Defeat = lost position to another player (was king/co-king, got overtaken or dropped).
-            getPlayerWinsDefeats: (memberId, events) => {
+            // Calculate wins, defeats, and ties for a member from daily ranking movements.
+            // Win = moved UP one position in the daily ranking.
+            // Defeat = moved DOWN one position in the daily ranking.
+            // Tie = trained on the same day as another member with identical training history (same points on all dates up to that day).
+            getPlayerWinsDefeats: (memberId, series, periodStart, periodEnd) => {
                 let wins = 0;
                 let defeats = 0;
-                if (!events || !events.length) return { wins, defeats };
+                let ties = 0;
 
-                events.forEach(ev => {
-                    if (ev.type === 'king' && ev.prevKingId) {
-                        // New king overtook previous king(s)
-                        if (ev.memberId === memberId) wins++;
-                        if (ev.prevKingIds && ev.prevKingIds.includes(memberId)) defeats++;
-                        else if (ev.prevKingId === memberId) defeats++;
-                    } else if (ev.type === 'consolidate') {
-                        // King broke away from co-kings
-                        if (ev.memberId === memberId) wins++;
-                        if (ev.prevKingIds && ev.prevKingIds.includes(memberId)) defeats++;
+                if (!series || !series.length) return { wins, defeats, ties };
+
+                // Build a map of memberId -> series for quick lookup
+                const seriesMap = {};
+                series.forEach(s => { seriesMap[s.member.id] = s; });
+
+                // Helper: count at a specific date
+                const countAt = (s, iso) => {
+                    if (!s || !s.points.length) return 0;
+                    let c = 0;
+                    for (let i = 0; i < s.points.length; i++) {
+                        if (s.points[i].date <= iso) c = s.points[i].count; else break;
                     }
-                    // challenge and defense don't change positions
+                    return c;
+                };
+
+                // Helper: points key for identical history check
+                const ptsKeyOf = (pts, upToDate) => {
+                    return pts
+                        .filter(pt => pt.date <= upToDate)
+                        .map(pt => pt.date + '=' + pt.count)
+                        .join('|');
+                };
+
+                // Helper: check if two members have identical history up to a date
+                const identicalUpTo = (a, b, date) => {
+                    const sa = seriesMap[a];
+                    const sb = seriesMap[b];
+                    if (!sa || !sb) return false;
+                    return ptsKeyOf(sa.points, date) === ptsKeyOf(sb.points, date);
+                };
+
+                // Helper: check if member trained on a specific date
+                const trainedOnDate = (s, date) => {
+                    if (!s || !s.points.length) return false;
+                    return s.points.some(pt => pt.date === date);
+                };
+
+                // Get all dates in the period where at least one training occurred
+                const allDates = new Set();
+                series.forEach(s => {
+                    s.points.forEach(pt => allDates.add(pt.date));
                 });
-                return { wins, defeats };
+                const sortedDates = [...allDates].sort();
+
+                if (sortedDates.length === 0) return { wins, defeats, ties };
+
+                // For each date, compute the ranking
+                const dailyRanks = {};
+                sortedDates.forEach(date => {
+                    const entries = series
+                        .filter(s => countAt(s, date) > 0)
+                        .map(s => ({
+                            id: s.member.id,
+                            count: countAt(s, date),
+                            series: s
+                        }))
+                        .sort((a, b) => {
+                            if (b.count !== a.count) return b.count - a.count;
+                            const rd = App.crownTieCompare(a, b);
+                            if (rd !== 0) return rd;
+                            const fa = a.series.points.length ? new Date(a.series.points[0].date + 'T00:00:00').getTime() : Infinity;
+                            const fb = b.series.points.length ? new Date(b.series.points[0].date + 'T00:00:00').getTime() : Infinity;
+                            if (fa !== fb) return fa - fb;
+                            const na = ((a.series.member.lastName || '') + ' ' + (a.series.member.firstName || '')).localeCompare((b.series.member.lastName || '') + ' ' + (b.series.member.firstName || ''));
+                            if (na !== 0) return na;
+                            return String(a.id).localeCompare(String(b.id));
+                        });
+
+                    // Assign places (same logic as rankPeriodSeries)
+                    const groupPlace = {};
+                    entries.forEach((e, i) => {
+                        const k = ptsKeyOf(e.series.points, date);
+                        if (groupPlace[k] != null) {
+                            e.place = groupPlace[k];
+                        } else {
+                            e.place = i + 1;
+                            groupPlace[k] = e.place;
+                        }
+                    });
+
+                    dailyRanks[date] = {};
+                    entries.forEach(e => { dailyRanks[date][e.id] = e.place; });
+                });
+
+                // Compare each day with previous day to count wins/defeats
+                for (let i = 1; i < sortedDates.length; i++) {
+                    const today = sortedDates[i];
+                    const yesterday = sortedDates[i - 1];
+                    const todayRanks = dailyRanks[today];
+                    const yesterdayRanks = dailyRanks[yesterday];
+
+                    if (!todayRanks[memberId] || !yesterdayRanks[memberId]) continue;
+
+                    const todayPlace = todayRanks[memberId];
+                    const yesterdayPlace = yesterdayRanks[memberId];
+
+                    if (todayPlace < yesterdayPlace) wins += (yesterdayPlace - todayPlace);
+                    else if (todayPlace > yesterdayPlace) defeats += (todayPlace - yesterdayPlace);
+                }
+
+                // Count ties: on days where member trained, check for others with identical history who also trained that day
+                const memberSeries = seriesMap[memberId];
+                if (memberSeries) {
+                    sortedDates.forEach(date => {
+                        if (!trainedOnDate(memberSeries, date)) return;
+                        const myCount = countAt(memberSeries, date);
+                        if (myCount === 0) return;
+
+                        // Find others with identical history up to this date who also trained today
+                        series.forEach(s => {
+                            if (s.member.id === memberId) return;
+                            if (trainedOnDate(s, date) && identicalUpTo(memberId, s.member.id, date)) {
+                                ties++;
+                            }
+                        });
+                    });
+                }
+
+                return { wins, defeats, ties };
             },
 
             // Open player profile modal with wins, defeats, and extensible roles/badges.
@@ -1399,83 +1506,43 @@ Object.assign(App, {
 
                 const crownResult = App.getCrownEvents(series);
                 const events = crownResult.events;
-                const stats = App.getPlayerWinsDefeats(memberId, events);
+
+                // Determine period start/end for getPlayerWinsDefeats
+                let periodStart, periodEnd;
+                if (periodStartIso) {
+                    const p = (App._bountyPeriodsCache || []).find(x => Utils.dateToLocalIso(x.start) === periodStartIso);
+                    if (p) {
+                        const todayMid = new Date();
+                        todayMid.setHours(0, 0, 0, 0);
+                        const lastDay = new Date(p.end.getTime() - 86400000);
+                        periodEnd = lastDay < todayMid ? lastDay : todayMid;
+                        periodStart = p.start;
+                    }
+                } else {
+                    const vp = App.getViewedBountyPeriod();
+                    const todayEnd = new Date();
+                    todayEnd.setHours(23, 59, 59, 999);
+                    periodEnd = vp.endExcl > todayEnd ? todayEnd : new Date(vp.endExcl.getTime() - 1);
+                    periodStart = new Date(vp.start.getTime());
+                    periodStart.setHours(0, 0, 0, 0);
+                }
+
+                const stats = App.getPlayerWinsDefeats(memberId, series, periodStart, periodEnd);
 
                 // Get member name
                 const allMembers = DB.getMembers();
                 const member = allMembers.find(m => m.id === memberId);
                 const displayName = member ? `${member.firstName} ${member.lastName}` : memberId;
 
-                // Extensible roles/badges system
-                // Each role: { id, label, icon, condition: (memberId, events, series, stats) => boolean }
-                const roles = [
-                    {
-                        id: 'executioner',
-                        label: map.playerProfileExecutioner || 'Executioner',
-                        icon: '⚔️',
-                        condition: (id, evts, ser) => {
-                            // Highest total wins (overtakes) in this period
-                            let maxWins = -1;
-                            let topId = null;
-                            ser.forEach(s => {
-                                const w = App.getPlayerWinsDefeats(s.member.id, evts).wins;
-                                if (w > maxWins) { maxWins = w; topId = s.member.id; }
-                            });
-                            return topId === id && maxWins > 0;
-                        }
-                    },
-                    {
+                // Roles/badges (only Crown Holder for now)
+                const earnedRoles = [];
+                if (crownResult.currentKing && (crownResult.currentKing.id === memberId || (crownResult.currentKing.alsoIds && crownResult.currentKing.alsoIds.includes(memberId)))) {
+                    earnedRoles.push({
                         id: 'king',
                         label: map.playerProfileKing || 'Crown Holder',
-                        icon: '👑',
-                        condition: (id, evts, ser) => {
-                            const current = crownResult.currentKing;
-                            return current && (current.id === id || (current.alsoIds && current.alsoIds.includes(id)));
-                        }
-                    },
-                    {
-                        id: 'defender',
-                        label: map.playerProfileDefender || 'Defender',
-                        icon: '🛡️',
-                        condition: (id, evts) => {
-                            // Most crown defenses in this period
-                            let maxDef = -1;
-                            let topId = null;
-                            const defenseCounts = {};
-                            evts.forEach(ev => {
-                                if (ev.type === 'defense') {
-                                    defenseCounts[ev.memberId] = (defenseCounts[ev.memberId] || 0) + 1;
-                                }
-                            });
-                            Object.entries(defenseCounts).forEach(([id, c]) => {
-                                if (c > maxDef) { maxDef = c; topId = id; }
-                            });
-                            return topId === id && maxDef > 0;
-                        }
-                    },
-                    {
-                        id: 'challenger',
-                        label: map.playerProfileChallenger || 'Challenger',
-                        icon: '⚔️',
-                        condition: (id, evts) => {
-                            // Most challenges issued in this period
-                            let maxChal = -1;
-                            let topId = null;
-                            const challengeCounts = {};
-                            evts.forEach(ev => {
-                                if (ev.type === 'challenge') {
-                                    challengeCounts[ev.memberId] = (challengeCounts[ev.memberId] || 0) + 1;
-                                }
-                            });
-                            Object.entries(challengeCounts).forEach(([id, c]) => {
-                                if (c > maxChal) { maxChal = c; topId = id; }
-                            });
-                            return topId === id && maxChal > 0;
-                        }
-                    }
-                ];
-
-                const earnedRoles = roles.filter(r => r.condition(memberId, events, series, stats));
+                        icon: '👑'
+                    });
+                }
 
                 // Build modal content
                 const nameEl = document.getElementById('player-profile-name');
@@ -1484,14 +1551,18 @@ Object.assign(App, {
                 if (contentEl) {
                     contentEl.innerHTML = `
                         <div style="display:flex; flex-direction:column; gap:1rem;">
-                            <div style="display:flex; gap:1.5rem; justify-content:center;">
-                                <div style="text-align:center;">
+                            <div style="display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;">
+                                <div style="text-align:center; min-width:80px;">
                                     <div style="font-size:2rem; font-weight:800; color:#16a34a;">${stats.wins}</div>
                                     <div class="text-gray" style="font-size:0.85rem;">${Utils.escapeHTML(map.playerProfileWins || 'Wins')}</div>
                                 </div>
-                                <div style="text-align:center;">
+                                <div style="text-align:center; min-width:80px;">
                                     <div style="font-size:2rem; font-weight:800; color:#dc2626;">${stats.defeats}</div>
                                     <div class="text-gray" style="font-size:0.85rem;">${Utils.escapeHTML(map.playerProfileDefeats || 'Defeats')}</div>
+                                </div>
+                                <div style="text-align:center; min-width:80px;">
+                                    <div style="font-size:2rem; font-weight:800; color:#2563eb;">${stats.ties}</div>
+                                    <div class="text-gray" style="font-size:0.85rem;">${Utils.escapeHTML(map.playerProfileTies || 'Ties')}</div>
                                 </div>
                             </div>
                             <hr style="border:none; border-top:1px solid var(--gray-light);">

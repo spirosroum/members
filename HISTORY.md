@@ -2,6 +2,17 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-28 — v1.36 (16:45) — Crown Bounty: fix wins/defeats/ties calculation, remove Executioner/Defender badges
+
+- Rewrote `getPlayerWinsDefeats()` to calculate from daily ranking movements (not just Crown events):
+  - Win = moved UP positions in daily ranking (sum of rank improvements day-over-day)
+  - Defeat = moved DOWN positions in daily ranking (sum of rank drops day-over-day)
+  - Tie = trained on same day as another member with identical training history up to that date
+- Members with identical training history (e.g. Maria & Demosthenes) now correctly show same wins/defeats/ties
+- Removed Executioner and Defender badges (only Crown Holder remains)
+- Ties only counted on days both members actually trained together with identical history
+- Full i18n support for new "Ties" stat (EN/EL)
+
 ## 2026-08-28 — v1.35 (14:30) — Crown Bounty: clickable player profiles with wins/defeats/roles modal
 
 - Added player profile modal for Crown Bounty leaderboard: click any player in the Bounty Leaderboard, Period Rankings modal, or Period Winners list to open their profile
