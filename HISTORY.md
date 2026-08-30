@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-08-30 — v1.35 (23:35) — Payments ledger Excel export with date range
+
+- Admin Payments pane now has Start/End date pickers and a Download Excel button
+- Export writes an Excel spreadsheet (.xls) of ledger payments in the chosen range (member, amount, plan, coverage dates, note) plus a totals row
+- Date inputs default to the 1st of the current month through today when the pane first loads
+
 ## 2026-08-26 — v1.33 (15:10) — Fix: chart label packing collapsed top names, labels off their lines
 
 - The v1.32 packing shifted the whole label stack up when the lowest names hit the x-axis zone, then clamped each top item individually — pushing the top names above the chart top where the per-item clamp dropped them onto the SAME pixel (👑 names rendered on top of each other) and dragged every label off its line

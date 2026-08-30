@@ -1,6 +1,6 @@
 // =====================================================================
 // app-payments.js
-// App methods: openPaymentModal, onPaymentPlanChange, onPaymentMemberOrPlanChange, renderPaymentUnpaidSummary, reconcileMemberPaymentVisitStatus, savePayment, syncPaymentViews, deletePayment, renderMemberPayments, renderAllPayments
+// App methods: openPaymentModal, onPaymentPlanChange, onPaymentMemberOrPlanChange, renderPaymentUnpaidSummary, reconcileMemberPaymentVisitStatus, savePayment, syncPaymentViews, deletePayment, renderMemberPayments, renderAllPayments, exportPaymentsExcel
 // Plain script (no ES modules). Methods attach to the global App object
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
@@ -737,6 +737,14 @@ Object.assign(App, {
             },
 
             renderAllPayments: () => {
+                const fromEl = document.getElementById('payments-export-from');
+                const toEl = document.getElementById('payments-export-to');
+                if (fromEl && !fromEl.value) {
+                    const today = Utils.todayLocalIso();
+                    fromEl.value = today.slice(0, 8) + '01';
+                    if (toEl) toEl.value = today;
+                }
+
                 const pays = DB.getPayments().sort((a,b) => new Date(b.date) - new Date(a.date));
                 const members = DB.getMembers();
                 const list = document.getElementById('all-payments-list');
@@ -773,6 +781,83 @@ Object.assign(App, {
                         <td data-label="Action" class="cell-actions"><button class="btn-outline btn-small" onclick="App.openPaymentModal(null, '${p.id}')">Edit</button></td>
                     </tr>`;
                 }).join('') || '<tr><td colspan="6" class="text-center text-gray">No payments recorded.</td></tr>';
+            },
+
+            exportPaymentsExcel: () => {
+                const from = (document.getElementById('payments-export-from') || {}).value;
+                const to = (document.getElementById('payments-export-to') || {}).value;
+                if (!from || !to) return alert('Select a start and end date.');
+                if (from > to) return alert('Start date must be on or before the end date.');
+
+                const members = DB.getMembers();
+                const memMap = new Map(members.map(m => [m.id, m]));
+                const planMap = new Map(DB.getPlans().map(p => [p.id, p.name]));
+                const xmlEsc = (s) => String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+                const cellStr = (val) => {
+                    let str = String(val == null ? '' : val);
+                    if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+                    return `<Cell><Data ss:Type="String">${xmlEsc(str)}</Data></Cell>`;
+                };
+                const cellNum = (n, style) => `<Cell${style ? ` ss:StyleID="${style}"` : ''}><Data ss:Type="Number">${isFinite(n) ? n : 0}</Data></Cell>`;
+
+                const pays = DB.getPayments()
+                    .filter(p => {
+                        const d = p.date || '';
+                        return d >= from && d <= to;
+                    })
+                    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
+
+                if (!pays.length) return alert('No payments found in this date range.');
+
+                const headers = ['Date', 'Member ID', 'First Name', 'Last Name', 'Amount', 'Plan', 'Sessions Granted', 'Coverage Start', 'New Exp. Date', 'Note'];
+                let rowsXml = '<Row>' + headers.map(h => cellStr(h)).join('') + '</Row>';
+                let total = 0;
+                pays.forEach(p => {
+                    let m = memMap.get(p.memberId);
+                    if (!m && typeof FSEngine !== 'undefined' && FSEngine.renameMap && FSEngine.renameMap.has(p.memberId)) {
+                        m = memMap.get(FSEngine.renameMap.get(p.memberId));
+                    }
+                    const amount = parseFloat(p.amount) || 0;
+                    total += amount;
+                    const sessions = (p.sessionsGranted != null && p.sessionsGranted !== '') ? p.sessionsGranted : '';
+                    rowsXml += '<Row>' +
+                        cellStr(p.date || '') +
+                        cellStr(m ? m.id : (p.memberId || '')) +
+                        cellStr(m ? m.firstName : '') +
+                        cellStr(m ? m.lastName : '') +
+                        cellNum(Math.round(amount * 100) / 100, 'sNum') +
+                        cellStr(p.planId ? (planMap.get(p.planId) || p.planId) : '') +
+                        (sessions === '' ? cellStr('') : cellNum(parseInt(sessions, 10) || 0)) +
+                        cellStr(p.appliedStartDate || '') +
+                        cellStr(p.appliedExpiration || '') +
+                        cellStr(p.note || '') +
+                        '</Row>';
+                });
+                rowsXml += '<Row>' + cellStr('Total') + cellStr('') + cellStr('') + cellStr('') +
+                    cellNum(Math.round(total * 100) / 100, 'sNum') +
+                    cellStr('') + cellStr('') + cellStr('') + cellStr('') + cellStr('') + '</Row>';
+
+                const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+                    '<?mso-application progid="Excel.Sheet"?>\n' +
+                    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"' +
+                    ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n' +
+                    '<Styles><Style ss:ID="sNum"><NumberFormat ss:Format="0.00"/></Style></Styles>\n' +
+                    '<Worksheet ss:Name="Payments"><Table>' + rowsXml + '</Table></Worksheet>\n' +
+                    '</Workbook>';
+
+                const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `GymDesk_Payments_${from}_to_${to}.xls`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
             },
 
 });
