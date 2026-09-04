@@ -1,41 +1,95 @@
 -- =====================================================================
--- GymDesk → Supabase migration: bracket payment coverage to actual windows.
+-- GymDesk → Supabase migration: payment windows + session queue fix.
 --
--- Root cause:
---   recompute_member retroactively marked remaining unpaid visits as paid when a
---   time-based payment still had a future expiration date, even when the visit
---   was earlier than the payment's own start date. That allowed a payment that
---   starts on 2026-09-01 to cover a workout from 2026-08-01 and made the
---   session-ledger look like it had created extra sessions.
+-- The root problem was twofold:
+--   1) a future payment window could cover older workouts because the recompute
+--      only checked the payment's expiration, not its actual start date.
+--   2) session grants were treated as a flat lifetime total instead of a
+--      consumable pool that must pay the oldest unpaid visits first.
 --
--- Fix:
---   - payment coverage only applies to visits within [applied_start_date, applied_expiration]
---   - a future payment never retroactively covers older workouts
---   - age/active membership logic still keeps members active when they have
---     valid current coverage, but zero remaining sessions is a valid "active without sessions"
---     state instead of being auto-extended from ancient expiration windows
---   - legacy rows missing applied_start_date are normalized to the payment date
---     before the recompute runs, so the database remains backwards-compatible
+-- Correct behavior:
+--   - time-based payments only cover visits in [applied_start_date, applied_expiration]
+--   - a future payment never retroactively pays older workouts
+--   - session grants consume the oldest unpaid visit first, then the remaining
+--     credit becomes sessions_left
+--   - legacy rows without applied_start_date are repaired to the payment date
 -- =====================================================================
 
--- Repair legacy time-based payments that were created without a start window.
--- The payment date is the conservative default: a payment cannot cover earlier
--- workouts than the day it was logged, and the recompute below will only use the
--- actual start date when it is explicitly set.
+-- Repair legacy time-based payments missing their coverage start.
 update public.payments
 set applied_start_date = coalesce(applied_start_date, date)
 where applied_start_date is null
   and applied_expiration is not null
   and coalesce(sessions_granted, 0) = 0;
 
+create or replace function public.apply_payment(p_payment jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  v_member_id          text := p_payment->>'memberId';
+  v_id                 text := coalesce(p_payment->>'id', 'PAY-' || (extract(epoch from clock_timestamp())*1000)::bigint);
+  v_plan_id            text := p_payment->>'planId';
+  v_sessions_granted   int  := nullif(p_payment->>'sessionsGranted','')::int;
+  v_amount             numeric := coalesce(nullif(p_payment->>'amount','')::numeric, 0);
+  v_date               date := coalesce(nullif(p_payment->>'date','')::date, current_date);
+  v_note               text := p_payment->>'note';
+  v_applied_start      date := nullif(p_payment->>'appliedStartDate','')::date;
+  v_applied_expiration date := nullif(p_payment->>'appliedExpiration','')::date;
+  v_prev_expiration    date := nullif(p_payment->>'prevExpiration','')::date;
+  v_plan               plans%rowtype;
+begin
+  if not public.is_admin() then
+    raise exception 'admin required';
+  end if;
+
+  if v_member_id is null or v_member_id = '' then
+    raise exception 'memberId is required';
+  end if;
+
+  if v_plan_id is not null then
+    select * into v_plan from plans where id = v_plan_id;
+    if found then
+      if v_plan.sessions is not null and v_plan.sessions > 0 then
+        v_sessions_granted := coalesce(v_sessions_granted, v_plan.sessions);
+      elsif v_plan.days is not null and v_plan.days > 0 then
+        v_applied_start := coalesce(v_applied_start, v_date);
+        v_applied_expiration := coalesce(v_applied_expiration, ((v_applied_start + v_plan.days)::date));
+      end if;
+    end if;
+  end if;
+
+  insert into payments
+    (id, member_id, date, amount, note, plan_id, sessions_granted,
+     applied_expiration, applied_start_date, prev_expiration)
+  values
+    (v_id, v_member_id, v_date, v_amount, v_note, v_plan_id, v_sessions_granted,
+     v_applied_expiration, coalesce(v_applied_start, v_date), v_prev_expiration)
+  on conflict (id) do update set
+    member_id = excluded.member_id,
+    date = excluded.date,
+    amount = excluded.amount,
+    note = excluded.note,
+    plan_id = excluded.plan_id,
+    sessions_granted = excluded.sessions_granted,
+    applied_expiration = excluded.applied_expiration,
+    applied_start_date = excluded.applied_start_date,
+    prev_expiration = excluded.prev_expiration;
+
+  -- New payments should not increment member sessions_left directly. The ledger
+  -- owns truth, and recompute_member derives the state from that ledger.
+  update visits set paid_override = null
+  where member_id = v_member_id and paid_override = 'unpaid';
+
+  perform public.recompute_member(v_member_id);
+end $$;
+
 create or replace function public.recompute_member(p_member_id text) returns void
 language plpgsql security definer set search_path = public as $$
 declare
   v_total_sessions int := 0;
-  v_exp           date := null;
-  v_sessions_used int := 0;
-  v_visit         visits%rowtype;
-  v_today         date := (now() at time zone 'Europe/Athens')::date;
+  v_session_pool   int := 0;
+  v_exp            date := null;
+  v_today          date := (now() at time zone 'Europe/Athens')::date;
+  v_visit          visits%rowtype;
 begin
   if p_member_id is null or p_member_id = '' then
     return;
@@ -55,8 +109,8 @@ begin
     and applied_expiration is not null
     and coalesce(sessions_granted, 0) = 0;
 
-  -- Preserve legitimate paid visits that have no payment row to re-derive from,
-  -- but reset any visit that is not clearly covered by a valid active payment.
+  -- Preserve valid legacy paid-without-ledger visits, but reset all other visits
+  -- before recomputing coverage from the payment ledger.
   update public.visits set is_unpaid = true
   where member_id = p_member_id
     and paid_override is distinct from 'paid'
@@ -74,9 +128,7 @@ begin
       )
     );
 
-  -- Time-based coverage is valid only inside the payment's own recorded window.
-  -- A future payment cannot cover a workout that occurred before the payment's
-  -- start date, even if the member's later expiration window is still active.
+  -- Time-based coverage only applies within each payment's real date window.
   update public.visits set is_unpaid = false
   where member_id = p_member_id
     and paid_override is null
@@ -90,7 +142,10 @@ begin
         and (visits.entry_time at time zone 'Europe/Athens')::date <= p.applied_expiration
     );
 
-  -- Session grants consume the oldest unpaid visit first.
+  -- Session grants are a consumable pool: spend it against the oldest unpaid
+  -- workouts first. This prevents later payments from inventing extra sessions
+  -- or leaving stale session totals behind.
+  v_session_pool := v_total_sessions;
   for v_visit in
     select v.*
     from public.visits v
@@ -99,28 +154,27 @@ begin
       and v.paid_override is null
     order by v.entry_time asc
   loop
-    if v_sessions_used < v_total_sessions then
-      v_sessions_used := v_sessions_used + 1;
-      update public.visits set is_unpaid = false where id = v_visit.id;
-    else
+    if v_session_pool <= 0 then
       exit;
     end if;
+    update public.visits set is_unpaid = false where id = v_visit.id;
+    v_session_pool := v_session_pool - 1;
   end loop;
 
   update public.members set
     sessions_total = (v_total_sessions > 0),
-    sessions_left = greatest(0, v_total_sessions - v_sessions_used),
+    sessions_left = greatest(0, v_session_pool),
     expiration_date = v_exp,
     account_status = case
       when account_status in ('frozen', 'cancelled') then account_status
-      when (v_exp is not null and v_exp >= v_today) or (v_total_sessions - v_sessions_used > 0) then 'active'
+      when (v_exp is not null and v_exp >= v_today) or (v_session_pool > 0) then 'active'
       else 'inactive'
     end
   where id = p_member_id;
 end $$;
 
--- Recompute every member once after the migration so older rows settle into the
--- corrected payment-window rules without rebuilding the whole schema.
+-- Recompute current table state once so legacy rows settle under the corrected
+-- rules without breaking the existing schema.
 do $$
 declare
   v_member text;
