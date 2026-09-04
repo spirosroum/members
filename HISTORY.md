@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-09-04 — v1.37 (23:47) — Fix: session credits spend against oldest unpaid visits; time windows stay bounded
+
+- Replaced the flat session-total recompute with a queue-based rule: session credits are consumed against the oldest unpaid visit first, so a bundle does not leave stale extra credit behind
+- Kept the start-date-bounded payment window fix: coverage only applies within `applied_start_date` → `applied_expiration`, never before the payment's own start
+- Reworked `apply_payment` to stop incrementing `members.sessions_left` before recompute and let the ledger derive the balance from the official payment records
+- Preserved legacy “paid with no payment row” visits while re-deriving coverage after the migration
+
 ## 2026-09-04 — v1.36 (23:35) — Fix: payment windows no longer retroactively cover older workouts
 
 - Corrected the server-side recompute to use each payment's actual coverage window: a plan/payment only covers visits between `applied_start_date` and `applied_expiration`, never earlier workouts
