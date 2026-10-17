@@ -1189,6 +1189,29 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 const yyyy = d.getFullYear();
                 return `${dd}/${mm}/${yyyy}`;
             },
+            // ISO (YYYY-MM-DD) → display (DD/MM/YYYY) for text date fields.
+            isoToDmy: (iso) => {
+                if (!iso) return '';
+                const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso));
+                return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+            },
+            // Display (DD/MM/YYYY) → ISO (YYYY-MM-DD); returns '' for incomplete/invalid input.
+            dmyToIso: (dmy) => {
+                const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(dmy || '').trim());
+                if (!m) return '';
+                const dd = parseInt(m[1], 10), mm = parseInt(m[2], 10), yyyy = parseInt(m[3], 10);
+                const d = new Date(yyyy, mm - 1, dd);
+                if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return '';
+                return `${yyyy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+            },
+            // Auto-inserts slashes while typing so a text date field reads DD/MM/YYYY.
+            formatDateField: (el) => {
+                const digits = String(el.value || '').replace(/[^\d]/g, '').slice(0, 8);
+                let out = digits;
+                if (digits.length > 4) out = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+                else if (digits.length > 2) out = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+                el.value = out;
+            },
             dateToLocalIso: (date) => {
                 if (!date) return '';
                 const d = date instanceof Date ? date : new Date(date);

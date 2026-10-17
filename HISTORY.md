@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.39 (12:00) — Member profile dates shown as DD/MM/YYYY
+
+- Edit Member Profile: Date of Birth, Starting Date, and Expiration Date are now text fields displaying `DD/MM/YYYY` instead of the locale-dependent native date picker
+- Added `Utils.isoToDmy`, `Utils.dmyToIso`, and `Utils.formatDateField` (live slash mask) in app-core.js
+- Values are converted to ISO on save and back to `DD/MM/YYYY` when loading/refreshing the form (app-members.js, app-payments.js)
+
 ## 2026-09-04 — v1.36 (23:30) — Fix: payment windows no longer retroactively cover older workouts
 
 - Corrected the server-side recompute to use each payment's actual coverage window: a plan/payment only covers visits between `applied_start_date` and `applied_expiration`, never earlier workouts

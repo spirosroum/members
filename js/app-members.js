@@ -558,15 +558,15 @@ Object.assign(App, {
                         document.getElementById('form-member-id').value = m.id;
                         document.getElementById('form-first-name').value = m.firstName;
                         document.getElementById('form-last-name').value = m.lastName;
-                        document.getElementById('form-dob').value = m.dob || '';
+                        document.getElementById('form-dob').value = Utils.isoToDmy(m.dob);
                         document.getElementById('form-belt').value = m.belt ? m.belt.split('/')[0].trim() : 'White';
                         document.getElementById('form-gender').value = m.gender || 'Unspecified';
                         document.getElementById('form-phone').value = m.phone || '';
                         document.getElementById('form-email').value = m.email || '';
-                        document.getElementById('form-expiration').value = m.expirationDate || '';
+                        document.getElementById('form-expiration').value = Utils.isoToDmy(m.expirationDate);
                         document.getElementById('form-account-status').value = m.accountStatus || 'Active';
                         document.getElementById('form-notes').value = m.notes || '';
-                        document.getElementById('form-start-date').value = Utils.todayLocalIso();
+                        document.getElementById('form-start-date').value = Utils.isoToDmy(Utils.todayLocalIso());
                         document.getElementById('btn-delete-member').classList.remove('hidden');
                         document.getElementById('admin-member-calendar-wrapper').classList.remove('hidden');
                         document.getElementById('admin-member-payments-wrapper').classList.remove('hidden');
@@ -609,7 +609,7 @@ Object.assign(App, {
                 } else {
                     document.getElementById('modal-title').innerText = 'Register New Member';
                     document.getElementById('form-member-id').value = App.generateRandomId();
-                    document.getElementById('form-start-date').value = Utils.todayLocalIso();
+                    document.getElementById('form-start-date').value = Utils.isoToDmy(Utils.todayLocalIso());
                     document.getElementById('form-expiration').style.backgroundColor = 'var(--white)';
                     document.getElementById('member-unpaid-warning').innerHTML = '';
                     document.getElementById('member-sessions-wrapper').style.display = 'none';
@@ -664,7 +664,7 @@ Object.assign(App, {
                 if (!planId) {
                     payInput.value = '0.00';
                     if (member && member.expirationDate) {
-                        expInput.value = member.expirationDate;
+                        expInput.value = Utils.isoToDmy(member.expirationDate);
                         expInput.style.backgroundColor = (Utils.getDaysRemaining(member.expirationDate) < 0) ? 'var(--bg-danger-soft)' : 'var(--bg-success-soft)';
                     } else {
                         expInput.value = '';
@@ -680,7 +680,7 @@ Object.assign(App, {
                     return;
                 }
                 const plan = DB.getPlans().find(p => p.id === planId);
-                let start = startInput.value;
+                let start = Utils.dmyToIso(startInput.value);
                 if (plan && start) {
                     // Stack onto the member's current unexpired membership when it ends later
                     // than the given start date — unless the admin explicitly overrode the
@@ -692,12 +692,12 @@ Object.assign(App, {
                             const startObj = new Date(start);
                             if (curExp > startObj) {
                                 start = member.expirationDate;
-                                startInput.value = start;
+                                startInput.value = Utils.isoToDmy(start);
                             }
                         }
                     }
                     if (plan.days) {
-                        expInput.value = Utils.calculateExpirationDate(start, plan.days);
+                        expInput.value = Utils.isoToDmy(Utils.calculateExpirationDate(start, plan.days));
                         expInput.style.backgroundColor = 'var(--bg-info-soft)';
                     }
                     payInput.value = parseFloat(plan.price).toFixed(2);
@@ -783,12 +783,12 @@ Object.assign(App, {
                     id,
                     firstName: document.getElementById('form-first-name').value,
                     lastName: document.getElementById('form-last-name').value,
-                    dob: document.getElementById('form-dob').value,
+                    dob: Utils.dmyToIso(document.getElementById('form-dob').value),
                     gender: document.getElementById('form-gender').value,
                     belt: App.memberBeltValue(originalId, members, beltBase),
                     phone: document.getElementById('form-phone').value,
                     email: document.getElementById('form-email').value,
-                    expirationDate: document.getElementById('form-expiration').value,
+                    expirationDate: Utils.dmyToIso(document.getElementById('form-expiration').value),
                     accountStatus: document.getElementById('form-account-status').value,
                     notes: document.getElementById('form-notes').value,
                 };
@@ -897,7 +897,7 @@ Object.assign(App, {
                     const plan = DB.getPlans().find(p=>p.id === planId);
                     const planSessions = plan && plan.sessions != null && plan.sessions !== '' ? (parseInt(plan.sessions, 10) || 0) : null;
                     const appliedExp = mData.expirationDate || null;
-                    const appliedStartDate = document.getElementById('form-start-date') ? document.getElementById('form-start-date').value : null;
+                    const appliedStartDate = document.getElementById('form-start-date') ? Utils.dmyToIso(document.getElementById('form-start-date').value) : null;
                     const autoLogPay = {
                         id: 'PAY-' + Date.now(),
                         memberId: id,

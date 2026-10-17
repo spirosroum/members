@@ -656,7 +656,7 @@ Object.assign(App, {
                         const updatedMember = DB.getMembers().find(m => m.id === memberId);
                         if (updatedMember && document.getElementById('form-member-id').value === memberId) {
                             const expInput = document.getElementById('form-expiration');
-                            expInput.value = updatedMember.expirationDate || '';
+                            expInput.value = Utils.isoToDmy(updatedMember.expirationDate);
                             expInput.style.backgroundColor = updatedMember.expirationDate
                                 ? (Utils.getDaysRemaining(updatedMember.expirationDate) < 0 ? '#fee2e2' : '#dcfce7')
                                 : '#fff';
