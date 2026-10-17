@@ -1212,6 +1212,24 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 else if (digits.length > 2) out = `${digits.slice(0, 2)}/${digits.slice(2)}`;
                 el.value = out;
             },
+            // Opens the native calendar for a DD/MM/YYYY text field. The hidden native
+            // <input type="date"> is positioned over the field so the picker anchors in
+            // place; picking a day copies the formatted value back into the text field.
+            openDatePicker: (pickerId, textId) => {
+                const picker = document.getElementById(pickerId);
+                const text = document.getElementById(textId);
+                if (!picker) return;
+                picker.value = Utils.dmyToIso(text && text.value) || Utils.todayLocalIso();
+                try {
+                    if (typeof picker.showPicker === 'function') { picker.showPicker(); return; }
+                } catch (e) { /* fall through to legacy open */ }
+                picker.focus();
+                picker.click();
+            },
+            onNativeDateChange: (picker, textId) => {
+                const text = document.getElementById(textId);
+                if (text && picker.value) text.value = Utils.isoToDmy(picker.value);
+            },
             dateToLocalIso: (date) => {
                 if (!date) return '';
                 const d = date instanceof Date ? date : new Date(date);

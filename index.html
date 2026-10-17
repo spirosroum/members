@@ -13,7 +13,7 @@
     // endless reload loop. The per-version `_v` marker guarantees at most one reload
     // per build. Bump the version string here AND in the asset URLs below on deploy.
     (function () {
-        var BUILT = '20261017-8';
+        var BUILT = '20261017-9';
         function check() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
                 .then(function (r) { return r.text(); })
@@ -34,7 +34,7 @@
     </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥋</text></svg>">
     <title>Sloth Submission Grappling - Members</title>
-    <link rel="stylesheet" href="styles.css?v=20261017-3">
+    <link rel="stylesheet" href="styles.css?v=20261017-9">
 </head>
 <body>
 
@@ -1487,7 +1487,11 @@
                 <div class="flex gap-2 mt-1">
                     <div style="flex: 1;">
                         <label class="text-gray font-bold">Date of Birth</label>
-                        <input type="text" id="form-dob" class="mt-1" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)">
+                        <div class="date-field mt-1">
+                            <input type="text" id="form-dob" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)">
+                            <input type="date" id="form-dob-cal" class="date-field-native" tabindex="-1" aria-hidden="true" onchange="Utils.onNativeDateChange(this, 'form-dob')">
+                            <button type="button" class="date-field-btn" onclick="Utils.openDatePicker('form-dob-cal','form-dob')" aria-label="Open calendar">📅</button>
+                        </div>
                     </div>
                     <div style="flex: 1;">
                         <label class="text-gray font-bold">Belt</label>
@@ -1537,11 +1541,19 @@
                     <div class="flex gap-2 mt-2">
                         <div style="flex: 1;">
                             <label class="text-gray">Starting Date</label>
-                            <input type="text" id="form-start-date" class="mt-1" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)" onchange="App.markMemberStartOverridden(); App.applyPlan()" required>
+                            <div class="date-field mt-1">
+                                <input type="text" id="form-start-date" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)" onchange="App.markMemberStartOverridden(); App.applyPlan()" required>
+                                <input type="date" id="form-start-date-cal" class="date-field-native" tabindex="-1" aria-hidden="true" onchange="Utils.onNativeDateChange(this, 'form-start-date'); App.markMemberStartOverridden(); App.applyPlan()">
+                                <button type="button" class="date-field-btn" onclick="Utils.openDatePicker('form-start-date-cal','form-start-date')" aria-label="Open calendar">📅</button>
+                            </div>
                         </div>
                         <div style="flex: 1;">
                             <label class="text-gray" style="font-weight:bold; color:var(--dark);">Expiration Date</label>
-                            <input type="text" id="form-expiration" class="mt-1" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)">
+                            <div class="date-field mt-1">
+                                <input type="text" id="form-expiration" inputmode="numeric" placeholder="DD/MM/YYYY" autocomplete="off" oninput="Utils.formatDateField(this)">
+                                <input type="date" id="form-expiration-cal" class="date-field-native" tabindex="-1" aria-hidden="true" onchange="Utils.onNativeDateChange(this, 'form-expiration')">
+                                <button type="button" class="date-field-btn" onclick="Utils.openDatePicker('form-expiration-cal','form-expiration')" aria-label="Open calendar">📅</button>
+                            </div>
                         </div>
                         <div style="flex: 1;">
                             <label class="text-gray" id="label-payment-applied">Payment Applied</label>
@@ -1774,7 +1786,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20261017-4"></script>
+    <script src="js/app-core.js?v=20261017-9"></script>
     <script src="js/app-ui.js?v=20261017-6"></script>
     <script src="js/app-kiosk.js?v=20260826-63"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>

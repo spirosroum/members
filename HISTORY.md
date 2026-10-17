@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.47 (13:55) — Restore calendar picker on member date fields
+
+- The DD/MM/YYYY change had replaced the native date inputs, removing the calendar picker; each of the three fields (Date of Birth, Starting Date, Expiration Date) now keeps the DD/MM/YYYY text field AND a 📅 button that opens the native calendar
+- A hidden `<input type="date">` is positioned over the field so the picker anchors in place (`Utils.openDatePicker` via `showPicker()`); picking a day writes the formatted value back (`Utils.onNativeDateChange`)
+- Added `.date-field` styles; bumped `version.txt`/`BUILT` to `20261017-9` and the `styles.css`/`app-core.js` cache-busters
+
 ## 2026-10-17 — v1.46 (13:40) — Payments ledger page-size selector
 
 - Added a "Show" selector (10 / 20 / 50 / All, default 20) above the admin Payment Ledger, mirroring the Notifications inbox
