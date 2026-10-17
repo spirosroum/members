@@ -5,8 +5,6 @@
 // created in app-core.js. Load order is fixed in index.html.
 // =====================================================================
 Object.assign(App, {
-            notificationPageSize: 20,
-
             renderColorPaletteUI: () => {
                 const planPalette = document.getElementById('preset-color-palette');
                 const schedPalette = document.getElementById('preset-sched-color-palette');
@@ -151,18 +149,10 @@ Object.assign(App, {
                 }
             },
 
-            setNotificationPageSize: (value) => {
-                App.notificationPageSize = value === 'all' ? 'all' : (parseInt(value, 10) || 20);
-                App.renderNotifications();
-            },
-
             renderNotifications: () => {
                 const notifs = DB.getNotifications();
                 const list = document.getElementById('notifications-list');
-                const sorted = notifs.slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-                const size = App.notificationPageSize;
-                const visible = size === 'all' ? sorted : sorted.slice(0, parseInt(size, 10) || 20);
-                list.innerHTML = visible.map(n => `
+                list.innerHTML = notifs.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).map(n => `
                     <div class="notif-item ${n.read ? '' : 'unread'}">
                         <div>
                             <strong style="color: ${App.notificationTierColor(n.type)}">${Utils.escapeHTML(n.title)}</strong>

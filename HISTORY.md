@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.44 (13:20) — Fix notification page-size selector (stale duplicate file)
+
+- The v1.43 edit landed in the stale root `app-ui.js`, but the app loads `js/app-ui.js`; moved the `notificationPageSize` / `setNotificationPageSize` / sliced `renderNotifications` logic into `js/app-ui.js` so selecting 10/20/50 actually limits the list
+- Reverted the unused root duplicate and bumped the `js/app-ui.js` cache-buster
+
 ## 2026-10-17 — v1.43 (13:16) — Notifications inbox page-size selector
 
 - Added a "Show" selector to the admin Notifications inbox with 10 / 20 / 50 / All options (defaults to 20)
