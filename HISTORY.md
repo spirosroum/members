@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.40 (12:20) — Fix infinite page auto-reload after deploy
+
+- v1.39 bumped `version.txt` but not the `BUILT` constant baked into `index.html`, so the version guard saw a mismatch on every check and reloaded the page forever
+- Synced `BUILT` to the current version and bumped the `?v=` cache-busters so stale clients fetch fresh HTML
+
 ## 2026-10-17 — v1.39 (12:00) — Member profile dates shown as DD/MM/YYYY
 
 - Edit Member Profile: Date of Birth, Starting Date, and Expiration Date are now text fields displaying `DD/MM/YYYY` instead of the locale-dependent native date picker
