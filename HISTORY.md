@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.41 (12:40) — Harden version guard against reload loops
+
+- GitHub Pages caches `index.html` for 10 min (`max-age=600`) while `version.txt` is fetched with `no-store`; a stale cached HTML with an old `BUILT` made the guard reload forever
+- The guard now reloads via a version-tagged URL (`?_v=<version>`) so the fresh HTML bypasses the cache, and skips if the URL already carries the deployed version — at most one reload per build
+- Bumped `version.txt`/`BUILT` to `20261017-3` and all `?v=` cache-busters
+
 ## 2026-10-17 — v1.40 (12:20) — Fix infinite page auto-reload after deploy
 
 - v1.39 bumped `version.txt` but not the `BUILT` constant baked into `index.html`, so the version guard saw a mismatch on every check and reloaded the page forever

@@ -7,34 +7,34 @@
     <script>
     // Version guard: when a new build is deployed, pages still running stale JS
     // detect the new version and reload themselves. version.txt is fetched with a
-    // cache-buster so the check always sees the current file. Bump the version
-    // string here AND in the asset URLs below on every deploy.
+    // cache-buster so the check always sees the current file. The reload goes to a
+    // version-tagged URL so a stale cached index.html (GitHub Pages caches HTML for
+    // 10 min) is bypassed instead of being served again — which previously caused an
+    // endless reload loop. The per-version `_v` marker guarantees at most one reload
+    // per build. Bump the version string here AND in the asset URLs below on deploy.
     (function () {
-        var KEY = 'gym_app_version';
-        var BUILT = '20261017-2';
-        var deployed = null;
-        function load() {
+        var BUILT = '20261017-3';
+        function check() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
                 .then(function (r) { return r.text(); })
                 .then(function (t) {
                     var v = (t || '').trim();
-                    if (!v) return;
-                    deployed = v;
-                    localStorage.setItem(KEY, v);
-                    // Compare against the version baked into THIS page, not the
-                    // stored one: a stale cached page would otherwise store the
-                    // new version and strand itself on old JS forever.
-                    if (deployed !== BUILT) location.reload();
+                    if (!v || v === BUILT) return;
+                    var url;
+                    try { url = new URL(window.location.href); } catch (e) { return; }
+                    if (url.searchParams.get('_v') === v) return;
+                    url.searchParams.set('_v', v);
+                    window.location.replace(url.toString());
                 })
                 .catch(function () {});
         }
-        setTimeout(load, 5000);
-        setInterval(load, 60000);
+        setTimeout(check, 5000);
+        setInterval(check, 60000);
     })();
     </script>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥋</text></svg>">
     <title>Sloth Submission Grappling - Members</title>
-    <link rel="stylesheet" href="styles.css?v=20261017-2">
+    <link rel="stylesheet" href="styles.css?v=20261017-3">
 </head>
 <body>
 
@@ -1751,16 +1751,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20261017-2"></script>
+    <script src="js/app-core.js?v=20261017-3"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
     <script src="js/app-kiosk.js?v=20260826-63"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20260814-1"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
-    <script src="js/app-members.js?v=20261017-2"></script>
+    <script src="js/app-members.js?v=20261017-3"></script>
     <script src="js/app-plans.js?v=20260815-1"></script>
     <script src="js/app-schedule.js?v=20260824-4"></script>
-    <script src="js/app-payments.js?v=20261017-2"></script>
+    <script src="js/app-payments.js?v=20261017-3"></script>
     <script src="js/app-admin.js?v=20260824-3"></script>
     <script src="js/app-i18n.js?v=20260824-45"></script>
 
