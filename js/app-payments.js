@@ -825,15 +825,15 @@ Object.assign(App, {
                     total += amount;
                     const sessions = (p.sessionsGranted != null && p.sessionsGranted !== '') ? p.sessionsGranted : '';
                     rowsXml += '<Row>' +
-                        cellStr(p.date || '') +
+                        cellStr(Utils.isoToDmy(p.date)) +
                         cellStr(m ? m.id : (p.memberId || '')) +
                         cellStr(m ? m.firstName : '') +
                         cellStr(m ? m.lastName : '') +
                         cellNum(Math.round(amount * 100) / 100, 'sNum') +
                         cellStr(p.planId ? (planMap.get(p.planId) || p.planId) : '') +
                         (sessions === '' ? cellStr('') : cellNum(parseInt(sessions, 10) || 0)) +
-                        cellStr(p.appliedStartDate || '') +
-                        cellStr(p.appliedExpiration || '') +
+                        cellStr(Utils.isoToDmy(p.appliedStartDate)) +
+                        cellStr(Utils.isoToDmy(p.appliedExpiration)) +
                         cellStr(p.note || '') +
                         '</Row>';
                 });

@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.45 (13:35) — Payments export uses DD/MM/YYYY dates
+
+- `exportPaymentsExcel` wrote raw ISO dates (`YYYY-MM-DD`) in the Date, Coverage Start, and New Exp. Date columns, inconsistent with the on-screen ledger
+- Those columns now format as `DD/MM/YYYY` via `Utils.isoToDmy` (timezone-safe, no day shift)
+- Bumped `version.txt`/`BUILT` to `20261017-7` and the `app-payments.js` cache-buster
+
 ## 2026-10-17 — v1.44 (13:20) — Fix notification page-size selector (stale duplicate file)
 
 - The v1.43 edit landed in the stale root `app-ui.js`, but the app loads `js/app-ui.js`; moved the `notificationPageSize` / `setNotificationPageSize` / sliced `renderNotifications` logic into `js/app-ui.js` so selecting 10/20/50 actually limits the list
