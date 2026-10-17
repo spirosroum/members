@@ -1263,7 +1263,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             escapeHTML: (str) => { if (!str) return ''; const div = document.createElement('div'); div.innerText = str; return div.innerHTML; },
             sortKey: (str) => String(str == null ? '' : str)
                 .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[\u0300-\u036f\u0384\u0385]/g, '')
                 .toLowerCase()
                 .replace(/ς/g, 'σ'),
             isGreek: (str) => /[\u0370-\u03FF]/.test(String(str == null ? '' : str)),

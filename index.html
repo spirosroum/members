@@ -13,7 +13,7 @@
     // endless reload loop. The per-version `_v` marker guarantees at most one reload
     // per build. Bump the version string here AND in the asset URLs below on deploy.
     (function () {
-        var BUILT = '20261017-3';
+        var BUILT = '20261017-4';
         function check() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
                 .then(function (r) { return r.text(); })
@@ -357,7 +357,10 @@
                 </div>
                 <div class="checkin-layout mt-2">
                     <div class="flex-col gap-2">
-                        <input type="text" id="checkin-search" class="search-bar w-full" placeholder="Search ID, Name, or Phone..." autocomplete="off">
+                        <div style="position: relative;">
+                            <input type="text" id="checkin-search" class="search-bar w-full" placeholder="Search ID, Name, or Phone..." autocomplete="off" onfocus="App.handleAdminCheckinSearch()" onblur="setTimeout(() => { const r = document.getElementById('checkin-search-results'); if (r) r.classList.add('hidden'); }, 150)">
+                            <div id="checkin-search-results" class="pay-member-search-results hidden"></div>
+                        </div>
                         <div id="checkin-member-card" class="member-card-display hidden"></div>
                     </div>
                     <div class="card" style="padding: 0;">
@@ -1751,11 +1754,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20261017-3"></script>
+    <script src="js/app-core.js?v=20261017-4"></script>
     <script src="js/app-ui.js?v=20260817-1"></script>
     <script src="js/app-kiosk.js?v=20260826-63"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
-    <script src="js/app-checkin-admin.js?v=20260814-1"></script>
+    <script src="js/app-checkin-admin.js?v=20261017-4"></script>
     <script src="js/app-mobile-checkin.js?v=20260814-29"></script>
     <script src="js/app-members.js?v=20261017-3"></script>
     <script src="js/app-plans.js?v=20260815-1"></script>

@@ -88,9 +88,18 @@ Object.assign(App, {
             },
  
             handleAdminCheckinSearch: async () => {
-                const query = Utils.normalizeSearch(document.getElementById('checkin-search').value);
+                const input = document.getElementById('checkin-search');
+                const resultsBox = document.getElementById('checkin-search-results');
                 const resultCard = document.getElementById('checkin-member-card');
-                if (!query) { resultCard.classList.add('hidden'); return; }
+                if (!input || !resultsBox || !resultCard) return;
+                const query = Utils.normalizeSearch(input.value);
+
+                if (!query) {
+                    resultsBox.classList.add('hidden');
+                    resultsBox.innerHTML = '';
+                    resultCard.classList.add('hidden');
+                    return;
+                }
 
                 if (FSEngine && typeof FSEngine.whenReady === 'function' && !(FSEngine.ready.members && FSEngine.migrationResolved)) {
                     await FSEngine.whenReady('members');
@@ -99,14 +108,49 @@ Object.assign(App, {
                 if (Utils.normalizeSearch(document.getElementById('checkin-search').value) !== query) return;
 
                 const members = DB.getMembers();
-                const m = members.find(m => 
-                    m.id === query || 
-                    Utils.normalizeSearch(m.firstName).includes(query) || 
-                    Utils.normalizeSearch(m.lastName).includes(query) ||
-                    (m.phone && m.phone.includes(query))
-                );
+                const matches = members.filter(m => {
+                    const fullName = Utils.normalizeSearch(`${m.firstName || ''} ${m.lastName || ''}`);
+                    const revName = Utils.normalizeSearch(`${m.lastName || ''} ${m.firstName || ''}`);
+                    return Utils.normalizeSearch(m.id || '').includes(query)
+                        || Utils.normalizeSearch(m.firstName || '').includes(query)
+                        || Utils.normalizeSearch(m.lastName || '').includes(query)
+                        || fullName.includes(query)
+                        || revName.includes(query)
+                        || (m.phone && m.phone.includes(query));
+                }).sort((a, b) => Utils.sortKey(a.firstName).localeCompare(Utils.sortKey(b.firstName)));
 
-                if (!m) { resultCard.classList.add('hidden'); return; }
+                if (matches.length === 0) {
+                    resultsBox.innerHTML = '<div class="pay-member-result text-gray" style="cursor: default;">No members found.</div>';
+                    resultsBox.classList.remove('hidden');
+                    resultCard.classList.add('hidden');
+                    return;
+                }
+
+                // Exact ID match (typed or scanned member ID) opens the card directly.
+                const exactId = matches.find(x => x.id === query);
+                if (exactId) { App.selectAdminCheckinMember(exactId.id); return; }
+
+                resultsBox.innerHTML = matches.slice(0, 50).map(m => `
+                    <div class="pay-member-result" onmousedown="App.selectAdminCheckinMember('${Utils.escapeHTML(m.id)}', event)">
+                        <strong>${Utils.escapeHTML(m.firstName)} ${Utils.escapeHTML(m.lastName)}</strong>
+                        <span class="text-gray" style="font-size:0.8rem; flex-shrink:0;">(${Utils.escapeHTML(m.id)})</span>
+                    </div>`).join('');
+                resultsBox.classList.remove('hidden');
+                resultCard.classList.add('hidden');
+            },
+
+            selectAdminCheckinMember: (id, e) => {
+                if (e) e.preventDefault();
+                const m = DB.getMembers().find(x => x.id === id);
+                if (!m) return;
+                const resultsBox = document.getElementById('checkin-search-results');
+                if (resultsBox) { resultsBox.classList.add('hidden'); resultsBox.innerHTML = ''; }
+                App.renderAdminCheckinMemberCard(m);
+            },
+
+            renderAdminCheckinMemberCard: (m) => {
+                const resultCard = document.getElementById('checkin-member-card');
+                if (!resultCard) return;
                 
                 const now = new Date();
                 const activeVisits = DB.getVisits().filter(v => v.exitTime === null && v.expectedExitTime && new Date(v.expectedExitTime) > now && v.memberId === m.id);

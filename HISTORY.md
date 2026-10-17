@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.42 (13:05) — Staff Check-in search shows a match list and matches full Greek names
+
+- Staff Check-in member search now renders a dropdown list of every member matching the query (name + ID), and clicking one opens that member's card; an exact ID still opens the card directly
+- Search now matches the combined "First Last" / "Last First" full name (and phone), so typing a full name — including Greek — reliably finds the member instead of missing when the query spanned both fields
+- Broadened `Utils.sortKey` to also strip the spacing Greek tonos (`U+0384`/`U+0385`) so accented Greek input matches accent-free stored names
+
 ## 2026-10-17 — v1.41 (12:40) — Harden version guard against reload loops
 
 - GitHub Pages caches `index.html` for 10 min (`max-age=600`) while `version.txt` is fetched with `no-store`; a stale cached HTML with an old `BUILT` made the guard reload forever
