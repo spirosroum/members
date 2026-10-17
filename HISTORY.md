@@ -2,6 +2,11 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.43 (13:16) — Notifications inbox page-size selector
+
+- Added a "Show" selector to the admin Notifications inbox with 10 / 20 / 50 / All options (defaults to 20)
+- `renderNotifications` now slices the sorted list to the selected page size; `setNotificationPageSize` stores the choice on `App.notificationPageSize`
+
 ## 2026-10-17 — v1.42 (13:05) — Staff Check-in search shows a match list and matches full Greek names
 
 - Staff Check-in member search now renders a dropdown list of every member matching the query (name + ID), and clicking one opens that member's card; an exact ID still opens the card directly

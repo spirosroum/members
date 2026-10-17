@@ -13,7 +13,7 @@
     // endless reload loop. The per-version `_v` marker guarantees at most one reload
     // per build. Bump the version string here AND in the asset URLs below on deploy.
     (function () {
-        var BUILT = '20261017-4';
+        var BUILT = '20261017-5';
         function check() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
                 .then(function (r) { return r.text(); })
@@ -669,6 +669,15 @@
 
                 <div id="tab-content-notifications-list" class="tab-content-notifications mt-1">
                     <p class="text-gray mb-2">Read and manage system alerts, expired check-in attempts, and general notices.</p>
+                    <div class="flex align-center gap-1 mb-2" style="flex-wrap: wrap;">
+                        <label class="text-gray" for="notification-page-size"><strong>Show</strong></label>
+                        <select id="notification-page-size" style="width: auto; min-width: 110px;" onchange="App.setNotificationPageSize(this.value)">
+                            <option value="10">10</option>
+                            <option value="20" selected>20</option>
+                            <option value="50">50</option>
+                            <option value="all">All</option>
+                        </select>
+                    </div>
                     <div id="notifications-list" class="flex-col gap-1"></div>
                 </div>
 
@@ -1755,7 +1764,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script src="js/app-core.js?v=20261017-4"></script>
-    <script src="js/app-ui.js?v=20260817-1"></script>
+    <script src="js/app-ui.js?v=20261017-5"></script>
     <script src="js/app-kiosk.js?v=20260826-63"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
     <script src="js/app-checkin-admin.js?v=20261017-4"></script>
