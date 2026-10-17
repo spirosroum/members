@@ -2,6 +2,12 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.46 (13:40) — Payments ledger page-size selector
+
+- Added a "Show" selector (10 / 20 / 50 / All, default 20) above the admin Payment Ledger, mirroring the Notifications inbox
+- `renderAllPayments` now renders only the first N sorted rows (`App.paymentsPageSize`); payments are never deleted or mutated — the full ledger and the Excel export are unaffected
+- Bumped `version.txt`/`BUILT` to `20261017-8` and the `js/app-payments.js` cache-buster
+
 ## 2026-10-17 — v1.45 (13:35) — Payments export uses DD/MM/YYYY dates
 
 - `exportPaymentsExcel` wrote raw ISO dates (`YYYY-MM-DD`) in the Date, Coverage Start, and New Exp. Date columns, inconsistent with the on-screen ledger

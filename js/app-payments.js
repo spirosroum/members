@@ -13,6 +13,13 @@ let paymentExpManualOverride = false;
 let paymentStartManualOverride = false;
 
 Object.assign(App, {
+            paymentsPageSize: 20,
+
+            setPaymentsPageSize: (value) => {
+                App.paymentsPageSize = value === 'all' ? 'all' : (parseInt(value, 10) || 20);
+                App.renderAllPayments();
+            },
+
             openPaymentModal: (presetMemberId = null, paymentId = null) => {
                 const form = document.getElementById('payment-form');
                 form.reset();
@@ -748,7 +755,6 @@ Object.assign(App, {
                 const pays = DB.getPayments().sort((a,b) => new Date(b.date) - new Date(a.date));
                 const members = DB.getMembers();
                 const list = document.getElementById('all-payments-list');
-
                 // Members not loaded yet (fresh boot / sync race): render a loading row and
                 // re-render once the members snapshot lands instead of flashing every payment
                 // as "Unknown Member" (Bug 2).
@@ -764,7 +770,9 @@ Object.assign(App, {
                     return;
                 }
 
-                list.innerHTML = pays.map(p => {
+                const size = App.paymentsPageSize;
+                const visiblePays = size === 'all' ? pays : pays.slice(0, parseInt(size, 10) || 20);
+                list.innerHTML = visiblePays.map(p => {
                     let m = members.find(x => x.id === p.memberId);
                     // Payments recorded before a member ID rename still reference the old id;
                     // resolve through the rename ledger so the name renders correctly.
