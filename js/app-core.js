@@ -157,7 +157,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             leaderboardEmojis: Object.assign({}, DEFAULT_LEADERBOARD_EMOJIS, JSON.parse(localStorage.getItem('gym_leaderboard_emojis') || '{}')),
             leaderboardSize: parseInt(localStorage.getItem('gym_leaderboard_size') || '10', 10),
             beltColors: Object.assign({}, DEFAULT_BELT_COLORS, JSON.parse(localStorage.getItem('gym_belt_colors') || '{}')),
-            hideKioskSchedule: JSON.parse(localStorage.getItem('gym_hide_kiosk_schedule') || 'false')
+            hideKioskSchedule: JSON.parse(localStorage.getItem('gym_hide_kiosk_schedule') || 'false'),
+            hideKioskPresent: JSON.parse(localStorage.getItem('gym_hide_kiosk_present') || 'false')
         };
 
         function fallbackToLocal() {
@@ -189,6 +190,7 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 localStorage.setItem('gym_leaderboard_size', String(STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE));
                 localStorage.setItem('gym_belt_colors', JSON.stringify(STATE.beltColors || {}));
                 localStorage.setItem('gym_hide_kiosk_schedule', JSON.stringify(STATE.hideKioskSchedule === true));
+                localStorage.setItem('gym_hide_kiosk_present', JSON.stringify(STATE.hideKioskPresent === true));
             } catch (err) {
                 console.warn('Failed to persist to localStorage fallback', err);
             }
@@ -207,7 +209,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 leaderboardEmojis: STATE.leaderboardEmojis || DEFAULT_LEADERBOARD_EMOJIS,
                 leaderboardSize: STATE.leaderboardSize || DEFAULT_LEADERBOARD_SIZE,
                 beltColors: STATE.beltColors || DEFAULT_BELT_COLORS,
-                hideKioskSchedule: STATE.hideKioskSchedule === true
+                hideKioskSchedule: STATE.hideKioskSchedule === true,
+                hideKioskPresent: STATE.hideKioskPresent === true
             };
         }
 
@@ -505,6 +508,10 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     STATE.hideKioskSchedule = !!s.hide_kiosk_schedule;
                     if (App.applyKioskScheduleVisibility) App.applyKioskScheduleVisibility();
                 }
+                if (s.hide_kiosk_present != null) {
+                    STATE.hideKioskPresent = !!s.hide_kiosk_present;
+                    if (App.applyKioskPresentVisibility) App.applyKioskPresentVisibility();
+                }
                 this.settingsMirror = JSON.stringify(settingsPayload());
                 this._markReady('settings');
             },
@@ -673,7 +680,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                     { key: 'leaderboard_emojis', value: p.leaderboardEmojis },
                     { key: 'leaderboard_size', value: p.leaderboardSize },
                     { key: 'belt_colors', value: p.beltColors },
-                    { key: 'hide_kiosk_schedule', value: p.hideKioskSchedule }
+                    { key: 'hide_kiosk_schedule', value: p.hideKioskSchedule },
+                    { key: 'hide_kiosk_present', value: p.hideKioskPresent }
                 ];
                 for (const c of chunkRows(rows)) await sb.from('settings').upsert(c, { onConflict: 'key' });
                 this.settingsMirror = json;
@@ -1082,6 +1090,8 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
             setBeltColors: (c) => { STATE.beltColors = c || {}; return saveToCloud(); },
             setHideKioskSchedule: (v) => { STATE.hideKioskSchedule = !!v; return saveToCloud(); },
             getHideKioskSchedule: () => STATE.hideKioskSchedule === true,
+            setHideKioskPresent: (v) => { STATE.hideKioskPresent = !!v; return saveToCloud(); },
+            getHideKioskPresent: () => STATE.hideKioskPresent === true,
             saveCheckinNotice: (msg) => { STATE.checkinNotice = msg || ''; return saveToCloud(); },
             saveCheckinNoticeColor: (color) => { STATE.checkinNoticeColor = color || '#fde68a'; return saveToCloud(); },
 
@@ -1773,11 +1783,17 @@ const PRESET_PALETTE = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#dc2626', '
                 if (card) card.classList.toggle('hidden', STATE.hideKioskSchedule === true);
             },
 
+            applyKioskPresentVisibility: () => {
+                const card = document.getElementById('kiosk-present-card');
+                if (card) card.classList.toggle('hidden', STATE.hideKioskPresent === true);
+            },
+
             init: () => {
                 App.cleanBin(); 
                 App.updateUICurrency();
                 App.applyBeltColors();
                 App.applyKioskScheduleVisibility();
+                App.applyKioskPresentVisibility();
  
                 App.bindAdminListeners();
                  

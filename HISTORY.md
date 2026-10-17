@@ -2,6 +2,13 @@
 
 Recent entries only. Older entries are in `HISTORY-ARCHIVE.md` (full history is also in git).
 
+## 2026-10-17 — v1.48 (14:50) — Admin toggle to hide "Currently Inside" on kiosk
+
+- Added a "Check-in Portal" switch in admin General Settings (`setting-hide-kiosk-present`) that hides the public kiosk "Currently Inside" card
+- New `hideKioskPresent` STATE value persisted to localStorage + the `settings` table (`hide_kiosk_present`), with `DB.setHideKioskPresent`/`getHideKioskPresent` and `App.applyKioskPresentVisibility`
+- Gave the kiosk card an id (`kiosk-present-card`); restored the checkbox in `renderAdminSettings`
+- Bumped `version.txt`/`BUILT` to `20261017-10` and the `js/app-core.js`/`js/app-admin.js` cache-busters
+
 ## 2026-10-17 — v1.47 (13:55) — Restore calendar picker on member date fields
 
 - The DD/MM/YYYY change had replaced the native date inputs, removing the calendar picker; each of the three fields (Date of Birth, Starting Date, Expiration Date) now keeps the DD/MM/YYYY text field AND a 📅 button that opens the native calendar

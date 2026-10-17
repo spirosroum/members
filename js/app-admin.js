@@ -1581,6 +1581,8 @@ Object.assign(App, {
                 document.getElementById('form-portal-name').value = DB.getPortalName();
                 document.getElementById('form-currency').value = DB.getCurrency();
                 document.getElementById('setting-show-class-checkins').checked = DB.getShowClassCheckins();
+                const hidePresent = document.getElementById('setting-hide-kiosk-present');
+                if (hidePresent) hidePresent.checked = DB.getHideKioskPresent();
                 const hidden = DB.getHiddenBelts();
                 document.querySelectorAll('.setting-hide-belt').forEach(cb => {
                     cb.checked = hidden.includes(cb.value);
@@ -1655,6 +1657,11 @@ Object.assign(App, {
             setHideKioskSchedule: (v) => {
                 DB.setHideKioskSchedule(v);
                 App.applyKioskScheduleVisibility();
+            },
+
+            setHideKioskPresent: (v) => {
+                DB.setHideKioskPresent(v);
+                App.applyKioskPresentVisibility();
             },
 
             // Admin editor for belt shades. Each belt gets a color picker synced

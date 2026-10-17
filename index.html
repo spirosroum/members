@@ -13,7 +13,7 @@
     // endless reload loop. The per-version `_v` marker guarantees at most one reload
     // per build. Bump the version string here AND in the asset URLs below on deploy.
     (function () {
-        var BUILT = '20261017-9';
+        var BUILT = '20261017-10';
         function check() {
             fetch('version.txt?_=' + Date.now(), { cache: 'no-store' })
                 .then(function (r) { return r.text(); })
@@ -100,7 +100,7 @@
                 </div>
             </div>
 
-            <div class="kiosk-card" style="height: 100%;">
+            <div class="kiosk-card" id="kiosk-present-card" style="height: 100%;">
                 <div class="kiosk-card-header">
                     <h3>Currently Inside</h3>
                     <span class="badge badge-inside" id="kiosk-present-count" style="font-size: 1.2rem;">0</span>
@@ -1197,6 +1197,16 @@
 
                     <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
 
+                    <h3>Check-in Portal</h3>
+                    <p class="text-gray mb-1">Control what members see on the public check-in screen.</p>
+                    <label class="closed-date-toggle">
+                        <input type="checkbox" id="setting-hide-kiosk-present" onchange="App.setHideKioskPresent(this.checked)">
+                        <span class="closed-date-toggle-track"></span>
+                        <span class="closed-date-toggle-label">Hide Currently Inside</span>
+                    </label>
+
+                    <hr style="margin: 2rem 0; border: none; border-top: 1px solid var(--gray-light);">
+
                     <h3>Class Details Visibility</h3>
                     <p class="text-gray mb-1">Choose whether the "Recorded Check-ins" list is shown publicly on class details.</p>
                     <div class="day-picker mb-1">
@@ -1786,7 +1796,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-    <script src="js/app-core.js?v=20261017-9"></script>
+    <script src="js/app-core.js?v=20261017-10"></script>
     <script src="js/app-ui.js?v=20261017-6"></script>
     <script src="js/app-kiosk.js?v=20260826-63"></script>
     <script src="js/app-member-portal.js?v=20260820-9"></script>
@@ -1796,7 +1806,7 @@
     <script src="js/app-plans.js?v=20260815-1"></script>
     <script src="js/app-schedule.js?v=20260824-4"></script>
     <script src="js/app-payments.js?v=20261017-8"></script>
-    <script src="js/app-admin.js?v=20260824-3"></script>
+    <script src="js/app-admin.js?v=20261017-10"></script>
     <script src="js/app-i18n.js?v=20260824-45"></script>
 
 
